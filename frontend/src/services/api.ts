@@ -62,7 +62,7 @@ export async function getActivePaperTypes(): Promise<PaperType[]> {
 export async function submitDelivery(formData: FormData): Promise<{ delivery: Delivery; drive: { folderUrl: string }; message: string }> {
   const { data } = await api.post('/api/deliveries', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000,
+    timeout: 900000, // 15 min — accommodates large photo uploads
   });
   return data;
 }
@@ -75,7 +75,7 @@ export async function getDelivery(id: string): Promise<Delivery> {
 export async function updateDelivery(id: string, formData: FormData): Promise<{ delivery: Delivery; drive: { folderUrl: string }; message: string }> {
   const { data } = await api.put(`/api/deliveries/${id}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000,
+    timeout: 900000, // 15 min — accommodates large photo uploads
   });
   return data;
 }
@@ -191,7 +191,30 @@ export async function adminGetSettings(): Promise<AppSetting[]> {
   return data;
 }
 
-export async function adminUpdateSettings(settings: { key: string; value: string }[]): Promise<AppSetting[]> {
+export async function adminUpdateSettings(
+  settings: { key: string; value: string }[],
+): Promise<{ updated: AppSetting[]; failures: Array<{ key: string; reason: string }> }> {
   const { data } = await api.put('/api/admin/settings', { settings });
+  // Backward compat: legacy shape was a bare array
+  if (Array.isArray(data)) return { updated: data, failures: [] };
+  return {
+    updated: data?.updated ?? [],
+    failures: data?.failures ?? [],
+  };
+}
+
+export interface ClaudeModelInfo {
+  id: string;
+  display_name: string;
+  created_at: string;
+}
+
+export async function adminGetModels(): Promise<ClaudeModelInfo[]> {
+  const { data } = await api.get('/api/admin/models', { timeout: 30000 });
+  return data;
+}
+
+export async function adminGetLatestModel(): Promise<ClaudeModelInfo> {
+  const { data } = await api.get('/api/admin/models/latest', { timeout: 30000 });
   return data;
 }

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { AuthRequest } from '../middleware/auth';
-import { correctText } from '../services/claude';
+import { correctText } from '../services/correction';
 
 const router = Router();
 
@@ -15,8 +15,9 @@ const correctionLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// POST /api/correct - Correct text with Claude
-router.post('/', correctionLimiter, async (req: AuthRequest, res: Response) => {
+// POST /api/correct - Correct text with the active AI provider
+// Long features (sujet de couv) can legitimately take 30-90s — extend the socket timeout.
+router.post('/', correctionLimiter, (req, _res, next) => { req.setTimeout(300_000); next(); }, async (req: AuthRequest, res: Response) => {
   const { text } = req.body;
 
   if (!text || typeof text !== 'string') {
@@ -30,9 +31,14 @@ router.post('/', correctionLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const result = await correctText(text);
     return res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Correction error:', error);
-    return res.status(500).json({ error: 'Erreur lors de la correction' });
+    const status = typeof error?.status === 'number' ? error.status : 500;
+    return res.status(status >= 500 || status === 429 ? 503 : 500).json({
+      error: 'Erreur lors de la correction',
+      detail: error?.message || String(error),
+      providerStatus: status,
+    });
   }
 });
 

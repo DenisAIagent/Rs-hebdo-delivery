@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
 import { todayString, nextFridayString } from '../utils/dates';
+import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
 
 const router = Router();
 
@@ -595,9 +596,45 @@ router.put('/prompt', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ========== CLAUDE MODELS ==========
+
+// GET /api/admin/models - Liste live des modèles Claude disponibles (récent → ancien)
+router.get('/models', async (_req: AuthRequest, res: Response) => {
+  try {
+    const models = await listClaudeModels();
+    return res.json(models);
+  } catch (error: any) {
+    console.error('List models error:', error);
+    return res.status(500).json({ error: 'Impossible de récupérer la liste des modèles', detail: error?.message || String(error) });
+  }
+});
+
+// GET /api/admin/models/latest - Modèle Claude le plus récent disponible
+router.get('/models/latest', async (_req: AuthRequest, res: Response) => {
+  try {
+    const latest = await getLatestClaudeModel();
+    if (!latest) return res.status(404).json({ error: 'Aucun modèle Claude trouvé' });
+    return res.json(latest);
+  } catch (error: any) {
+    console.error('Latest model error:', error);
+    return res.status(500).json({ error: 'Impossible de détecter le dernier modèle', detail: error?.message || String(error) });
+  }
+});
+
 // ========== APP SETTINGS ==========
 
-// GET /api/admin/settings - List all settings (values masked)
+// Keys that are not secrets and should be returned in clear
+const NON_SECRET_KEYS = new Set(['AI_PROVIDER', 'CLAUDE_MODEL']);
+
+function maskValue(key: string, value: string): string {
+  if (NON_SECRET_KEYS.has(key)) return value || '';
+  if (!value) return '';
+  return value.length > 4
+    ? '\u2022'.repeat(8) + value.slice(-4)
+    : '\u2022'.repeat(8);
+}
+
+// GET /api/admin/settings - List all settings (secret values masked)
 router.get('/settings', async (_req: AuthRequest, res: Response) => {
   try {
     const { data, error } = await supabaseAdmin
@@ -607,14 +644,9 @@ router.get('/settings', async (_req: AuthRequest, res: Response) => {
 
     if (error) throw error;
 
-    // Mask values: show only last 4 characters
     const masked = (data || []).map((s: any) => ({
       ...s,
-      value: s.value
-        ? s.value.length > 4
-          ? '\u2022'.repeat(8) + s.value.slice(-4)
-          : '\u2022'.repeat(8)
-        : '',
+      value: maskValue(s.key, s.value),
     }));
 
     return res.json(masked);
@@ -634,41 +666,55 @@ router.put('/settings', async (req: AuthRequest, res: Response) => {
 
   try {
     const results = [];
+    const failures: Array<{ key: string; reason: string }> = [];
     for (const s of settings) {
-      if (!s.key || typeof s.value !== 'string') continue;
+      if (!s.key || typeof s.value !== 'string') {
+        failures.push({ key: s?.key ?? '?', reason: 'payload invalide (key ou value manquant)' });
+        continue;
+      }
 
+      // Upsert so we tolerate keys that may not yet exist as rows
       const { data, error } = await supabaseAdmin
         .from('app_settings')
-        .update({
-          value: s.value.trim(),
-          updated_at: new Date().toISOString(),
-          updated_by: req.userId || null,
-        })
-        .eq('key', s.key)
+        .upsert(
+          {
+            key: s.key,
+            value: s.value.trim(),
+            updated_at: new Date().toISOString(),
+            updated_by: req.userId || null,
+          },
+          { onConflict: 'key' },
+        )
         .select()
         .single();
 
       if (error) {
         console.error(`Update setting ${s.key} error:`, error);
+        failures.push({ key: s.key, reason: error.message });
         continue;
       }
       results.push(data);
     }
 
-    // Return masked values
+    if (results.length === 0 && failures.length > 0) {
+      return res.status(500).json({
+        error: 'Erreur mise a jour settings',
+        failures,
+      });
+    }
+
     const masked = results.map((s: any) => ({
       ...s,
-      value: s.value
-        ? s.value.length > 4
-          ? '\u2022'.repeat(8) + s.value.slice(-4)
-          : '\u2022'.repeat(8)
-        : '',
+      value: maskValue(s.key, s.value),
     }));
 
-    return res.json(masked);
-  } catch (error) {
+    return res.json({ updated: masked, failures });
+  } catch (error: any) {
     console.error('Update settings error:', error);
-    return res.status(500).json({ error: 'Erreur mise a jour settings' });
+    return res.status(500).json({
+      error: 'Erreur mise a jour settings',
+      detail: error?.message || String(error),
+    });
   }
 });
 

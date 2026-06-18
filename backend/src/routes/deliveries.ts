@@ -24,7 +24,7 @@ function stripHtml(str: string): string {
 const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB per file
+  limits: { fileSize: 250 * 1024 * 1024 }, // 250MB per file
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
@@ -217,15 +217,33 @@ router.get('/paper-types', async (_req: AuthRequest, res: Response) => {
 });
 
 // POST /api/deliveries - Submit a delivery (now supports multiple images)
-// Extend timeout for this upload-heavy route (5 min)
-router.post('/', (req, _res, next) => { req.setTimeout(300_000); next(); }, upload.array('images', 10), async (req: AuthRequest, res: Response) => {
-  // Log context — built progressively as we gather info
+// Extend timeout for this upload-heavy route (15 min — accommodates large photos)
+router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, upload.array('images', 30), async (req: AuthRequest, res: Response) => {
+  // Log context — built progressively as we gather info (filled below)
   const ctx: LogContext = { journalistId: req.userId };
   let currentStep = 'start';
+  // Reassigned below to the resolved author
 
   try {
-    const { paper_type_id, title, metadata, hebdo_id } = req.body;
+    const { paper_type_id, title, metadata, hebdo_id, author_id: rawAuthorId } = req.body;
     const imageFiles = req.files as Express.Multer.File[];
+
+    // Resolve the author: admins can attribute a delivery to another active user
+    let authorId = req.userId!;
+    if (rawAuthorId && typeof rawAuthorId === 'string' && rawAuthorId !== req.userId) {
+      if (req.userRole !== 'admin') {
+        return res.status(403).json({ error: "Seul un admin peut attribuer une livraison a un autre utilisateur" });
+      }
+      const { data: targetProfile, error: targetError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, is_active')
+        .eq('id', rawAuthorId)
+        .single();
+      if (targetError || !targetProfile?.is_active) {
+        return res.status(400).json({ error: "Journaliste cible introuvable ou inactif" });
+      }
+      authorId = targetProfile.id;
+    }
 
     // Parse metadata if it's a JSON string
     let parsedMetadata: Record<string, any> = {};
@@ -279,14 +297,15 @@ router.post('/', (req, _res, next) => { req.setTimeout(300_000); next(); }, uplo
       return res.status(400).json({ error: 'Hebdo invalide' });
     }
 
-    // Get journalist profile
+    // Get journalist profile (the resolved author, which may differ from the caller when admin attributes)
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('full_name')
-      .eq('id', req.userId!)
+      .select('full_name, email')
+      .eq('id', authorId)
       .single();
 
-    const journalistName = profile?.full_name || req.userEmail || 'Unknown';
+    const journalistName = profile?.full_name || profile?.email || 'Unknown';
+    ctx.journalistId = authorId;
 
     // Strip HTML from all string metadata values
     for (const key of Object.keys(parsedMetadata)) {
@@ -362,7 +381,7 @@ router.post('/', (req, _res, next) => { req.setTimeout(300_000); next(); }, uplo
     const { data: delivery, error: insertError } = await supabaseAdmin
       .from('deliveries')
       .insert({
-        author_id: req.userId,
+        author_id: authorId,
         hebdo_id: hebdo.id,
         paper_type_id: paperType.id,
         title,
@@ -439,7 +458,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // PUT /api/deliveries/:id - Update a delivery (owner only, re-generates DOCX + re-uploads to Dropbox)
-router.put('/:id', (req, _res, next) => { req.setTimeout(300_000); next(); }, upload.array('images', 10), async (req: AuthRequest, res: Response) => {
+router.put('/:id', (req, _res, next) => { req.setTimeout(900_000); next(); }, upload.array('images', 30), async (req: AuthRequest, res: Response) => {
   const ctx: LogContext = { journalistId: req.userId };
   let currentStep = 'start';
 

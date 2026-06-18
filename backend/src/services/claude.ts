@@ -1,177 +1,172 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '../utils/supabase';
+import {
+  CorrectionResult,
+  buildSystemPrompt,
+  getPromptFromDB,
+  numberEmptyLines,
+  restoreStructure,
+} from './correctionPrompt';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  timeout: 120_000, // 2 minutes max
-});
+// Modèle utilisé par défaut si rien n'est configuré en base / en env.
+// Sert uniquement de dernier recours : la liste live (API Anthropic) et le
+// réglage CLAUDE_MODEL choisi dans l'admin priment toujours sur cette valeur.
+export const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-5-20250929';
 
-// Hardcoded fallback prompt in case DB is unavailable
-const FALLBACK_PROMPT = `Tu es correcteur professionnel pour Rolling Stone France (magazine hebdomadaire).
-
-Corrige le texte suivant en respectant ces regles :
-
-ORTHOGRAPHE & GRAMMAIRE :
-- Orthographe francaise impeccable
-- Grammaire et syntaxe correctes
-- Verification des noms propres (artistes, lieux, labels, producteurs) — corrige les erreurs d'orthographe sur les noms connus
-
-PONCTUATION & TYPOGRAPHIE :
-- Guillemets francais (\u00ab \u00bb) avec espaces insecables
-- Espaces insecables avant : ; ! ? et apres \u00ab
-- Tirets cadratins pour les incises
-
-CONVENTIONS EDITORIALES ROLLING STONE :
-- Noms d'albums en italique : <em>Nom de l'album</em>
-- Noms de singles/chansons entre guillemets : \u00ab Nom du single \u00bb
-- Citations en italique : <em>citation</em>
-- Noms propres avec majuscules correctes
-- Style journalistique Rolling Stone (dynamique, precis, pas de jargon inutile)
-
-MISE EN PAGE :
-- CONSERVE IMPERATIVEMENT tous les sauts de ligne (\\n) et la structure en paragraphes du texte original.
-- Ne fusionne JAMAIS deux paragraphes. Ne supprime JAMAIS de saut de ligne.
-- Chaque paragraphe du texte original doit rester un paragraphe separe dans le texte corrige.
-
-STYLE ET TON :
-- Ne modifie PAS le sens ni le ton du texte. Corrige uniquement les erreurs et applique le formatage editorial.
-- Les ponctuations expressives (?!, !?, ?!?, etc.) sont volontaires et font partie du style journalistique Rolling Stone. NE LES CORRIGE PAS. Exemples : "enfin de retour en France ?!" est correct, "c'est vraiment ca ?!" est correct.
-- Respecte le registre de langue du journaliste : familier, oral, exclamatif — c'est le style Rolling Stone, pas une erreur.
-
-Reponds UNIQUEMENT en JSON valide avec cette structure :
-{
-  "correctedText": "le texte corrige complet",
-  "corrections": [
-    {
-      "original": "mot ou passage original",
-      "corrected": "mot ou passage corrige",
-      "type": "orthographe|grammaire|ponctuation|style|typographie",
-      "explanation": "explication courte"
-    }
-  ]
-}
-
-Si le texte est parfait, renvoie correctedText identique et corrections vide.`;
-
-async function getPromptFromDB(): Promise<string> {
+export async function getApiKey(): Promise<string> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('correction_prompt')
-      .select('prompt_text')
-      .limit(1)
+    const { data } = await supabaseAdmin
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'ANTHROPIC_API_KEY')
       .single();
-
-    if (error || !data?.prompt_text) {
-      console.warn('Failed to fetch prompt from DB, using fallback:', error?.message);
-      return FALLBACK_PROMPT;
-    }
-
-    return data.prompt_text;
-  } catch (e) {
-    console.warn('Error fetching prompt from DB, using fallback:', e);
-    return FALLBACK_PROMPT;
+    const dbValue = data?.value?.trim();
+    if (dbValue) return dbValue;
+  } catch {
+    // ignore, fall through to env
   }
+  const envValue = process.env.ANTHROPIC_API_KEY?.trim();
+  if (envValue) return envValue;
+  throw new Error('ANTHROPIC_API_KEY non configuree (ni en base ni en variable d\'environnement)');
 }
 
-export interface CorrectionResult {
-  correctedText: string;
-  corrections: Array<{
-    original: string;
-    corrected: string;
-    type: 'orthographe' | 'grammaire' | 'ponctuation' | 'style' | 'typographie';
-    explanation: string;
-  }>;
-  signCount: number;
+/**
+ * Modèle Claude à utiliser pour la correction.
+ * Choisi par l'admin (app_settings.CLAUDE_MODEL), sinon env, sinon défaut.
+ */
+export async function getClaudeModel(): Promise<string> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'CLAUDE_MODEL')
+      .single();
+    const dbValue = data?.value?.trim();
+    if (dbValue) return dbValue;
+  } catch {
+    // ignore, fall through
+  }
+  return process.env.CLAUDE_MODEL?.trim() || DEFAULT_CLAUDE_MODEL;
 }
 
-// Unique marker that Claude won't touch — replaced back after correction
-const PARAGRAPH_MARKER = '¶¶BREAK¶¶';
+export interface ClaudeModelInfo {
+  id: string;
+  display_name: string;
+  created_at: string;
+}
+
+/**
+ * Liste, en direct depuis l'API Anthropic, les modèles Claude disponibles
+ * (triés du plus récent au plus ancien). Couvre automatiquement les modèles futurs.
+ */
+export async function listClaudeModels(): Promise<ClaudeModelInfo[]> {
+  const apiKey = await getApiKey();
+  const anthropic = new Anthropic({ apiKey, timeout: 30_000 });
+  const out: ClaudeModelInfo[] = [];
+  for await (const m of anthropic.models.list({ limit: 100 })) {
+    if (!m.id?.startsWith('claude-')) continue;
+    out.push({
+      id: m.id,
+      display_name: (m as any).display_name || m.id,
+      created_at: (m as any).created_at || '',
+    });
+  }
+  out.sort((a, b) => (b.created_at > a.created_at ? 1 : b.created_at < a.created_at ? -1 : 0));
+  return out;
+}
+
+/** Renvoie le modèle Claude le plus récent disponible sur le compte. */
+export async function getLatestClaudeModel(): Promise<ClaudeModelInfo | null> {
+  const models = await listClaudeModels();
+  return models[0] ?? null;
+}
+
+// Outil de sortie structurée : force Claude à répondre dans un schéma JSON valide
+// (fini le parsing fragile de texte libre / les réponses « 0 correction » fantômes).
+const CORRECTION_TOOL = {
+  name: 'submit_correction',
+  description: "Renvoie le texte corrigé complet et la liste détaillée des corrections appliquées.",
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      correctedText: {
+        type: 'string',
+        description: "Le texte corrigé complet, avec les marqueurs [LIGNE_VIDE_X] conservés à leur position.",
+      },
+      corrections: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            original: { type: 'string' },
+            corrected: { type: 'string' },
+            type: { type: 'string', enum: ['orthographe', 'grammaire', 'ponctuation', 'style', 'typographie'] },
+            explanation: { type: 'string' },
+          },
+          required: ['original', 'corrected', 'type', 'explanation'],
+        },
+      },
+    },
+    required: ['correctedText', 'corrections'],
+  },
+};
 
 export async function correctText(text: string): Promise<CorrectionResult> {
+  const apiKey = await getApiKey();
   const promptText = await getPromptFromDB();
 
-  // Replace newlines with unique markers so Claude preserves paragraph structure
-  const markedText = text
-    .replace(/\n\n+/g, `\n${PARAGRAPH_MARKER}\n`)  // double+ newlines → marker
-    .replace(/\n/g, `\n${PARAGRAPH_MARKER}\n`);      // single newlines → marker
+  const anthropic = new Anthropic({ apiKey, timeout: 120_000 });
+  let model = await getClaudeModel();
+  const numberedText = numberEmptyLines(text);
 
-  // Actually, simpler: split into paragraphs, number them, send with clear structure
-  const paragraphs = text.split(/\n/);
-  const numberedText = paragraphs
-    .map((p, i) => p.trim() === '' ? `[LIGNE_VIDE_${i}]` : p)
-    .join('\n');
+  // jusqu'à 2 tentatives : la sortie structurée est fiable, mais on se protège
+  // d'une éventuelle troncature / aléa réseau / modèle invalide plutôt que de
+  // renvoyer un faux « 0 faute ».
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await anthropic.messages.create({
+        model,
+        max_tokens: 16384,
+        system: buildSystemPrompt(promptText),
+        tools: [CORRECTION_TOOL],
+        tool_choice: { type: 'tool', name: 'submit_correction' },
+        messages: [
+          {
+            role: 'user',
+            content: `<text_to_correct>\n${numberedText}\n</text_to_correct>`,
+          },
+        ],
+      });
 
-  const systemPrompt = `${promptText}
+      const toolUse = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
 
-REGLE ABSOLUE SUR LES SAUTS DE LIGNE :
-Le texte contient des marqueurs [LIGNE_VIDE_X] qui representent des lignes vides (sauts de paragraphe). Tu DOIS les conserver EXACTEMENT tels quels dans correctedText, a leur position d'origine. Chaque ligne du texte original doit rester sur sa propre ligne dans correctedText. Ne fusionne JAMAIS deux lignes.`;
+      if (toolUse) {
+        const result = toolUse.input as { correctedText?: string; corrections?: CorrectionResult['corrections'] };
+        const corrections = Array.isArray(result.corrections) ? result.corrections : [];
+        const corrected = restoreStructure(text, result.correctedText || text, corrections);
+        return { correctedText: corrected, corrections, signCount: corrected.length };
+      }
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 16384,
-    system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: `<text_to_correct>\n${numberedText}\n</text_to_correct>`,
-      },
-    ],
-  });
-
-  try {
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type');
-    }
-
-    // Extract JSON from possible markdown code blocks
-    let jsonText = content.text.trim();
-    if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-    }
-
-    const result = JSON.parse(jsonText);
-
-    // Restore empty line markers back to actual newlines
-    let corrected: string = result.correctedText;
-    corrected = corrected.replace(/\[LIGNE_VIDE_\d+\]/g, '');
-
-    // Safety: if Claude somehow stripped all newlines, re-inject paragraph structure
-    const originalNewlines = (text.match(/\n/g) || []).length;
-    const correctedNewlines = (corrected.match(/\n/g) || []).length;
-
-    if (originalNewlines > 3 && correctedNewlines < originalNewlines * 0.5) {
-      // Claude butchered the formatting — use paragraph-by-paragraph correction
-      console.warn(`[Claude] Newlines lost: original=${originalNewlines}, corrected=${correctedNewlines}. Using original structure.`);
-      // Split original into paragraphs and try to map corrected text back
-      // Fallback: use corrected text but re-inject original paragraph breaks
-      const origParagraphs = text.split(/\n\n+/);
-      const corrParagraphs = corrected.split(/\n\n+/);
-
-      if (corrParagraphs.length >= origParagraphs.length * 0.5) {
-        corrected = corrParagraphs.join('\n\n');
-      } else {
-        // Last resort: apply corrections but keep original structure
-        corrected = text;
-        for (const c of (result.corrections || [])) {
-          if (c.original && c.corrected) {
-            corrected = corrected.replace(c.original, c.corrected);
-          }
-        }
+      // Pas de bloc structuré : généralement une troncature (max_tokens) → on retente.
+      lastErr = new Error(`stop_reason=${response.stop_reason}`);
+      console.error(`[Correction] Pas de tool_use (tentative ${attempt}/2), stop_reason=${response.stop_reason}`);
+    } catch (e: any) {
+      lastErr = e;
+      const msg = String(e?.message || e);
+      console.error(`[Correction] Erreur API (tentative ${attempt}/2, modèle=${model}):`, msg);
+      // Modèle configuré invalide/inexistant → on bascule sur le modèle par défaut pour la 2e tentative.
+      if (model !== DEFAULT_CLAUDE_MODEL && /model|not_found|404|does not exist|invalid/i.test(msg)) {
+        console.warn(`[Correction] Bascule vers le modèle par défaut: ${DEFAULT_CLAUDE_MODEL}`);
+        model = DEFAULT_CLAUDE_MODEL;
       }
     }
-
-    return {
-      correctedText: corrected,
-      corrections: result.corrections || [],
-      signCount: corrected.length,
-    };
-  } catch (e) {
-    console.error('Failed to parse Claude correction response:', e);
-    return {
-      correctedText: text,
-      corrections: [],
-      signCount: text.length,
-    };
   }
+
+  // On ne ment plus en renvoyant « 0 correction » : on remonte une vraie erreur.
+  console.error('[Correction] Échec de la correction structurée:', lastErr);
+  throw new Error("La correction n'a pas abouti (texte peut-être trop long ou réponse incomplète). Réessaie.");
 }
+
+// Re-export for backward compatibility with existing imports
+export type { CorrectionResult } from './correctionPrompt';

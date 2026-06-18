@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
-import { adminGetSettings, adminUpdateSettings } from '../../services/api.ts';
+import {
+  adminGetSettings,
+  adminUpdateSettings,
+  adminGetModels,
+  adminGetLatestModel,
+  type ClaudeModelInfo,
+} from '../../services/api.ts';
 import type { AppSetting } from '../../types/index.ts';
-import { Key, Eye, EyeOff, Save, AlertCircle, Loader2 } from 'lucide-react';
+import { Key, Eye, EyeOff, Save, AlertCircle, Loader2, Sparkles, Cpu, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface SettingField {
@@ -16,15 +22,25 @@ interface SettingSection {
   fields: SettingField[];
 }
 
-const SECTIONS: SettingSection[] = [
+const SECRET_SECTIONS: SettingSection[] = [
   {
-    title: 'API Claude (Anthropic)',
+    title: 'Cles API IA',
     icon: <Key size={18} className="text-purple-600" />,
     fields: [
       {
         key: 'ANTHROPIC_API_KEY',
-        label: 'Cle API Anthropic',
-        description: 'Cle utilisee pour la correction automatique des textes via Claude.',
+        label: 'Cle API Anthropic (Claude)',
+        description: 'Utilisee quand le moteur IA selectionne est Anthropic.',
+      },
+      {
+        key: 'GEMINI_API_KEY',
+        label: 'Cle API Google Gemini',
+        description: 'Utilisee quand le moteur IA selectionne est Gemini (modele gemini-3.5-flash).',
+      },
+      {
+        key: 'MISTRAL_API_KEY',
+        label: 'Cle API Mistral',
+        description: 'Utilisee quand le moteur IA selectionne est Mistral (modele mistral-large-latest).',
       },
     ],
   },
@@ -32,23 +48,42 @@ const SECTIONS: SettingSection[] = [
     title: 'Dropbox',
     icon: <Key size={18} className="text-blue-600" />,
     fields: [
-      {
-        key: 'DROPBOX_APP_KEY',
-        label: 'App Key',
-        description: 'Identifiant de l\'application Dropbox.',
-      },
-      {
-        key: 'DROPBOX_APP_SECRET',
-        label: 'App Secret',
-        description: 'Secret de l\'application Dropbox.',
-      },
-      {
-        key: 'DROPBOX_REFRESH_TOKEN',
-        label: 'Refresh Token',
-        description: 'Token de rafraichissement pour l\'acces Dropbox.',
-      },
+      { key: 'DROPBOX_APP_KEY', label: 'App Key', description: "Identifiant de l'application Dropbox." },
+      { key: 'DROPBOX_APP_SECRET', label: 'App Secret', description: "Secret de l'application Dropbox." },
+      { key: 'DROPBOX_REFRESH_TOKEN', label: 'Refresh Token', description: "Token de rafraichissement pour l'acces Dropbox." },
     ],
   },
+];
+
+type AIProvider = 'anthropic' | 'gemini' | 'mistral' | 'claude-code';
+
+interface ProviderDef {
+  id: AIProvider;
+  label: string;
+  model: string;
+  /** App-settings key for the secret; null means no key required (e.g. local CLI). */
+  keyName: string | null;
+  /** True when this provider only works locally (no production deploy). */
+  localOnly?: boolean;
+}
+
+const PROVIDERS: ReadonlyArray<ProviderDef> = [
+  { id: 'anthropic', label: 'Anthropic', model: 'choisi ci-dessous', keyName: 'ANTHROPIC_API_KEY' },
+  { id: 'gemini', label: 'Gemini', model: 'gemini-3.5-flash', keyName: 'GEMINI_API_KEY' },
+  { id: 'mistral', label: 'Mistral', model: 'mistral-large-latest', keyName: 'MISTRAL_API_KEY' },
+  { id: 'claude-code', label: 'Claude Code', model: 'sonnet (CLI local)', keyName: null, localOnly: true },
+];
+
+// Modèle par défaut côté UI (doit rester aligné sur DEFAULT_CLAUDE_MODEL du backend).
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-5-20250929';
+
+// Liste de secours affichée dans le sélecteur quand l'API live Anthropic est
+// injoignable (clé absente, réseau). La liste live (récupérée à chaud) prime
+// toujours et fait apparaître automatiquement les nouveaux modèles.
+const FALLBACK_CLAUDE_MODELS: ReadonlyArray<ClaudeModelInfo> = [
+  { id: 'claude-opus-4-1-20250805', display_name: 'Claude Opus 4.1', created_at: '' },
+  { id: 'claude-sonnet-4-5-20250929', display_name: 'Claude Sonnet 4.5', created_at: '' },
+  { id: 'claude-3-5-haiku-latest', display_name: 'Claude Haiku 3.5', created_at: '' },
 ];
 
 export function SettingsTab() {
@@ -56,17 +91,34 @@ export function SettingsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Track which fields are being edited (key -> new value)
+  // Secret fields editing state
   const [editing, setEditing] = useState<Record<string, string>>({});
-  // Track which fields have visible values
   const [visible, setVisible] = useState<Record<string, boolean>>({});
-  // Track saving state per section
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  // AI provider state
+  const [provider, setProvider] = useState<AIProvider>('anthropic');
+  const [providerDirty, setProviderDirty] = useState(false);
+  const [providerSaving, setProviderSaving] = useState(false);
+
+  // Claude model state
+  const [model, setModel] = useState('');
+  const [models, setModels] = useState<ClaudeModelInfo[]>([]);
+  const [modelDirty, setModelDirty] = useState(false);
+  const [modelSaving, setModelSaving] = useState(false);
+  const [modelSearching, setModelSearching] = useState(false);
 
   const load = async () => {
     try {
       const data = await adminGetSettings();
       setSettings(data);
+      const p = data.find((s) => s.key === 'AI_PROVIDER')?.value;
+      if (p && PROVIDERS.some((x) => x.id === p)) {
+        setProvider(p as AIProvider);
+        setProviderDirty(false);
+      }
+      const m = data.find((s) => s.key === 'CLAUDE_MODEL')?.value;
+      if (m) { setModel(m); setModelDirty(false); }
     } catch {
       setError('Erreur chargement des settings');
     } finally {
@@ -74,32 +126,76 @@ export function SettingsTab() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  // Charge la liste live des modèles Anthropic (silencieux si la clé n'est pas configurée)
+  const loadModels = async () => {
+    try {
+      const list = await adminGetModels();
+      setModels(list);
+      // si aucun modèle enregistré, propose le plus récent par défaut dans le menu
+      setModel((cur) => cur || (list[0]?.id ?? FALLBACK_CLAUDE_MODELS[0].id));
+    } catch {
+      /* clé API absente ou erreur réseau — on bascule sur la liste de secours */
+      setModel((cur) => cur || FALLBACK_CLAUDE_MODELS[0].id);
+    }
+  };
+
+  // Options du sélecteur : liste live si disponible, sinon liste de secours.
+  const modelOptions: ClaudeModelInfo[] = models.length > 0 ? models : [...FALLBACK_CLAUDE_MODELS];
+
+  useEffect(() => { load().then(loadModels); }, []);
+
+  const handleSaveModel = async (value?: string) => {
+    const v = (value ?? model).trim();
+    if (!v) { toast.error('Choisis un modèle'); return; }
+    setModelSaving(true);
+    try {
+      const { failures } = await adminUpdateSettings([{ key: 'CLAUDE_MODEL', value: v }]);
+      if (failures.length > 0) {
+        toast.error(`Erreur : ${failures[0].reason}`);
+      } else {
+        toast.success(`Modèle de correction : ${v}`);
+        setModel(v);
+        setModelDirty(false);
+        await load();
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || err?.response?.data?.error || 'Erreur enregistrement modèle');
+    } finally {
+      setModelSaving(false);
+    }
+  };
+
+  const handleSearchLatest = async () => {
+    setModelSearching(true);
+    try {
+      const latest = await adminGetLatestModel();
+      // rafraîchit aussi la liste complète au passage
+      await loadModels();
+      const created = latest.created_at ? new Date(latest.created_at).toLocaleDateString('fr-FR') : '';
+      toast.success(`Dernier modèle : ${latest.display_name}${created ? ` (${created})` : ''}`);
+      await handleSaveModel(latest.id);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || err?.response?.data?.error || 'Détection impossible (clé API Anthropic configurée ?)');
+    } finally {
+      setModelSearching(false);
+    }
+  };
 
   const getSettingValue = (key: string): string => {
-    const s = settings.find((s) => s.key === key);
-    return s?.value || '';
+    return settings.find((s) => s.key === key)?.value || '';
   };
 
   const isEditing = (key: string): boolean => key in editing;
-
-  const startEditing = (key: string) => {
-    setEditing((prev) => ({ ...prev, [key]: '' }));
-  };
-
-  const cancelEditing = (key: string) => {
-    setEditing((prev) => {
-      const next = { ...prev };
+  const startEditing = (key: string) => setEditing((p) => ({ ...p, [key]: '' }));
+  const cancelEditing = (key: string) =>
+    setEditing((p) => {
+      const next = { ...p };
       delete next[key];
       return next;
     });
-  };
+  const toggleVisibility = (key: string) => setVisible((p) => ({ ...p, [key]: !p[key] }));
 
-  const toggleVisibility = (key: string) => {
-    setVisible((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const handleSaveSection = async (section: SettingSection) => {
+  const handleSaveSecretSection = async (section: SettingSection) => {
     const sectionKeys = section.fields.map((f) => f.key);
     const toUpdate = sectionKeys
       .filter((key) => key in editing && editing[key].trim() !== '')
@@ -110,30 +206,52 @@ export function SettingsTab() {
       return;
     }
 
-    setSaving((prev) => ({ ...prev, [section.title]: true }));
+    setSaving((p) => ({ ...p, [section.title]: true }));
     try {
-      await adminUpdateSettings(toUpdate);
-      toast.success('Settings mis a jour');
-      // Clear editing state for saved keys
-      setEditing((prev) => {
-        const next = { ...prev };
-        for (const key of toUpdate.map((u) => u.key)) {
-          delete next[key];
-        }
+      const { updated, failures } = await adminUpdateSettings(toUpdate);
+      if (failures.length > 0) {
+        const first = failures[0];
+        toast.error(`Erreur sur ${first.key} : ${first.reason}`);
+      }
+      if (updated.length > 0) {
+        toast.success(`${updated.length} parametre(s) mis a jour`);
+      }
+      setEditing((p) => {
+        const next = { ...p };
+        for (const k of updated.map((u) => u.key)) delete next[k];
         return next;
       });
-      // Reload to get masked values
       await load();
-    } catch {
-      toast.error('Erreur mise a jour');
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.response?.data?.error || err?.message || 'Erreur inconnue';
+      toast.error(`Erreur mise a jour : ${msg}`);
     } finally {
-      setSaving((prev) => ({ ...prev, [section.title]: false }));
+      setSaving((p) => ({ ...p, [section.title]: false }));
     }
   };
 
-  const sectionHasEdits = (section: SettingSection): boolean => {
-    return section.fields.some((f) => f.key in editing && editing[f.key].trim() !== '');
+  const handleSaveProvider = async () => {
+    setProviderSaving(true);
+    try {
+      const { failures } = await adminUpdateSettings([{ key: 'AI_PROVIDER', value: provider }]);
+      if (failures.length > 0) {
+        toast.error(`Erreur : ${failures[0].reason}`);
+      } else {
+        const label = PROVIDERS.find((p) => p.id === provider)?.label ?? provider;
+        toast.success(`Moteur IA : ${label}`);
+        setProviderDirty(false);
+      }
+      await load();
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.response?.data?.error || err?.message || 'Erreur inconnue';
+      toast.error(`Erreur moteur IA : ${msg}`);
+    } finally {
+      setProviderSaving(false);
+    }
   };
+
+  const sectionHasEdits = (section: SettingSection): boolean =>
+    section.fields.some((f) => f.key in editing && editing[f.key].trim() !== '');
 
   if (loading) {
     return <div className="text-center py-8 text-gray-400">Chargement...</div>;
@@ -150,16 +268,157 @@ export function SettingsTab() {
         </div>
       )}
 
+      {/* AI Engine selector */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50">
+          <Sparkles size={18} className="text-rs-red" />
+          <h3 className="font-semibold text-rs-black">Moteur IA pour la correction</h3>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-xs text-gray-500">
+            Choisis le fournisseur d'IA utilise pour corriger les textes. La cle API correspondante doit etre configuree ci-dessous.
+          </p>
+
+          {/* Segmented toggle — 3 positions */}
+          <div
+            role="radiogroup"
+            aria-label="Moteur IA"
+            className="relative inline-flex w-full max-w-xl p-1 rounded-full bg-gray-100 border border-gray-200"
+          >
+            {/* Sliding indicator */}
+            <span
+              aria-hidden
+              className="absolute top-1 bottom-1 rounded-full bg-rs-red shadow-sm transition-transform duration-200 ease-out"
+              style={{
+                width: `calc(${100 / PROVIDERS.length}% - ${8 / PROVIDERS.length}px)`,
+                transform: `translateX(${PROVIDERS.findIndex((p) => p.id === provider) * 100}%)`,
+              }}
+            />
+
+            {PROVIDERS.map((p) => {
+              const isActive = provider === p.id;
+              const keyConfigured = p.keyName ? !!getSettingValue(p.keyName) : true;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={isActive}
+                  onClick={() => {
+                    setProvider(p.id);
+                    setProviderDirty(true);
+                  }}
+                  className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-full transition-colors whitespace-nowrap ${
+                    isActive ? 'text-white' : 'text-gray-600 hover:text-rs-black'
+                  }`}
+                >
+                  {p.label}
+                  {!keyConfigured && (
+                    <span
+                      title={`Cle ${p.label} manquante`}
+                      className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-red-500'}`}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selection details */}
+          <div className="space-y-2">
+            <div className="text-xs text-gray-500 flex items-center gap-2">
+              <span>Modele :</span>
+              <code className="font-mono text-rs-black bg-gray-50 px-2 py-0.5 rounded">
+                {provider === 'anthropic'
+                  ? (getSettingValue('CLAUDE_MODEL') || model || DEFAULT_CLAUDE_MODEL)
+                  : (PROVIDERS.find((p) => p.id === provider)?.model ?? '—')}
+              </code>
+            </div>
+            {PROVIDERS.find((p) => p.id === provider)?.localOnly && (
+              <div className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+                <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                <span>
+                  <strong>Mode local uniquement.</strong> Utilise le CLI <code className="font-mono">claude</code>{' '}
+                  installe sur la machine du serveur (ton abonnement Claude). Ne fonctionne pas en production sur Railway.
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end">
+          <button
+            onClick={handleSaveProvider}
+            disabled={!providerDirty || providerSaving}
+            className="flex items-center gap-1.5 bg-rs-red hover:bg-rs-red-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {providerSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Appliquer
+          </button>
+        </div>
+      </div>
+
+      {/* Modèle Claude pour la correction */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50">
+          <Cpu size={18} className="text-rs-red" />
+          <h3 className="font-semibold text-rs-black">Modèle Claude (correction)</h3>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <p className="text-xs text-gray-500">
+            Modèle Anthropic utilisé pour la correction quand le moteur « Anthropic » est actif. La liste est
+            récupérée en direct depuis l'API Anthropic — les modèles futurs apparaissent automatiquement. Si la clé
+            n'est pas encore configurée, une liste de secours est proposée.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <select
+              value={model}
+              onChange={(e) => { setModel(e.target.value); setModelDirty(true); }}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-rs-red focus:border-transparent"
+            >
+              {modelOptions.map((m) => (
+                <option key={m.id} value={m.id}>{m.display_name} — {m.id}</option>
+              ))}
+              {model && !modelOptions.some((m) => m.id === model) && (
+                <option value={model}>{model} (actuel)</option>
+              )}
+            </select>
+            <button
+              type="button"
+              onClick={handleSearchLatest}
+              disabled={modelSearching || modelSaving}
+              className="flex items-center justify-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg border border-rs-red text-rs-red hover:bg-rs-red/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {modelSearching ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+              Rechercher la version la plus récente
+            </button>
+          </div>
+          <div className="text-xs text-gray-500 flex items-center gap-2">
+            <span>Actif :</span>
+            <code className="font-mono text-rs-black bg-gray-50 px-2 py-0.5 rounded">
+              {getSettingValue('CLAUDE_MODEL') || `défaut (${DEFAULT_CLAUDE_MODEL})`}
+            </code>
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end">
+          <button
+            onClick={() => handleSaveModel()}
+            disabled={!modelDirty || modelSaving || modelSearching}
+            className="flex items-center gap-1.5 bg-rs-red hover:bg-rs-red-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {modelSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Enregistrer le modèle
+          </button>
+        </div>
+      </div>
+
       <div className="space-y-6">
-        {SECTIONS.map((section) => (
+        {SECRET_SECTIONS.map((section) => (
           <div key={section.title} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {/* Section header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-gray-50">
               {section.icon}
               <h3 className="font-semibold text-rs-black">{section.title}</h3>
             </div>
 
-            {/* Fields */}
             <div className="divide-y divide-gray-100">
               {section.fields.map((field) => {
                 const maskedValue = getSettingValue(field.key);
@@ -223,18 +482,13 @@ export function SettingsTab() {
               })}
             </div>
 
-            {/* Save button */}
             <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end">
               <button
-                onClick={() => handleSaveSection(section)}
+                onClick={() => handleSaveSecretSection(section)}
                 disabled={!sectionHasEdits(section) || saving[section.title]}
                 className="flex items-center gap-1.5 bg-rs-red hover:bg-rs-red-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {saving[section.title] ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Save size={16} />
-                )}
+                {saving[section.title] ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Enregistrer
               </button>
             </div>

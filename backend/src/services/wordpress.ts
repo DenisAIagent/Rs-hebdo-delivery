@@ -5,7 +5,62 @@
  */
 
 import axios, { AxiosInstance } from 'axios';
+import { lookup } from 'node:dns/promises';
+import net from 'node:net';
 import { supabaseAdmin } from '../utils/supabase';
+
+/** Adresse IP privée / loopback / lien-local (cibles SSRF internes). */
+function isPrivateIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const p = ip.split('.').map(Number);
+    return (
+      p[0] === 10 ||
+      p[0] === 127 ||
+      p[0] === 0 ||
+      (p[0] === 169 && p[1] === 254) ||
+      (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+      (p[0] === 192 && p[1] === 168)
+    );
+  }
+  const v = ip.toLowerCase();
+  return v === '::1' || v === '::' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe80') ||
+    v.startsWith('::ffff:127.') || v.startsWith('::ffff:10.') || v.startsWith('::ffff:192.168.');
+}
+
+/**
+ * Valide une URL WordPress avant tout appel serveur : HTTPS obligatoire et
+ * hôte résolvant vers une IP publique (anti-SSRF vers les services internes /
+ * métadonnées cloud). En dev on tolère http://localhost pour les tests.
+ */
+async function assertSafeWpUrl(rawUrl: string): Promise<string> {
+  let u: URL;
+  try {
+    u = new URL(rawUrl);
+  } catch {
+    throw new Error('WORDPRESS_URL invalide');
+  }
+
+  const isDev = process.env.NODE_ENV !== 'production';
+  const isLocalDev = isDev && u.hostname === 'localhost';
+
+  if (u.protocol !== 'https:' && !isLocalDev) {
+    throw new Error('WORDPRESS_URL doit utiliser HTTPS');
+  }
+
+  if (!isLocalDev) {
+    let address: string;
+    try {
+      ({ address } = await lookup(u.hostname));
+    } catch {
+      throw new Error('Hôte WordPress introuvable (DNS)');
+    }
+    if (isPrivateIp(address)) {
+      throw new Error('Hôte WordPress non autorisé (adresse réseau interne)');
+    }
+  }
+
+  return `${u.origin}${u.pathname}`.replace(/\/+$/, '');
+}
 
 export interface WpConfig {
   baseUrl: string;
@@ -46,11 +101,7 @@ export async function getWpConfig(): Promise<WpConfig> {
     throw new Error('Configuration WordPress incomplete (URL, utilisateur ou mot de passe application manquant)');
   }
 
-  const baseUrl = rawUrl.replace(/\/+$/, '');
-  if (!/^https?:\/\//.test(baseUrl)) {
-    throw new Error('WORDPRESS_URL invalide (doit commencer par https://)');
-  }
-
+  const baseUrl = await assertSafeWpUrl(rawUrl);
   return { baseUrl, username, appPassword };
 }
 

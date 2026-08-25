@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import multer from 'multer';
 import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
@@ -22,18 +22,48 @@ function stripHtml(str: string): string {
     .replace(/&#39;/g, "'");
 }
 
+const MAX_FILE_BYTES = 60 * 1024 * 1024; // 60 Mo/fichier — large pour une photo de presse HD
+const MAX_FILES = 30;
+
 const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 250 * 1024 * 1024 }, // 250MB per file
+  limits: { fileSize: MAX_FILE_BYTES, files: MAX_FILES, fields: 50 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    // On refuse d'emblee SVG (vecteur XSS) et tout ce qui n'est pas une image.
+    // Le MIME client n'est pas fiable : la vraie verif se fait sur les magic
+    // bytes apres reception (assertRealImages).
+    if (file.mimetype === 'image/svg+xml') {
+      cb(new Error('Les images SVG ne sont pas acceptees'));
+    } else if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
       cb(new Error('Seules les images sont acceptees'));
     }
   },
 });
+
+/** Vrai type d'image d'apres les premiers octets (indépendant du MIME client). */
+function detectImageType(buf: Buffer): string | null {
+  if (buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'gif';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  if ((buf[0] === 0x49 && buf[1] === 0x49 && buf[2] === 0x2a && buf[3] === 0x00) ||
+      (buf[0] === 0x4d && buf[1] === 0x4d && buf[2] === 0x00 && buf[3] === 0x2a)) return 'tiff';
+  if (buf.toString('ascii', 4, 8) === 'ftyp') return 'heic'; // HEIC/HEIF
+  return null;
+}
+
+/** Rejette toute pièce jointe dont le contenu binaire n'est pas une image reconnue. */
+function assertRealImages(files: Express.Multer.File[]): void {
+  for (const f of files || []) {
+    if (!detectImageType(f.buffer)) {
+      throw new Error(`Fichier « ${f.originalname} » : contenu non reconnu comme une image valide`);
+    }
+  }
+}
 
 // GET /api/deliveries - List user's deliveries
 router.get('/', async (req: AuthRequest, res: Response) => {
@@ -119,7 +149,7 @@ router.get('/hebdos', async (_req: AuthRequest, res: Response) => {
 const ensureHebdoLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
-  keyGenerator: (req: AuthRequest) => req.userId || req.ip || 'unknown',
+  keyGenerator: (req: AuthRequest) => req.userId || ipKeyGenerator(req.ip || ''),
   message: { error: 'Trop de creations d\'hebdo. Reessayez plus tard.' },
 });
 router.post('/ensure-hebdo', ensureHebdoLimiter, async (req: AuthRequest, res: Response) => {
@@ -184,12 +214,15 @@ router.post('/prepare-hebdo', async (req: AuthRequest, res: Response) => {
       .eq('is_active', true);
 
     if (activeTypes && activeTypes.length > 0) {
-      const result = await ensureHebdoFolderStructure(hebdo.label, activeTypes);
+      // On (pré)crée la structure de dossiers mais on NE renvoie PAS le lien
+      // partagé du dossier racine de l'hebdo : ce lien donne accès aux papiers
+      // de tous les journalistes et n'a aucune utilité côté journaliste ici.
+      await ensureHebdoFolderStructure(hebdo.label, activeTypes);
       await logInfo('dropbox-prepare', `Dossiers Dropbox pre-crees pour ${hebdo.label}`, {
         journalistId: req.userId,
         hebdoLabel: hebdo.label,
       });
-      return res.json({ message: 'Dossiers prets', folderUrl: result.hebdoFolderUrl });
+      return res.json({ message: 'Dossiers prets' });
     }
 
     return res.json({ message: 'Aucun type de papier actif' });
@@ -228,6 +261,14 @@ router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, uplo
   try {
     const { paper_type_id, title, metadata, hebdo_id, author_id: rawAuthorId } = req.body;
     const imageFiles = req.files as Express.Multer.File[];
+
+    // Vérifie que chaque fichier est réellement une image (magic bytes)
+    currentStep = 'validation';
+    try {
+      assertRealImages(imageFiles);
+    } catch (e: any) {
+      return res.status(400).json({ error: e?.message || 'Image invalide' });
+    }
 
     // Resolve the author: admins can attribute a delivery to another active user
     let authorId = req.userId!;
@@ -481,6 +522,13 @@ router.put('/:id', (req, _res, next) => { req.setTimeout(900_000); next(); }, up
     const { id } = req.params;
     const { title, metadata } = req.body;
     const imageFiles = req.files as Express.Multer.File[];
+
+    // Vérifie que chaque fichier est réellement une image (magic bytes)
+    try {
+      assertRealImages(imageFiles);
+    } catch (e: any) {
+      return res.status(400).json({ error: e?.message || 'Image invalide' });
+    }
 
     // ── Check ownership ─────────────────────────────────
     currentStep = 'ownership';

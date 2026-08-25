@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { AuthRequest } from '../middleware/auth';
 import { correctText } from '../services/correction';
 
@@ -9,7 +9,7 @@ const router = Router();
 const correctionLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,  // 1 hour window
   max: 30,                     // 30 corrections per hour per user
-  keyGenerator: (req: AuthRequest) => req.userId || req.ip || 'unknown',
+  keyGenerator: (req: AuthRequest) => req.userId || ipKeyGenerator(req.ip || ''),
   message: { error: 'Trop de corrections demandees. Reessayez dans quelques minutes.' },
   standardHeaders: true,
   legacyHeaders: false,

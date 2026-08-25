@@ -49,7 +49,7 @@ export async function getNextHebdo(): Promise<HebdoConfig | null> {
   return data;
 }
 
-export async function prepareHebdo(hebdoId: string): Promise<{ message: string; folderUrl?: string }> {
+export async function prepareHebdo(hebdoId: string): Promise<{ message: string }> {
   const { data } = await api.post('/api/deliveries/prepare-hebdo', { hebdo_id: hebdoId }, { timeout: 60000 });
   return data;
 }

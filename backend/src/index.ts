@@ -118,10 +118,17 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'Internal server error', reference: errorId });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`RS Hebdo Delivery API running on port ${PORT} (${isProd ? 'production' : 'development'})`);
+// Interface d'écoute. Non défini (Railway) => toutes interfaces, comportement
+// historique. Défini (ex. app desktop => 127.0.0.1) => écoute restreinte,
+// le serveur n'est alors pas joignable depuis le réseau.
+const BIND_HOST = process.env.BIND_HOST?.trim();
+const onListening = () => {
+  console.log(`RS Hebdo Delivery API running on port ${PORT}${BIND_HOST ? ` (host ${BIND_HOST})` : ''} (${isProd ? 'production' : 'development'})`);
   startHebdoRotation();
-});
+};
+const server = BIND_HOST
+  ? app.listen(Number(PORT), BIND_HOST, onListening)
+  : app.listen(PORT, onListening);
 
 // Default short timeout (30s) — upload routes extend per-request
 server.timeout = 30_000;

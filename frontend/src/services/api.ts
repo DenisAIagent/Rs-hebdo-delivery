@@ -148,6 +148,11 @@ export async function adminUpdateJournalist(id: string, j: Partial<Profile>): Pr
   return data;
 }
 
+export async function adminResetJournalistMfa(id: string): Promise<{ message: string }> {
+  const { data } = await api.delete(`/api/admin/journalists/${id}/mfa`);
+  return data;
+}
+
 export async function adminGetDeliveries(): Promise<Delivery[]> {
   const { data } = await api.get('/api/admin/deliveries');
   return data;

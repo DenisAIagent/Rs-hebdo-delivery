@@ -1581,6 +1581,15 @@ Les routes de livraison (`POST /api/deliveries`, `PUT /api/deliveries/:id`) éte
 
 ## 12. Sécurité
 
+### Double authentification (2FA) — obligatoire pour tous
+
+La 2FA TOTP (Google Authenticator, 1Password, Authy…) est **obligatoire pour tous les comptes**, via le MFA natif Supabase :
+
+- **Frontend** : après le login par mot de passe, la page `/mfa` prend le relais — saisie du code à 6 chiffres si un facteur est déjà enrôlé, sinon enrôlement forcé (QR code + clé manuelle) avant d'entrer dans l'app.
+- **Backend** : `authMiddleware` exige le claim `aal: 'aal2'` dans le JWT sur **toutes** les routes API — une session mot-de-passe-seul (AAL1) reçoit `401 { code: 'mfa_required' }`.
+- **Téléphone perdu** : un admin réinitialise la 2FA d'un utilisateur (Admin → Journalistes → icône bouclier barré, ou `DELETE /api/admin/journalists/:id/mfa`) ; l'utilisateur re-scanne un QR code à sa prochaine connexion.
+- **Prérequis** : TOTP activé côté Supabase — local : `[auth.mfa.totp]` dans `supabase/config.toml` ; production : Dashboard → Authentication → MFA → TOTP.
+
 ### Authentification — Supabase JWT
 
 L'authentification est entièrement déléguée à Supabase Auth. Le serveur ne gère pas de sessions propres. Le middleware `authMiddleware` :

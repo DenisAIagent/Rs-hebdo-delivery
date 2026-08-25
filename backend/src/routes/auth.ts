@@ -1,38 +1,24 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { supabaseAdmin } from '../utils/supabase';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/auth/profile - Get current user profile (requires token in header)
-router.get('/profile', async (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Token manquant' });
-  }
-  const token = authHeader.split(' ')[1];
-
+// GET /api/auth/profile - Get current user profile
+// authMiddleware enforces: valid token, active account, and 2FA passed (AAL2)
+router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) {
-      return res.status(401).json({ error: 'Token invalide' });
-    }
-
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', req.userId!)
       .single();
 
     if (!profile) {
       return res.status(404).json({ error: 'Profil introuvable' });
     }
 
-    // Block deactivated accounts
-    if (!profile.is_active) {
-      return res.status(403).json({ error: 'Compte desactive' });
-    }
-
-    return res.json({ user: { ...profile, email: user.email } });
+    return res.json({ user: { ...profile, email: req.userEmail } });
   } catch {
     return res.status(500).json({ error: 'Erreur serveur' });
   }

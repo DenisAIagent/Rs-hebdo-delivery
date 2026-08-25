@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { adminGetJournalists, adminCreateJournalist, adminUpdateJournalist } from '../../services/api.ts';
+import { adminGetJournalists, adminCreateJournalist, adminUpdateJournalist, adminResetJournalistMfa } from '../../services/api.ts';
 import type { Profile } from '../../types/index.ts';
-import { Plus, Save, X, AlertCircle, UserCheck, UserX } from 'lucide-react';
+import { Plus, Save, X, AlertCircle, UserCheck, UserX, ShieldOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function JournalistsTab() {
@@ -61,6 +61,18 @@ export function JournalistsTab() {
     } catch {
       setError('Erreur mise a jour');
       toast.error('Erreur mise a jour');
+    }
+  };
+
+  const resetMfa = async (j: Profile) => {
+    if (!confirm(`Reinitialiser la double authentification de ${j.full_name} ?\nSon application actuelle ne fonctionnera plus : il devra rescanner un QR code a la prochaine connexion.`)) {
+      return;
+    }
+    try {
+      const { message } = await adminResetJournalistMfa(j.id);
+      toast.success(message);
+    } catch {
+      toast.error('Erreur reinitialisation 2FA');
     }
   };
 
@@ -213,6 +225,13 @@ export function JournalistsTab() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => resetMfa(j)}
+                    className="p-1.5 text-gray-400 hover:text-amber-600 transition-colors"
+                    title="Reinitialiser la double authentification (telephone perdu...)"
+                  >
+                    <ShieldOff size={16} />
+                  </button>
                   <button
                     onClick={() => toggleActive(j.id, j.is_active)}
                     className={`p-1.5 transition-colors ${

@@ -5,6 +5,7 @@ import { useAuthStore } from './stores/authStore.ts';
 import { ProtectedRoute } from './components/ProtectedRoute.tsx';
 import { Layout } from './components/Layout.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
+import { MfaPage } from './pages/MfaPage.tsx';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage.tsx';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.tsx';
 import { DashboardPage } from './pages/DashboardPage.tsx';
@@ -73,6 +74,7 @@ export function App() {
         path="/login"
         element={user ? <Navigate to="/" replace /> : <LoginPage />}
       />
+      <Route path="/mfa" element={user ? <Navigate to="/" replace /> : <MfaPage />} />
       <Route
         path="/forgot-password"
         element={user ? <Navigate to="/" replace /> : <ForgotPasswordPage />}

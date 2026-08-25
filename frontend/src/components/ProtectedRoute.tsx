@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function ProtectedRoute({ children, adminOnly = false }: Props) {
-  const { user, initialized, loading } = useAuthStore();
+  const { user, initialized, loading, mfaRequired } = useAuthStore();
 
   if (!initialized || loading) {
     return (
@@ -18,7 +18,8 @@ export function ProtectedRoute({ children, adminOnly = false }: Props) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Session ouverte mais 2FA pas encore validee → ecran de verification
+    return <Navigate to={mfaRequired ? '/mfa' : '/login'} replace />;
   }
 
   if (adminOnly && user.role !== 'admin') {

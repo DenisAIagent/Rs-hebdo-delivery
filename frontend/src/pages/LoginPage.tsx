@@ -16,7 +16,8 @@ export function LoginPage() {
     setError('');
     try {
       await login(email, password);
-      navigate('/');
+      // 2FA obligatoire : verification (ou enrolement) du code TOTP
+      navigate('/mfa');
     } catch (err: unknown) {
       setError('Email ou mot de passe incorrect');
     }
@@ -40,7 +41,7 @@ export function LoginPage() {
         {/* Logo kept as-is — red mark stays readable on the dark pane */}
         <div className="inline-flex items-center gap-3 self-start">
           <img
-            src="/logo-rs-france.png"
+            src="/logo_rollingstone.png"
             alt="Rolling Stone France"
             className="h-10 w-auto"
             style={{ display: 'block' }}
@@ -131,7 +132,7 @@ export function LoginPage() {
           {/* Mobile-only brand */}
           <div className="lg:hidden flex flex-col items-center text-center mb-8">
             <img
-              src="/logo-rs-france.png"
+              src="/logo_rollingstone.png"
               alt="Rolling Stone France"
               className="h-12 mb-3"
             />

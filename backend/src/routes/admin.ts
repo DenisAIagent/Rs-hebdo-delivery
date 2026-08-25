@@ -374,6 +374,31 @@ router.put('/journalists/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// DELETE /api/admin/journalists/:id/mfa - Reset a user's 2FA (lost phone, etc.)
+// Removes all enrolled TOTP factors; the user re-enrolls at next login.
+router.delete('/journalists/:id/mfa', async (req: AuthRequest, res: Response) => {
+  const userId = String(req.params.id);
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId });
+    if (error) throw error;
+
+    const factors = data?.factors || [];
+    for (const factor of factors) {
+      const { error: delError } = await supabaseAdmin.auth.admin.mfa.deleteFactor({ id: factor.id, userId });
+      if (delError) throw delError;
+    }
+
+    return res.json({
+      message: factors.length > 0
+        ? `2FA reinitialisee (${factors.length} facteur(s) supprime(s)). L'utilisateur devra reconfigurer son application a la prochaine connexion.`
+        : "Aucun facteur 2FA a supprimer pour cet utilisateur.",
+    });
+  } catch (error: any) {
+    console.error('Reset MFA error:', error);
+    return res.status(500).json({ error: 'Erreur reinitialisation 2FA', detail: error?.message });
+  }
+});
+
 // ========== ALL DELIVERIES (admin view) ==========
 
 // GET /api/admin/deliveries - List all deliveries

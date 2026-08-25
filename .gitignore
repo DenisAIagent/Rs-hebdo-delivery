@@ -7,3 +7,12 @@ dist/
 # Sauvegardes locales de .env (secrets — jamais commitees)
 *.env.backup*
 .env.backup*
+
+# App desktop Electron — conservée en local uniquement, JAMAIS sur GitHub.
+# Contient des secrets bakés (macos/src/default-config.ts) et n'a aucun rôle
+# dans le déploiement Railway (build limité à backend/ + frontend/).
+macos/
+
+# Dossiers de travail locaux (design, deck) — hors dépôt
+Hebdo RS Delivery-design/
+deck/

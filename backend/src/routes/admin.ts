@@ -3,6 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
 import { todayString, nextFridayString } from '../utils/dates';
 import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
+import { testWpConnection } from '../services/wordpress';
+import { republishDeliveryToWordpress } from '../services/wordpressPublisher';
 
 const router = Router();
 
@@ -596,6 +598,35 @@ router.put('/prompt', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ========== WORDPRESS ==========
+
+// POST /api/admin/wordpress/test - Verify WP credentials (application password)
+router.post('/wordpress/test', async (_req: AuthRequest, res: Response) => {
+  try {
+    const user = await testWpConnection();
+    return res.json({ ok: true, name: user.name });
+  } catch (error: any) {
+    const detail = error?.response?.data?.message || error?.message || String(error);
+    return res.status(400).json({ ok: false, error: detail });
+  }
+});
+
+// POST /api/admin/deliveries/:id/wordpress - (Re)send a delivery to WordPress
+router.post('/deliveries/:id/wordpress', (req, _res, next) => { req.setTimeout(300_000); next(); }, async (req: AuthRequest, res: Response) => {
+  try {
+    const post = await republishDeliveryToWordpress(String(req.params.id));
+    if (!post) {
+      return res.status(400).json({
+        error: "Envoi WordPress echoue (module desactive ou erreur — voir l'onglet Logs)",
+      });
+    }
+    return res.json({ post, message: `Brouillon WordPress cree (#${post.id})` });
+  } catch (error: any) {
+    console.error('Admin send to WordPress error:', error);
+    return res.status(500).json({ error: error?.message || 'Erreur envoi WordPress' });
+  }
+});
+
 // ========== CLAUDE MODELS ==========
 
 // GET /api/admin/models - Liste live des modèles Claude disponibles (récent → ancien)
@@ -624,7 +655,13 @@ router.get('/models/latest', async (_req: AuthRequest, res: Response) => {
 // ========== APP SETTINGS ==========
 
 // Keys that are not secrets and should be returned in clear
-const NON_SECRET_KEYS = new Set(['AI_PROVIDER', 'CLAUDE_MODEL']);
+const NON_SECRET_KEYS = new Set([
+  'AI_PROVIDER',
+  'CLAUDE_MODEL',
+  'WORDPRESS_ENABLED',
+  'WORDPRESS_URL',
+  'WORDPRESS_USERNAME',
+]);
 
 function maskValue(key: string, value: string): string {
   if (NON_SECRET_KEYS.has(key)) return value || '';

@@ -203,6 +203,23 @@ export async function adminUpdateSettings(
   };
 }
 
+// ========== WORDPRESS ==========
+export async function adminTestWordpress(): Promise<{ ok: boolean; name?: string; error?: string }> {
+  try {
+    const { data } = await api.post('/api/admin/wordpress/test', {}, { timeout: 30000 });
+    return data;
+  } catch (err: any) {
+    return { ok: false, error: err?.response?.data?.error || err?.message || 'Erreur de connexion' };
+  }
+}
+
+export async function adminSendDeliveryToWordpress(
+  id: string,
+): Promise<{ post: { id: number; link: string; editUrl: string }; message: string }> {
+  const { data } = await api.post(`/api/admin/deliveries/${id}/wordpress`, {}, { timeout: 300000 });
+  return data;
+}
+
 export interface ClaudeModelInfo {
   id: string;
   display_name: string;

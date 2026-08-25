@@ -54,6 +54,10 @@ export interface Delivery {
   drive_folder_url: string | null;
   status: 'draft' | 'corrected' | 'delivered';
   sign_count: number;
+  wp_post_id: number | null;
+  wp_post_url: string | null;
+  wp_status: 'pending' | 'sent' | 'error' | null;
+  wp_payload: Record<string, any> | null;
   created_at: string;
   delivered_at: string | null;
   // Joined

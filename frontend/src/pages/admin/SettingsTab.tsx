@@ -4,10 +4,11 @@ import {
   adminUpdateSettings,
   adminGetModels,
   adminGetLatestModel,
+  adminTestWordpress,
   type ClaudeModelInfo,
 } from '../../services/api.ts';
 import type { AppSetting } from '../../types/index.ts';
-import { Key, Eye, EyeOff, Save, AlertCircle, Loader2, Sparkles, Cpu, RefreshCw } from 'lucide-react';
+import { Key, Eye, EyeOff, Save, AlertCircle, Loader2, Sparkles, Cpu, RefreshCw, Globe, PlugZap } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface SettingField {
@@ -101,6 +102,16 @@ export function SettingsTab() {
   const [providerDirty, setProviderDirty] = useState(false);
   const [providerSaving, setProviderSaving] = useState(false);
 
+  // WordPress state
+  const [wpEnabled, setWpEnabled] = useState(false);
+  const [wpUrl, setWpUrl] = useState('');
+  const [wpUser, setWpUser] = useState('');
+  const [wpPass, setWpPass] = useState('');
+  const [wpPassVisible, setWpPassVisible] = useState(false);
+  const [wpDirty, setWpDirty] = useState(false);
+  const [wpSaving, setWpSaving] = useState(false);
+  const [wpTesting, setWpTesting] = useState(false);
+
   // Claude model state
   const [model, setModel] = useState('');
   const [models, setModels] = useState<ClaudeModelInfo[]>([]);
@@ -119,6 +130,11 @@ export function SettingsTab() {
       }
       const m = data.find((s) => s.key === 'CLAUDE_MODEL')?.value;
       if (m) { setModel(m); setModelDirty(false); }
+      setWpEnabled(data.find((s) => s.key === 'WORDPRESS_ENABLED')?.value === 'true');
+      setWpUrl(data.find((s) => s.key === 'WORDPRESS_URL')?.value || '');
+      setWpUser(data.find((s) => s.key === 'WORDPRESS_USERNAME')?.value || '');
+      setWpPass('');
+      setWpDirty(false);
     } catch {
       setError('Erreur chargement des settings');
     } finally {
@@ -247,6 +263,46 @@ export function SettingsTab() {
       toast.error(`Erreur moteur IA : ${msg}`);
     } finally {
       setProviderSaving(false);
+    }
+  };
+
+  const handleSaveWordpress = async () => {
+    setWpSaving(true);
+    try {
+      const updates: { key: string; value: string }[] = [
+        { key: 'WORDPRESS_ENABLED', value: wpEnabled ? 'true' : 'false' },
+        { key: 'WORDPRESS_URL', value: wpUrl.trim() },
+        { key: 'WORDPRESS_USERNAME', value: wpUser.trim() },
+      ];
+      if (wpPass.trim() !== '') {
+        updates.push({ key: 'WORDPRESS_APP_PASSWORD', value: wpPass.trim() });
+      }
+      const { failures } = await adminUpdateSettings(updates);
+      if (failures.length > 0) {
+        toast.error(`Erreur sur ${failures[0].key} : ${failures[0].reason}`);
+      } else {
+        toast.success('Configuration WordPress enregistree');
+      }
+      await load();
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.response?.data?.error || err?.message || 'Erreur inconnue';
+      toast.error(`Erreur WordPress : ${msg}`);
+    } finally {
+      setWpSaving(false);
+    }
+  };
+
+  const handleTestWordpress = async () => {
+    setWpTesting(true);
+    try {
+      const result = await adminTestWordpress();
+      if (result.ok) {
+        toast.success(`Connexion WordPress OK — connecte en tant que ${result.name}`);
+      } else {
+        toast.error(`Connexion WordPress echouee : ${result.error}`);
+      }
+    } finally {
+      setWpTesting(false);
     }
   };
 
@@ -407,6 +463,100 @@ export function SettingsTab() {
           >
             {modelSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Enregistrer le modèle
+          </button>
+        </div>
+      </div>
+
+      {/* WordPress */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+          <div className="flex items-center gap-3">
+            <Globe size={18} className="text-rs-red" />
+            <h3 className="font-semibold text-rs-black">WordPress (rollingstone.fr)</h3>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <span className={`text-xs font-medium ${wpEnabled ? 'text-green-700' : 'text-gray-400'}`}>
+              {wpEnabled ? 'Active' : 'Desactive'}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={wpEnabled}
+              onClick={() => { setWpEnabled((v) => !v); setWpDirty(true); }}
+              className={`relative w-10 h-6 rounded-full transition-colors ${wpEnabled ? 'bg-green-600' : 'bg-gray-300'}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${wpEnabled ? 'translate-x-4' : ''}`}
+              />
+            </button>
+          </label>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-xs text-gray-500">
+            Quand le module est actif, chaque papier livre est aussi envoye sur WordPress en <strong>brouillon</strong>{' '}
+            avec la mention <code className="font-mono bg-gray-50 px-1 rounded">[EN ATTENTE DE RELECTURE]</code> dans le titre :
+            mise en forme editoriale (chapo H3, intertitres H4, citations), categories + sous-categories, tags et image a la une.
+            L'authentification utilise un <strong>mot de passe application</strong> WordPress (profil utilisateur → Mots de passe d'application).
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-rs-black mb-1">URL du site</label>
+              <input
+                type="url"
+                value={wpUrl}
+                onChange={(e) => { setWpUrl(e.target.value); setWpDirty(true); }}
+                placeholder="https://www.rollingstone.fr"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-rs-red focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-rs-black mb-1">Nom d'utilisateur WP</label>
+              <input
+                type="text"
+                value={wpUser}
+                onChange={(e) => { setWpUser(e.target.value); setWpDirty(true); }}
+                placeholder="redaction"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-rs-red focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-rs-black mb-1">Mot de passe application</label>
+              <div className="relative">
+                <input
+                  type={wpPassVisible ? 'text' : 'password'}
+                  value={wpPass}
+                  onChange={(e) => { setWpPass(e.target.value); setWpDirty(true); }}
+                  placeholder={getSettingValue('WORDPRESS_APP_PASSWORD') ? 'Configure — saisir pour remplacer' : 'xxxx xxxx xxxx xxxx xxxx xxxx'}
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-rs-red focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={() => setWpPassVisible((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {wpPassVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+          <button
+            onClick={handleTestWordpress}
+            disabled={wpTesting}
+            className="flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg border border-rs-red text-rs-red hover:bg-rs-red/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {wpTesting ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
+            Tester la connexion
+          </button>
+          <button
+            onClick={handleSaveWordpress}
+            disabled={!wpDirty || wpSaving}
+            className="flex items-center gap-1.5 bg-rs-red hover:bg-rs-red-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {wpSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Enregistrer
           </button>
         </div>
       </div>

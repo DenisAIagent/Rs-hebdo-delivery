@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { adminGetDeliveries, adminDeleteDelivery } from '../../services/api.ts';
+import { adminGetDeliveries, adminDeleteDelivery, adminSendDeliveryToWordpress } from '../../services/api.ts';
 import type { Delivery } from '../../types/index.ts';
-import { FolderOpen, ExternalLink, AlertCircle, Search, Trash2, Pencil } from 'lucide-react';
+import { FolderOpen, ExternalLink, AlertCircle, Search, Trash2, Pencil, Globe, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -18,6 +19,29 @@ export function DeliveriesTab() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [sendingWp, setSendingWp] = useState<string | null>(null);
+
+  async function handleSendWordpress(d: Delivery) {
+    if (d.wp_status === 'sent' && !confirm(`"${d.title}" a deja un brouillon WordPress. Renvoyer quand meme (nouveau brouillon) ?`)) {
+      return;
+    }
+    setSendingWp(d.id);
+    try {
+      const { post, message } = await adminSendDeliveryToWordpress(d.id);
+      toast.success(message);
+      setDeliveries((prev) =>
+        prev.map((x) =>
+          x.id === d.id
+            ? { ...x, wp_status: 'sent', wp_post_id: post.id, wp_post_url: post.editUrl }
+            : x,
+        ),
+      );
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Erreur envoi WordPress (voir Logs)');
+    } finally {
+      setSendingWp(null);
+    }
+  }
 
   async function handleDelete(id: string, title: string) {
     if (!confirm(`Supprimer la livraison "${title}" ? Cette action est irreversible.`)) return;
@@ -144,6 +168,34 @@ export function DeliveriesTab() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {d.wp_status === 'sent' && d.wp_post_url ? (
+                            <a
+                              href={d.wp_post_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-green-600 hover:text-green-700 transition-colors"
+                              title={`Brouillon WordPress #${d.wp_post_id} — en attente de relecture`}
+                            >
+                              <Globe size={16} />
+                            </a>
+                          ) : (
+                            <button
+                              onClick={() => handleSendWordpress(d)}
+                              disabled={sendingWp === d.id}
+                              className={`p-1.5 transition-colors disabled:opacity-50 ${
+                                d.wp_status === 'error'
+                                  ? 'text-red-500 hover:text-red-600'
+                                  : 'text-gray-300 hover:text-rs-red'
+                              }`}
+                              title={
+                                d.wp_status === 'error'
+                                  ? 'Echec envoi WordPress — cliquer pour reessayer'
+                                  : 'Envoyer sur WordPress (brouillon)'
+                              }
+                            >
+                              {sendingWp === d.id ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
+                            </button>
+                          )}
                           {d.drive_folder_url && (
                             <a
                               href={d.drive_folder_url}

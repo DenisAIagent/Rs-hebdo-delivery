@@ -1164,6 +1164,21 @@ Le service `dropbox.ts` :
 
 La livraison est enregistrée en base Supabase avec tous les champs. Un email HTML est envoyé à `NOTIFY_EMAIL_ALMA` et `NOTIFY_EMAIL_DENIS` avec les informations clés et un lien vers le dossier Dropbox.
 
+### Étape 10 : Envoi WordPress (parallèle, non bloquant)
+
+Si le module WordPress est activé (admin → Paramètres → WordPress), chaque livraison est aussi envoyée sur rollingstone.fr via l'API REST WP (`/wp-json/wp/v2/`), authentifiée par **mot de passe application** (Basic auth). Le pipeline (`services/wordpressPublisher.ts`) :
+
+1. Recherche jusqu'à 5 articles existants sur le site (candidats de lien interne).
+2. Mise en forme IA (Claude, sortie structurée forcée) selon les conventions éditoriales (`services/wordpressRules.ts`) : chapô en H3, intertitres H4 (jamais H1/H2/H5/H6, jamais de lien dans H3/H4), citations `<em>« »</em>`, crédit traduction en fin d'article si une URL source RS US est fournie, ≥ 1 lien interne, catégories parent + sous-catégorie (taxonomie complète avec IDs), ≥ 5 tags, Yoast (focus keyword, titre SEO ~55c, meta description ~150c, slug propre).
+3. Tags : réutilisation des tags existants (recherche) avant création.
+4. Image à la une : première image de la livraison, dédupliquée par nom de fichier dans la médiathèque, crédit photo en légende (jamais dans le corps).
+5. Création du post en **brouillon** avec le titre suffixé `[EN ATTENTE DE RELECTURE]`.
+6. Suivi sur la livraison : `wp_post_id`, `wp_post_url` (lien d'édition), `wp_status` (`pending`/`sent`/`error`), `wp_payload` (payload IA complet).
+
+**Champs à finir à la main dans l'éditeur classique** (non fiables via REST) : Yoast (`yoast_wpseo_*`), Style Music (`select[name="liste"]`) et Main Music Artist (`input#new-mat-tag`). Les valeurs suggérées par l'IA sont conservées dans `wp_payload`.
+
+Un échec WordPress ne bloque **jamais** la livraison : il est loggé (onglet Logs, étapes `wp-*`) et l'admin peut relancer l'envoi depuis l'onglet Livraisons (icône globe) ou via `POST /api/admin/deliveries/:id/wordpress`. Test des identifiants : `POST /api/admin/wordpress/test`.
+
 ---
 
 ## 8. Administration

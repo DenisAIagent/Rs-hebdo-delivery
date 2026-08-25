@@ -3,3 +3,7 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Sauvegardes locales de .env (secrets — jamais commitees)
+*.env.backup*
+.env.backup*

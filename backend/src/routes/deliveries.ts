@@ -7,6 +7,7 @@ import { supabaseAdmin } from '../utils/supabase';
 import { generateDocx } from '../services/docx';
 import { uploadDelivery, ensureHebdoFolderStructure } from '../services/dropbox';
 import { notifyDelivery } from '../services/email';
+import { publishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { logInfo, logError, logWarn, type LogContext } from '../services/deliveryLogger';
 
 /** Strip HTML tags safely (removes all tags, decodes entities) */
@@ -401,6 +402,20 @@ router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, uplo
 
     if (insertError) throw insertError;
     await logInfo('database', `Livraison enregistree en base (${signCount} signes)`, ctx);
+
+    // ── WordPress (parallele, non bloquant) ─────────────
+    // L'article part en brouillon "[EN ATTENTE DE RELECTURE]" ; tout echec
+    // est visible dans les logs admin sans jamais bloquer la livraison.
+    void publishDeliveryToWordpress({
+      deliveryId: delivery.id,
+      title,
+      paperTypeName: paperType.name,
+      journalistName,
+      hebdoLabel: hebdo.label,
+      metadata: parsedMetadata,
+      bodyText,
+      firstImage: images[0],
+    }).catch((err) => console.error('[WordPress] Unexpected publish error:', err));
 
     // ── Email Notification ──────────────────────────────
     currentStep = 'email';

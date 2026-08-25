@@ -26,6 +26,13 @@ const STEP_LABELS: Record<string, string> = {
   'database':     'Enregistrement en base',
   'email':        'Envoi notification email',
   'success':      'Livraison terminee',
+  'wp-start':     'Envoi WordPress demarre',
+  'wp-links':     'Recherche liens internes WordPress',
+  'wp-format':    'Mise en forme editoriale WordPress',
+  'wp-tags':      'Creation des tags WordPress',
+  'wp-media':     'Upload image WordPress',
+  'wp-success':   'Brouillon WordPress cree',
+  'wp-error':     'Echec envoi WordPress',
 };
 
 /**

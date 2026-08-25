@@ -52,6 +52,10 @@ CREATE TABLE deliveries (
   drive_folder_url TEXT,
   status TEXT NOT NULL DEFAULT 'delivered' CHECK (status IN ('draft', 'corrected', 'delivered')),
   sign_count INTEGER NOT NULL DEFAULT 0,
+  wp_post_id INTEGER,
+  wp_post_url TEXT,
+  wp_status TEXT,
+  wp_payload JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   delivered_at TIMESTAMPTZ
 );
@@ -251,7 +255,11 @@ INSERT INTO app_settings (key, value) VALUES
   ('ANTHROPIC_API_KEY', ''),
   ('DROPBOX_APP_KEY', ''),
   ('DROPBOX_APP_SECRET', ''),
-  ('DROPBOX_REFRESH_TOKEN', '');
+  ('DROPBOX_REFRESH_TOKEN', ''),
+  ('WORDPRESS_ENABLED', 'false'),
+  ('WORDPRESS_URL', ''),
+  ('WORDPRESS_USERNAME', ''),
+  ('WORDPRESS_APP_PASSWORD', '');
 
 -- First hebdo (adjust number as needed)
 INSERT INTO hebdo_config (numero, label, start_date, end_date, is_current) VALUES

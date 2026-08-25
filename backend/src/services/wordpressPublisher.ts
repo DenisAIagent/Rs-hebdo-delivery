@@ -12,6 +12,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '../utils/supabase';
 import { logInfo, logError, logWarn, type LogContext } from './deliveryLogger';
+import { notifyWordpressError } from './email';
 import { getApiKey, getClaudeModel, DEFAULT_CLAUDE_MODEL } from './claude';
 import {
   isWordpressEnabled,
@@ -244,6 +245,15 @@ export async function publishDeliveryToWordpress(
     console.error('[WordPress] Publish error:', detail);
     await saveWpState(input.deliveryId, { wp_status: 'error' });
     await logError('wp-error', `Echec envoi WordPress: ${detail}`, ctx, error);
+    // Alerte les admins par email — ils corrigent puis relancent en un clic
+    // (icone globe, onglet Livraisons)
+    await notifyWordpressError({
+      journalistName: input.journalistName,
+      paperType: input.paperTypeName,
+      title: input.title,
+      hebdoNumber: input.hebdoLabel,
+      errorDetail: detail,
+    });
     return null;
   }
 }

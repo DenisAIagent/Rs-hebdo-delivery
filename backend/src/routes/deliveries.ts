@@ -455,8 +455,8 @@ router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, uplo
       hebdoLabel: hebdo.label,
       metadata: parsedMetadata,
       bodyText,
-      firstImage: images[0],
-    }).catch((err) => console.error('[WordPress] Unexpected publish error:', err));
+      images,
+    }).catch((err) => console.error('[WordPress] Unexpected publish error:', err?.response?.data || err?.message || String(err)));
 
     // ── Email Notification ──────────────────────────────
     currentStep = 'email';

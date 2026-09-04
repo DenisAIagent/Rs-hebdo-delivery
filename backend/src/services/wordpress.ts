@@ -89,13 +89,28 @@ export async function isWordpressEnabled(): Promise<boolean> {
   return v === 'true' || v === '1';
 }
 
-/** Read WP credentials; throws with a clear message when incomplete. */
-export async function getWpConfig(): Promise<WpConfig> {
-  const [rawUrl, username, appPassword] = await Promise.all([
+/** Values typed in the admin form but not yet saved (used by the connection test). */
+export interface WpConfigOverride {
+  url?: string;
+  username?: string;
+  appPassword?: string;
+}
+
+/**
+ * Read WP credentials; throws with a clear message when incomplete.
+ * `override` (form values) takes precedence over stored settings so the
+ * admin can test before saving; an empty override password falls back to
+ * the stored one.
+ */
+export async function getWpConfig(override: WpConfigOverride = {}): Promise<WpConfig> {
+  const [storedUrl, storedUser, storedPass] = await Promise.all([
     getSetting('WORDPRESS_URL'),
     getSetting('WORDPRESS_USERNAME'),
     getSetting('WORDPRESS_APP_PASSWORD'),
   ]);
+  const rawUrl = override.url?.trim() || storedUrl;
+  const username = override.username?.trim() || storedUser;
+  const appPassword = override.appPassword?.trim() || storedPass;
 
   if (!rawUrl || !username || !appPassword) {
     throw new Error('Configuration WordPress incomplete (URL, utilisateur ou mot de passe application manquant)');
@@ -107,16 +122,33 @@ export async function getWpConfig(): Promise<WpConfig> {
 
 function wpClient(config: WpConfig): AxiosInstance {
   const token = Buffer.from(`${config.username}:${config.appPassword}`).toString('base64');
-  return axios.create({
+  const client = axios.create({
     baseURL: `${config.baseUrl}/wp-json/wp/v2`,
     timeout: 30_000,
     headers: { Authorization: `Basic ${token}` },
   });
+
+  // La requete part TOUJOURS avec le header Authorization (publication inchangee).
+  // Mais axios rattache ce header a l'objet d'erreur (error.config.headers) : on
+  // l'efface avant que l'erreur ne remonte, pour qu'aucun console.error/logger en
+  // aval ne puisse imprimer le mot de passe applicatif WordPress dans les logs.
+  client.interceptors.response.use(
+    (res) => res,
+    (error) => {
+      if (error?.config?.headers) {
+        delete error.config.headers.Authorization;
+        delete error.config.headers.authorization;
+      }
+      if (error?.request?._header) delete error.request._header; // header brut bas niveau
+      return Promise.reject(error);
+    }
+  );
+  return client;
 }
 
 /** Verify credentials: returns the authenticated WP user. */
-export async function testWpConnection(): Promise<{ id: number; name: string }> {
-  const config = await getWpConfig();
+export async function testWpConnection(override: WpConfigOverride = {}): Promise<{ id: number; name: string }> {
+  const config = await getWpConfig(override);
   const client = wpClient(config);
   const { data } = await client.get('/users/me', { params: { context: 'edit' } });
   return { id: data.id, name: data.name };
@@ -141,6 +173,28 @@ export async function searchWpPosts(query: string, perPage = 5): Promise<WpPostC
     link: p.link,
     title: p.title?.rendered || '',
   }));
+}
+
+export interface WpMediaHit { id: number; url: string; title: string }
+
+/**
+ * Look for an existing image in the media library (chroniques rarely come
+ * with a photo: the cover or an artist picture is often already on the site).
+ * Queries are tried in order; the first image hit wins.
+ */
+export async function findWpMediaByKeywords(queries: string[]): Promise<WpMediaHit | null> {
+  const config = await getWpConfig();
+  const client = wpClient(config);
+  for (const raw of queries) {
+    const q = raw.replace(/\s+/g, ' ').trim();
+    if (q.length < 3) continue;
+    const { data } = await client.get('/media', {
+      params: { search: q, media_type: 'image', per_page: 10, orderby: 'date', order: 'desc', _fields: 'id,source_url,title,mime_type' },
+    });
+    const hit = (data || []).find((m: any) => String(m.mime_type || '').startsWith('image/'));
+    if (hit) return { id: hit.id, url: hit.source_url, title: hit.title?.rendered || '' };
+  }
+  return null;
 }
 
 /** Find a tag by exact name (case-insensitive) or create it. Returns the tag ID. */
@@ -203,6 +257,9 @@ export async function uploadWpMedia(upload: WpMediaUpload): Promise<{ id: number
       'Content-Disposition': `attachment; filename="${upload.filename.replace(/"/g, '')}"`,
     },
     maxBodyLength: Infinity,
+    // Media uploads are the only large requests: WordPress also generates
+    // the intermediate sizes server-side, which takes well over 30 s.
+    timeout: 180_000,
   });
 
   if (upload.caption) {
@@ -240,14 +297,17 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<{ id:
   };
   if (input.featuredMediaId) body.featured_media = input.featuredMediaId;
 
-  // Yoast meta does not save reliably via REST; try, and retry without on 400.
+  // Yoast stores its fields as protected meta (_yoast_wpseo_*). WordPress only
+  // accepts them via REST when the site registers them with show_in_rest
+  // (see scripts/wp/rs-delivery-rest-meta.php); otherwise WP ignores or rejects
+  // them, so we retry without meta on 400.
   const withYoast = input.yoast
     ? {
         ...body,
         meta: {
-          yoast_wpseo_focuskw: input.yoast.focusKeyword,
-          yoast_wpseo_title: input.yoast.seoTitle,
-          yoast_wpseo_metadesc: input.yoast.metaDescription,
+          _yoast_wpseo_focuskw: input.yoast.focusKeyword,
+          _yoast_wpseo_title: input.yoast.seoTitle,
+          _yoast_wpseo_metadesc: input.yoast.metaDescription,
         },
       }
     : body;

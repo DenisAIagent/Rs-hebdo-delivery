@@ -99,3 +99,11 @@ rs-hebdo-delivery/
 ├── TUTO-JOURNALISTE.md  # Guide journaliste
 └── FAQ-JOURNALISTE.md   # FAQ journaliste
 ```
+
+## Sécurité — à savoir avant d'intervenir
+
+Détails complets dans `DOCUMENTATION.md` §12. Points essentiels pour un dev / une mise en ligne :
+
+- **RLS Supabase actuellement non fonctionnelle** (récursion `42P17` sur `profiles`, fail-closed). Ne **jamais** corriger par `DISABLE ROW LEVEL SECURITY` : la clé anon est publique, ça ouvrirait la base. Correctif : `REVOKE` sur les tables sensibles **puis** `is_admin()` `SECURITY DEFINER` (voir §12).
+- **Secrets** : préférer les variables d'environnement Railway au stockage en clair dans `app_settings`. Le mot de passe applicatif WordPress est déjà en variable Railway (`WORDPRESS_APP_PASSWORD`).
+- La sécurité effective repose sur le backend (JWT validé serveur, rôle lu en base, filtrage par `author_id`), qui est fonctionnel.

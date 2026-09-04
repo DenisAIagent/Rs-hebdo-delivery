@@ -1,4 +1,8 @@
 import { Router, Response } from 'express';
+import { invalidateMfaPolicyCache } from '../services/mfaPolicy';
+import { generateDocx } from '../services/docx';
+import { reattributeDelivery } from '../services/dropbox';
+import { logInfo, logWarn, type LogContext } from '../services/deliveryLogger';
 import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
 import { todayString, nextFridayString } from '../utils/dates';
@@ -448,7 +452,7 @@ router.get('/deliveries/:id', async (req: AuthRequest, res: Response) => {
 router.put('/deliveries/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, metadata: metadataRaw } = req.body;
+    const { title, metadata: metadataRaw, author_id: rawAuthorId } = req.body;
 
     // Get existing delivery with paper_type and hebdo
     const { data: existing, error: fetchErr } = await supabaseAdmin
@@ -478,6 +482,39 @@ router.put('/deliveries/:id', async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Reattribution : l'admin peut corriger le journaliste d'une livraison
+    // (compte actif uniquement). Les fichiers deja deposes sur Dropbox ne sont
+    // pas deplaces : seule la fiche de livraison change d'auteur.
+    let authorId: string = existing.author_id;
+    if (typeof rawAuthorId === 'string' && rawAuthorId && rawAuthorId !== existing.author_id) {
+      const { data: targetProfile, error: targetError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, is_active')
+        .eq('id', rawAuthorId)
+        .single();
+      if (targetError || !targetProfile?.is_active) {
+        return res.status(400).json({ error: 'Journaliste cible introuvable ou inactif' });
+      }
+      authorId = targetProfile.id;
+    }
+
+    // Noms des journalistes (avant / apres) : ils apparaissent dans le DOCX et
+    // dans l'arborescence Dropbox de certains types de papier.
+    let previousAuthorName = '';
+    let newAuthorName = '';
+    if (authorId !== existing.author_id) {
+      const { data: people } = await supabaseAdmin
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', [existing.author_id, authorId]);
+      const nameOf = (uid: string) => {
+        const p = (people || []).find((x: any) => x.id === uid);
+        return p?.full_name || p?.email || '';
+      };
+      previousAuthorName = nameOf(existing.author_id);
+      newAuthorName = nameOf(authorId);
+    }
+
     const updatedTitle = title || existing.title;
     const bodyField = paperType.fields_config?.find((f: any) => f.key === 'corps');
     const bodyText = bodyField ? parsedMetadata[bodyField.key] || '' : '';
@@ -489,6 +526,7 @@ router.put('/deliveries/:id', async (req: AuthRequest, res: Response) => {
       .from('deliveries')
       .update({
         title: updatedTitle,
+        author_id: authorId,
         subject: subject || null,
         body_original: bodyText,
         body_corrected: bodyText,
@@ -501,7 +539,68 @@ router.put('/deliveries/:id', async (req: AuthRequest, res: Response) => {
       .single();
 
     if (updateErr) throw updateErr;
-    return res.json({ delivery: updated, message: 'Livraison modifiee par admin' });
+
+    // Reattribution : le DOCX depose sur Dropbox porte le nom du journaliste
+    // ("Par X — Type"). On le regenere avec le meme contenu et on le remplace
+    // (ecrasement, jamais de suppression) ; si l'arborescence depend du
+    // journaliste, le dossier complet est deplace pour garder images + DOCX.
+    let driveInfo: { folderUrl: string; docxUrl: string; moved: boolean } | null = null;
+    if (authorId !== existing.author_id) {
+      const ctx: LogContext = {
+        journalistId: authorId,
+        journalistName: newAuthorName || undefined,
+        hebdoLabel: existing.hebdo?.label,
+        paperTypeName: paperType?.name,
+        title: updatedTitle,
+      };
+      try {
+        const docxBuffer = await generateDocx({
+          title: updatedTitle,
+          author: newAuthorName || 'Unknown',
+          paperType: paperType.name,
+          metadata: parsedMetadata,
+          fieldsConfig: paperType.fields_config || [],
+        });
+        const folderBase = {
+          hebdoNumber: existing.hebdo?.label || '',
+          driveFolderName: paperType.drive_folder_name || paperType.name,
+          subject: existing.subject || updatedTitle,
+        };
+        driveInfo = await reattributeDelivery({
+          previous: { ...folderBase, journalistName: previousAuthorName || '' },
+          next: { ...folderBase, journalistName: newAuthorName || '' },
+          docxFileName: `${existing.hebdo?.label || ''} - ${paperType.name} - ${updatedTitle}.docx`,
+          docxBuffer,
+        });
+        if (driveInfo.folderUrl && driveInfo.folderUrl !== updated.drive_folder_url) {
+          await supabaseAdmin
+            .from('deliveries')
+            .update({ drive_folder_url: driveInfo.folderUrl })
+            .eq('id', id);
+          updated.drive_folder_url = driveInfo.folderUrl;
+        }
+        await logInfo(
+          'admin-reassign',
+          `Livraison reattribuee a ${newAuthorName} (etait ${previousAuthorName}) — DOCX Dropbox mis a jour${driveInfo.moved ? ' et dossier deplace' : ''}`,
+          ctx,
+        );
+      } catch (dropboxErr: any) {
+        // La reattribution en base reste valable : on signale l'echec Dropbox.
+        await logWarn(
+          'admin-reassign',
+          `Livraison reattribuee a ${newAuthorName} mais DOCX Dropbox non mis a jour : ${dropboxErr?.message || dropboxErr}`,
+          ctx,
+        );
+      }
+    }
+
+    return res.json({
+      delivery: updated,
+      drive: driveInfo,
+      message: authorId !== existing.author_id
+        ? `Livraison attribuee a ${newAuthorName}${driveInfo ? ' — DOCX Dropbox mis a jour' : ' — DOCX Dropbox non mis a jour (voir Logs)'}`
+        : 'Livraison modifiee par admin',
+    });
   } catch (error) {
     console.error('Admin update delivery error:', error);
     return res.status(500).json({ error: 'Erreur modification' });
@@ -626,9 +725,16 @@ router.put('/prompt', async (req: AuthRequest, res: Response) => {
 // ========== WORDPRESS ==========
 
 // POST /api/admin/wordpress/test - Verify WP credentials (application password)
-router.post('/wordpress/test', async (_req: AuthRequest, res: Response) => {
+router.post('/wordpress/test', async (req: AuthRequest, res: Response) => {
   try {
-    const user = await testWpConnection();
+    // Optional form values (not yet saved) so the admin can test before saving
+    const body = (req.body ?? {}) as { url?: unknown; username?: unknown; appPassword?: unknown };
+    const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+    const user = await testWpConnection({
+      url: str(body.url),
+      username: str(body.username),
+      appPassword: str(body.appPassword),
+    });
     return res.json({ ok: true, name: user.name });
   } catch (error: any) {
     const detail = error?.response?.data?.message || error?.message || String(error);
@@ -647,7 +753,7 @@ router.post('/deliveries/:id/wordpress', (req, _res, next) => { req.setTimeout(3
     }
     return res.json({ post, message: `Brouillon WordPress cree (#${post.id})` });
   } catch (error: any) {
-    console.error('Admin send to WordPress error:', error);
+    console.error('Admin send to WordPress error:', error?.response?.data || error?.message || String(error));
     return res.status(500).json({ error: error?.message || 'Erreur envoi WordPress' });
   }
 });
@@ -681,6 +787,7 @@ router.get('/models/latest', async (_req: AuthRequest, res: Response) => {
 
 // Keys that are not secrets and should be returned in clear
 const NON_SECRET_KEYS = new Set([
+  'REQUIRE_MFA',
   'AI_PROVIDER',
   'CLAUDE_MODEL',
   'WORDPRESS_ENABLED',
@@ -755,6 +862,7 @@ router.put('/settings', async (req: AuthRequest, res: Response) => {
         failures.push({ key: s.key, reason: error.message });
         continue;
       }
+      if (s.key === 'REQUIRE_MFA') invalidateMfaPolicyCache();
       results.push(data);
     }
 

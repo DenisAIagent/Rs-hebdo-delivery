@@ -28,6 +28,16 @@ export async function postSetupConfigure(settings: { key: string; value: string 
 }
 
 // ========== AUTH ==========
+/** Politique d'authentification (publique) : la 2FA est-elle exigee ? */
+export async function getAuthConfig(): Promise<{ mfaRequired: boolean }> {
+  try {
+    const { data } = await api.get('/api/auth/config', { timeout: 10000 });
+    return { mfaRequired: data?.mfaRequired === true };
+  } catch {
+    return { mfaRequired: false };
+  }
+}
+
 export async function getProfile(): Promise<Profile> {
   const { data } = await api.get('/api/auth/profile');
   return data.user;
@@ -163,8 +173,26 @@ export async function adminGetDelivery(id: string): Promise<Delivery> {
   return data;
 }
 
-export async function adminUpdateDelivery(id: string, metadata: Record<string, any>, title: string): Promise<{ delivery: Delivery; message: string }> {
-  const { data } = await api.put(`/api/admin/deliveries/${id}`, { title, metadata: JSON.stringify(metadata) });
+export async function adminUpdateDelivery(
+  id: string,
+  metadata: Record<string, any>,
+  title: string,
+  authorId?: string,
+): Promise<{ delivery: Delivery; message: string }> {
+  const { data } = await api.put(`/api/admin/deliveries/${id}`, {
+    title,
+    metadata: JSON.stringify(metadata),
+    ...(authorId ? { author_id: authorId } : {}),
+  });
+  return data;
+}
+
+/** Reattribue une livraison a un autre journaliste (admin). */
+export async function adminReassignDelivery(
+  id: string,
+  authorId: string,
+): Promise<{ delivery: Delivery; message: string }> {
+  const { data } = await api.put(`/api/admin/deliveries/${id}`, { author_id: authorId });
   return data;
 }
 
@@ -209,9 +237,11 @@ export async function adminUpdateSettings(
 }
 
 // ========== WORDPRESS ==========
-export async function adminTestWordpress(): Promise<{ ok: boolean; name?: string; error?: string }> {
+export async function adminTestWordpress(
+  values: { url?: string; username?: string; appPassword?: string } = {},
+): Promise<{ ok: boolean; name?: string; error?: string }> {
   try {
-    const { data } = await api.post('/api/admin/wordpress/test', {}, { timeout: 30000 });
+    const { data } = await api.post('/api/admin/wordpress/test', values, { timeout: 30000 });
     return data;
   } catch (err: any) {
     return { ok: false, error: err?.response?.data?.error || err?.message || 'Erreur de connexion' };
@@ -220,7 +250,12 @@ export async function adminTestWordpress(): Promise<{ ok: boolean; name?: string
 
 export async function adminSendDeliveryToWordpress(
   id: string,
-): Promise<{ post: { id: number; link: string; editUrl: string }; message: string }> {
+): Promise<{
+  post: { id: number; link: string; editUrl: string; metaRejected?: string[] };
+  /** Contient editorTodo : la liste de ce qui reste a saisir dans l'editeur classique. */
+  wp_payload: Record<string, any> | null;
+  message: string;
+}> {
   const { data } = await api.post(`/api/admin/deliveries/${id}/wordpress`, {}, { timeout: 300000 });
   return data;
 }

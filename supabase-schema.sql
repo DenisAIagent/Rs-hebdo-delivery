@@ -252,6 +252,7 @@ CREATE POLICY "Admins can manage settings"
 
 -- Seed default settings keys
 INSERT INTO app_settings (key, value) VALUES
+  ('REQUIRE_MFA', 'false'),
   ('ANTHROPIC_API_KEY', ''),
   ('DROPBOX_APP_KEY', ''),
   ('DROPBOX_APP_SECRET', ''),

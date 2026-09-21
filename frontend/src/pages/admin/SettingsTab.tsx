@@ -8,7 +8,7 @@ import {
   type ClaudeModelInfo,
 } from '../../services/api.ts';
 import type { AppSetting } from '../../types/index.ts';
-import { Key, Eye, EyeOff, Save, AlertCircle, Loader2, Sparkles, Cpu, RefreshCw, Globe, PlugZap } from 'lucide-react';
+import { Key, Eye, EyeOff, Save, AlertCircle, Loader2, Sparkles, Cpu, RefreshCw, Globe, PlugZap, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface SettingField {
@@ -118,6 +118,28 @@ export function SettingsTab() {
   const [modelDirty, setModelDirty] = useState(false);
   const [modelSaving, setModelSaving] = useState(false);
   const [modelSearching, setModelSearching] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaSaving, setMfaSaving] = useState(false);
+
+  const handleToggleMfa = async () => {
+    const next = !mfaRequired;
+    setMfaSaving(true);
+    try {
+      const { failures } = await adminUpdateSettings([{ key: 'REQUIRE_MFA', value: next ? 'true' : 'false' }]);
+      if (failures.length > 0) {
+        toast.error(`Erreur : ${failures[0].reason}`);
+      } else {
+        setMfaRequired(next);
+        toast.success(next
+          ? 'Double authentification activee — demandee a la prochaine connexion'
+          : 'Double authentification desactivee');
+      }
+    } catch (err: any) {
+      toast.error(`Erreur : ${err?.response?.data?.error || err?.message || 'Erreur inconnue'}`);
+    } finally {
+      setMfaSaving(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -130,6 +152,7 @@ export function SettingsTab() {
       }
       const m = data.find((s) => s.key === 'CLAUDE_MODEL')?.value;
       if (m) { setModel(m); setModelDirty(false); }
+      setMfaRequired(data.find((s) => s.key === 'REQUIRE_MFA')?.value === 'true');
       setWpEnabled(data.find((s) => s.key === 'WORDPRESS_ENABLED')?.value === 'true');
       setWpUrl(data.find((s) => s.key === 'WORDPRESS_URL')?.value || '');
       setWpUser(data.find((s) => s.key === 'WORDPRESS_USERNAME')?.value || '');
@@ -295,7 +318,12 @@ export function SettingsTab() {
   const handleTestWordpress = async () => {
     setWpTesting(true);
     try {
-      const result = await adminTestWordpress();
+      // Teste les valeurs saisies (meme non enregistrees) ; mot de passe vide = celui deja stocke
+      const result = await adminTestWordpress({
+        url: wpUrl.trim(),
+        username: wpUser.trim(),
+        appPassword: wpPass.trim(),
+      });
       if (result.ok) {
         toast.success(`Connexion WordPress OK — connecte en tant que ${result.name}`);
       } else {
@@ -464,6 +492,41 @@ export function SettingsTab() {
             {modelSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Enregistrer le modèle
           </button>
+        </div>
+      </div>
+
+      {/* Securite : double authentification */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+          <div className="flex items-center gap-3">
+            <ShieldCheck size={18} className="text-rs-red" />
+            <h3 className="font-semibold text-rs-black">Double authentification (2FA)</h3>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <span className={`text-xs font-medium ${mfaRequired ? 'text-green-700' : 'text-gray-400'}`}>
+              {mfaSaving ? 'Enregistrement…' : mfaRequired ? 'Obligatoire' : 'Desactivee'}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={mfaRequired}
+              disabled={mfaSaving}
+              onClick={handleToggleMfa}
+              className={`relative w-10 h-6 rounded-full transition-colors disabled:opacity-60 ${mfaRequired ? 'bg-green-600' : 'bg-gray-300'}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${mfaRequired ? 'translate-x-4' : ''}`}
+              />
+            </button>
+          </label>
+        </div>
+        <div className="px-5 py-4">
+          <p className="text-xs text-gray-500">
+            Quand elle est obligatoire, chaque compte doit valider un code TOTP (Google Authenticator, 1Password, Authy…)
+            apres son mot de passe. Le premier passage propose l'enrolement par QR code. L'interrupteur s'applique
+            immediatement a toutes les connexions et a toutes les routes de l'API ; les sessions deja ouvertes sans 2FA
+            seront redirigees vers la verification a leur prochaine action.
+          </p>
         </div>
       </div>
 

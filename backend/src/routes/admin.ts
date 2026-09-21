@@ -751,7 +751,20 @@ router.post('/deliveries/:id/wordpress', (req, _res, next) => { req.setTimeout(3
         error: "Envoi WordPress echoue (module desactive ou erreur — voir l'onglet Logs)",
       });
     }
-    return res.json({ post, message: `Brouillon WordPress cree (#${post.id})` });
+    // On renvoie aussi wp_payload : il contient editorTodo, la liste de ce qui
+    // reste a saisir a la main. Sans ca l'utilisateur n'a aucun moyen de le
+    // savoir depuis l'application.
+    const { data: saved } = await supabaseAdmin
+      .from('deliveries')
+      .select('wp_payload')
+      .eq('id', String(req.params.id))
+      .single();
+
+    return res.json({
+      post,
+      wp_payload: saved?.wp_payload ?? null,
+      message: `Brouillon WordPress cree (#${post.id})`,
+    });
   } catch (error: any) {
     console.error('Admin send to WordPress error:', error?.response?.data || error?.message || String(error));
     return res.status(500).json({ error: error?.message || 'Erreur envoi WordPress' });
@@ -793,6 +806,9 @@ const NON_SECRET_KEYS = new Set([
   'WORDPRESS_ENABLED',
   'WORDPRESS_URL',
   'WORDPRESS_USERNAME',
+  // Cles de meta du theme / des plugins, decouvertes sur le site puis saisies
+  // ici. Ce n'est pas un secret : c'est de la configuration de mapping.
+  'WP_META_MAP',
 ]);
 
 function maskValue(key: string, value: string): string {

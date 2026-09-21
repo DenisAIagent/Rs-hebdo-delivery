@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../utils/supabase';
+import { isMfaRequired } from '../services/mfaPolicy';
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -35,8 +36,8 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ error: 'Token invalide' });
     }
 
-    // 2FA obligatoire : la session doit avoir passe la verification TOTP
-    if (getTokenAal(token) !== 'aal2') {
+    // 2FA (si activee dans l'admin) : la session doit avoir passe la verification TOTP
+    if (getTokenAal(token) !== 'aal2' && (await isMfaRequired())) {
       return res.status(401).json({ error: 'Verification 2FA requise', code: 'mfa_required' });
     }
 

@@ -1,0 +1,26 @@
+# Ce que `railway up` ne doit PAS televerser.
+#
+# Le build Railway ne compile que backend/ et frontend/ (voir nixpacks.toml).
+# Tout le reste alourdit l'envoi pour rien : l'upload de 90 Mo de visuels
+# d'archive faisait expirer la requete avant meme le demarrage du build.
+
+# Dependances et artefacts : reinstalles/rebuild par Nixpacks
+node_modules/
+dist/
+.vite/
+
+# Dossiers de travail locaux (visuels des numeros livres, archives)
+HEBDO4septembre/
+HEBDO*/
+Hebdo RS Delivery-design/
+deck/
+macos/
+
+# Secrets et journaux
+.env
+*.env.backup*
+.env.backup*
+*.log
+
+# Bruit macOS
+.DS_Store

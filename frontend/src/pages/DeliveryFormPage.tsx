@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
+import { useAuthStore } from '../stores/authStore.ts';
 import { useDropzone } from 'react-dropzone';
 import {
   getActivePaperTypes,
@@ -11,8 +12,9 @@ import {
   updateDelivery,
   adminGetDelivery,
   adminUpdateDelivery,
+  adminGetJournalists,
 } from '../services/api.ts';
-import type { PaperType, HebdoConfig, CorrectionResult, Delivery, FieldConfig } from '../types/index.ts';
+import type { PaperType, HebdoConfig, CorrectionResult, Delivery, FieldConfig, Profile } from '../types/index.ts';
 import {
   ChevronRight,
   ChevronLeft,
@@ -30,6 +32,7 @@ import {
   Upload,
   Home,
   Eye,
+  UserRound,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -58,6 +61,13 @@ export function DeliveryFormPage() {
   const [preparingFolders, setPreparingFolders] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editDelivery, setEditDelivery] = useState<Delivery | null>(null);
+
+  // Livraison au nom d'un journaliste (admin uniquement) : l'admin choisit
+  // pour qui il livre avant de selectionner le type de papier.
+  const currentUser = useAuthStore((s) => s.user);
+  const isAdmin = currentUser?.role === 'admin';
+  const [journalists, setJournalists] = useState<Profile[]>([]);
+  const [authorId, setAuthorId] = useState('');
 
   // Form
   const [step, setStep] = useState<Step>('type');
@@ -88,6 +98,16 @@ export function DeliveryFormPage() {
         const [pt, hebdo] = await Promise.all([getActivePaperTypes(), getNextHebdo()]);
         setPaperTypes(pt);
         setNextHebdo(hebdo);
+
+        // Admin : liste des journalistes actifs pour choisir l'auteur du papier.
+        if (useAuthStore.getState().user?.role === 'admin') {
+          try {
+            const people = await adminGetJournalists();
+            setJournalists(people.filter((p: Profile) => p.is_active));
+          } catch {
+            setJournalists([]);
+          }
+        }
 
         if (editId) {
           const delivery = isAdminEdit ? await adminGetDelivery(editId) : await getDelivery(editId);
@@ -143,6 +163,9 @@ export function DeliveryFormPage() {
     }
   };
 
+  // Nombre maximum de photos accepte par le format (champ images, cle "max").
+  const maxImages = selectedType?.fields_config?.find((f) => f.type === 'images')?.max;
+
   const onDrop = useCallback((accepted: File[], rejected: any[]) => {
     if (rejected.length > 0) {
       rejected.forEach((r: any) => {
@@ -150,17 +173,26 @@ export function DeliveryFormPage() {
         toast.error(`${r.file?.name}: ${errors}`);
       });
     }
-    if (accepted.length > 0) {
-      setImageFiles((prev) => [...prev, ...accepted]);
-      accepted.forEach((file) => {
+    if (accepted.length === 0) return;
+
+    setImageFiles((prev) => {
+      const room = maxImages ? Math.max(0, maxImages - prev.length) : accepted.length;
+      const kept = accepted.slice(0, room);
+      if (kept.length < accepted.length) {
+        toast.error(
+          maxImages === 1
+            ? 'Ce format accepte une seule photo'
+            : `Ce format accepte ${maxImages} photos maximum`,
+        );
+      }
+      kept.forEach((file) => {
         const reader = new FileReader();
-        reader.onload = () => {
-          setImagePreviews((prev) => [...prev, reader.result as string]);
-        };
+        reader.onload = () => setImagePreviews((p) => [...p, reader.result as string]);
         reader.readAsDataURL(file);
       });
-    }
-  }, []);
+      return [...prev, ...kept];
+    });
+  }, [maxImages]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -243,6 +275,9 @@ export function DeliveryFormPage() {
 
     const title = getTitle();
     formData.append('title', title);
+    if (isAdmin && authorId && authorId !== currentUser?.id) {
+      formData.append('author_id', authorId);
+    }
     imageFiles.forEach((file) => formData.append('images', file));
 
     try {
@@ -352,9 +387,39 @@ export function DeliveryFormPage() {
     );
   }
 
+  // Remise a zero pour enchainer un papier : on est deja sur /livrer, une
+  // navigation vers la meme route ne remonte pas le composant — il faut donc
+  // vider l'etat a la main (le bouton restait sans effet).
+  const handleDeliverAnother = () => {
+    setStep('type');
+    setSelectedType(null);
+    setMetadata({});
+    setImageFiles([]);
+    setImagePreviews([]);
+    setCorrection(null);
+    setCorrecting(false);
+    setBodyCorrected('');
+    setSubmitting(false);
+    setSubmitError('');
+    setSubmitSuccess(false);
+    setDriveUrl('');
+    setShowValidation(false);
+    setAuthorId('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Success screen
   if (submitSuccess) {
-    return <SuccessScreen title={getTitle()} driveUrl={driveUrl} isEditMode={isEditMode} />;
+    return (
+      <SuccessScreen
+        title={getTitle()}
+        driveUrl={driveUrl}
+        isEditMode={isEditMode}
+        // En edition, le formulaire est lie a un papier precis : on renvoie
+        // vers une nouvelle livraison plutot que de vider le formulaire.
+        onDeliverAnother={isEditMode ? () => navigate('/livrer') : handleDeliverAnother}
+      />
+    );
   }
 
   const stepIndex = STEPS.findIndex((s) => s.key === step);
@@ -429,6 +494,9 @@ export function DeliveryFormPage() {
               onConfirm={handleConfirmHebdo}
               paperTypes={paperTypes}
               selectedType={selectedType}
+              journalists={isAdmin && !isEditMode ? journalists : []}
+              authorId={authorId}
+              onSelectAuthor={setAuthorId}
               onSelectType={(pt) => {
                 setSelectedType(pt);
                 setMetadata({});
@@ -608,6 +676,10 @@ interface StepTypeViewProps {
   paperTypes: PaperType[];
   selectedType: PaperType | null;
   onSelectType: (pt: PaperType) => void;
+  /** Non vide uniquement pour un admin qui livre : il choisit l'auteur du papier. */
+  journalists: Profile[];
+  authorId: string;
+  onSelectAuthor: (id: string) => void;
 }
 
 function StepTypeView({
@@ -618,7 +690,13 @@ function StepTypeView({
   paperTypes,
   selectedType,
   onSelectType,
+  journalists,
+  authorId,
+  onSelectAuthor,
 }: StepTypeViewProps) {
+  // Admin : le journaliste doit etre choisi avant le type de papier.
+  const needsAuthor = journalists.length > 0;
+  const authorReady = !needsAuthor || !!authorId;
   return (
     <div className="space-y-4">
       {/* Hebdo confirmation */}
@@ -699,10 +777,85 @@ function StepTypeView({
       </div>
 
       {/* Paper type selector */}
-      {hebdoConfirmed && (
+      {/* Admin : pour qui livre-t-on ? (avant le choix du type de papier) */}
+      {hebdoConfirmed && needsAuthor && (
         <div className="rs-card" style={{ padding: '24px 28px' }}>
           <div className="eyebrow" style={{ marginBottom: 6 }}>
-            Étape 1
+            Étape 1 · Admin
+          </div>
+          <h2
+            className="serif"
+            style={{ fontSize: 22, lineHeight: 1.1, marginBottom: 4 }}
+          >
+            Pour quel journaliste livrez-vous ?
+          </h2>
+          <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>
+            Le papier sera enregistré à son nom, dans Dropbox comme dans l'historique.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {journalists.map((j) => {
+              const active = authorId === j.id;
+              return (
+                <button
+                  key={j.id}
+                  type="button"
+                  onClick={() => onSelectAuthor(j.id)}
+                  className="text-left"
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: 'var(--r-md)',
+                    border: '2px solid',
+                    borderColor: active ? 'var(--rs-red)' : 'var(--border)',
+                    background: active ? 'var(--rs-red-tint)' : 'var(--surface)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    transition: 'border-color .15s var(--ease), background .15s var(--ease)',
+                  }}
+                >
+                  <UserRound
+                    size={20}
+                    style={{ color: active ? 'var(--rs-red)' : 'var(--muted)', flexShrink: 0 }}
+                  />
+                  <span style={{ minWidth: 0 }}>
+                    <span
+                      style={{
+                        display: 'block',
+                        fontSize: 15,
+                        fontWeight: 600,
+                        color: 'var(--ink)',
+                      }}
+                    >
+                      {j.full_name}
+                    </span>
+                    <span
+                      style={{
+                        display: 'block',
+                        fontSize: 12,
+                        color: 'var(--muted)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {j.email}
+                    </span>
+                  </span>
+                  {active && (
+                    <CheckCircle size={18} style={{ color: 'var(--rs-red)', marginLeft: 'auto', flexShrink: 0 }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {hebdoConfirmed && authorReady && (
+        <div className="rs-card" style={{ padding: '24px 28px' }}>
+          <div className="eyebrow" style={{ marginBottom: 6 }}>
+            {needsAuthor ? 'Étape 2' : 'Étape 1'}
           </div>
           <h2
             className="serif"
@@ -1684,9 +1837,11 @@ interface SuccessScreenProps {
   title: string;
   driveUrl: string;
   isEditMode: boolean;
+  /** Reinitialise le formulaire pour enchainer un papier (meme route /livrer). */
+  onDeliverAnother: () => void;
 }
 
-function SuccessScreen({ title, driveUrl, isEditMode }: SuccessScreenProps) {
+function SuccessScreen({ title, driveUrl, isEditMode, onDeliverAnother }: SuccessScreenProps) {
   return (
     <div className="flex items-center justify-center" style={{ padding: '40px 16px' }}>
       <div className="text-center" style={{ maxWidth: 720, width: '100%', position: 'relative' }}>
@@ -1777,10 +1932,10 @@ function SuccessScreen({ title, driveUrl, isEditMode }: SuccessScreenProps) {
               Voir dans Dropbox
             </a>
           )}
-          <Link to="/livrer" className="rs-btn primary lg">
+          <button type="button" onClick={onDeliverAnother} className="rs-btn primary lg">
             <Plus size={16} />
             Livrer un autre papier
-          </Link>
+          </button>
         </div>
       </div>
     </div>

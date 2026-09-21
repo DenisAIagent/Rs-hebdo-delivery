@@ -20,9 +20,13 @@ import {
   findOrCreateWpTag,
   uploadWpMedia,
   createWpDraftPost,
+  findWpMediaByKeywords,
+  getWpMetaMap,
   type WpPostCandidate,
 } from './wordpress';
 import { buildWpSystemPrompt, normalizeWpCategories, WP_STYLE_MUSIC } from './wordpressRules';
+import { fetchDeliveryImages, type ImageFile } from './dropbox';
+import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SIDE } from './imageResize';
 
 export interface WpPublishInput {
   deliveryId: string;
@@ -32,7 +36,163 @@ export interface WpPublishInput {
   hebdoLabel: string;
   metadata: Record<string, unknown>;
   bodyText: string;
-  firstImage?: { buffer: Buffer; originalname: string; mimetype: string };
+  /** All delivered images, in order: the first one becomes the featured image,
+   *  the others are inserted at the end of the article body. */
+  images?: ImageFile[];
+}
+
+function escapeHtmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Chronique types get the Reviewer box recap shortcode (rollingstone.fr convention). */
+const REVIEW_RECAP_SHORTCODE = '[rwp-review-recap id="0"]';
+
+export function isChroniqueType(paperTypeName: string): boolean {
+  const n = paperTypeName.toLowerCase();
+  return n.includes('chronique') || n.includes('disque de la semaine');
+}
+
+/**
+ * Insert the review recap shortcode after the body, before the author /
+ * translation credit block when there is one (never twice).
+ */
+export function appendReviewRecap(contentHtml: string): string {
+  if (contentHtml.includes('[rwp-review-recap')) return contentHtml;
+  const creditIdx = contentHtml.search(/<p>\s*<em>\s*Par\s|<em>\s*Par\s/i);
+  if (creditIdx > 0) {
+    return `${contentHtml.slice(0, creditIdx).trimEnd()}\n\n${REVIEW_RECAP_SHORTCODE}\n\n${contentHtml.slice(creditIdx)}`;
+  }
+  return `${contentHtml.trimEnd()}\n\n${REVIEW_RECAP_SHORTCODE}`;
+}
+
+/**
+ * Ce qui reste VRAIMENT a saisir a la main, une ligne par tache.
+ *
+ * Calcule a partir de ce que WordPress a reellement accepte, pas d'une phrase
+ * figee : un champ ecrit par l'API ne doit plus apparaitre dans la liste.
+ */
+export function buildEditorTodo(p: {
+  chronique: boolean;
+  reviewScore: number | null;
+  /** Valeur du select Style Music ('1' a '27'), telle que la stocke WP_STYLE_MUSIC. */
+  styleMusicValue: string | null;
+  mainArtist?: string;
+  metaRejected: string[];
+  metaMap: Partial<Record<'styleMusic' | 'mainArtist' | 'reviewScore', string>>;
+}): string[] {
+  const todo: string[] = [];
+  const refuse = (key?: string) => !key || p.metaRejected.includes(key);
+
+  if (p.metaRejected.some((k) => k.startsWith('_yoast_wpseo_'))) {
+    todo.push('Yoast SEO : requete cible, titre SEO et meta description (voyant vert).');
+  }
+  if (refuse(p.metaMap.styleMusic)) {
+    todo.push(
+      p.styleMusicValue
+        ? `Style Music : selectionner la valeur ${p.styleMusicValue} dans le menu deroulant.`
+        : 'Style Music : a choisir dans le menu deroulant.',
+    );
+  }
+  if (refuse(p.metaMap.mainArtist)) {
+    todo.push(
+      p.mainArtist
+        ? `Main Music Artist : saisir "${p.mainArtist}".`
+        : 'Main Music Artist : a saisir.',
+    );
+  }
+  if (p.chronique && refuse(p.metaMap.reviewScore)) {
+    todo.push(
+      `Reviews Box : template Review Chronique ${p.chronique ? 'Music' : ''}, critere "Avis de la redaction", note ${p.reviewScore ?? 'a reporter'}/5, image = image a la une.`.replace(
+        /\s+/g,
+        ' ',
+      ),
+    );
+  }
+  return todo;
+}
+
+/** Rating from the delivery form ("etoiles", on 5), or null. */
+function reviewScoreFromMetadata(metadata: Record<string, unknown>): number | null {
+  const raw = (metadata as any)?.etoiles;
+  const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? '').replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 && n <= 5 ? n : null;
+}
+
+/** One Gutenberg image block (no caption: the photo credit lives on the media only). */
+function buildImageBlock(m: { id: number; url: string }, alt: string): string {
+  const safeAlt = escapeHtmlAttr(alt);
+  return (
+    `<!-- wp:image {"id":${m.id},"sizeSlug":"large","linkDestination":"none"} -->\n` +
+    `<figure class="wp-block-image size-large"><img src="${m.url}" alt="${safeAlt}" class="wp-image-${m.id}"/></figure>\n` +
+    `<!-- /wp:image -->`
+  );
+}
+
+/** Top-level HTML blocks of the AI content (h3 chapo, h4 intertitres, p paragraphs, anything else). */
+const TOP_LEVEL_BLOCK_RE = /<(h3|h4|p)\b[^>]*>[\s\S]*?<\/\1>/gi;
+
+function splitTopLevelBlocks(html: string): string[] {
+  const blocks: string[] = [];
+  let last = 0;
+  for (const match of html.matchAll(TOP_LEVEL_BLOCK_RE)) {
+    const start = match.index ?? 0;
+    const between = html.slice(last, start).trim();
+    if (between) blocks.push(between);
+    blocks.push(match[0]);
+    last = start + match[0].length;
+  }
+  const tail = html.slice(last).trim();
+  if (tail) blocks.push(tail);
+  return blocks;
+}
+
+const isParagraph = (b: string) => /^<p\b/i.test(b);
+
+/**
+ * Spread the extra photos evenly inside the article body:
+ * - never before the chapo (first H3) and never right after an H4 (an
+ *   intertitre must be followed by its paragraph);
+ * - insertion points = after body paragraphs at k·P/(N+1);
+ * - whatever cannot be placed goes at the end.
+ */
+export function insertImagesIntoBody(
+  contentHtml: string,
+  media: Array<{ id: number; url: string }>,
+  alt: string,
+): string {
+  if (media.length === 0) return contentHtml;
+
+  const blocks = splitTopLevelBlocks(contentHtml);
+  // Candidate slots: index (in `blocks`) after which an image may go.
+  const slots: number[] = [];
+  // Only after a paragraph: an image is never placed right after an H3/H4
+  // (an intertitre stays glued to its paragraph); before an H4 is fine.
+  blocks.forEach((b, i) => {
+    if (isParagraph(b)) slots.push(i);
+  });
+  // Never before the chapo: drop any slot located before the first H3 (if any).
+  const firstH3 = blocks.findIndex((b) => /^<h3\b/i.test(b));
+  const usable = firstH3 >= 0 ? slots.filter((i) => i > firstH3) : slots;
+
+  const placements = new Map<number, string[]>(); // block index -> blocks to append after it
+  const leftovers: string[] = [];
+  const P = usable.length;
+  media.forEach((m, k) => {
+    const html = buildImageBlock(m, alt);
+    if (P === 0) { leftovers.push(html); return; }
+    const pos = Math.min(P - 1, Math.max(0, Math.round(((k + 1) * P) / (media.length + 1)) - 1));
+    const at = usable[pos];
+    placements.set(at, [...(placements.get(at) || []), html]);
+  });
+
+  const out: string[] = [];
+  blocks.forEach((b, i) => {
+    out.push(b);
+    for (const img of placements.get(i) || []) out.push(img);
+  });
+  out.push(...leftovers);
+  return out.join('\n\n');
 }
 
 interface WpArticlePayload {
@@ -191,28 +351,91 @@ export async function publishDeliveryToWordpress(
       }
     }
 
-    // 4. Featured image (dedup by filename, credit as caption — never in the body)
+    // 4. Images : la premiere devient l'image a la une, les suivantes sont
+    //    inserees en fin d'article (blocs image Gutenberg). Dedup par nom de
+    //    fichier ; le credit photo va en legende du media, jamais dans le texte.
     let featuredMediaId: number | undefined;
-    if (input.firstImage) {
+    const bodyMedia: Array<{ id: number; url: string }> = [];
+    const images = input.images || [];
+    if (images.length === 0) {
+      // No photo delivered (typical for chroniques): reuse an image already in
+      // the media library — cover or artist picture — searched by artist/album.
+      const artiste = String((input.metadata as any)?.artiste || '').trim();
+      const album = String((input.metadata as any)?.album || '').trim();
+      const queries = [artiste && album ? `${artiste} ${album}` : '', album, artiste, input.title].filter(Boolean);
       try {
+        const hit = await findWpMediaByKeywords(queries);
+        if (hit) {
+          featuredMediaId = hit.id;
+          await logInfo('wp-media', `Aucune photo livree — image a la une reprise de la mediatheque (media #${hit.id}, ${hit.url.split('/').pop()})`, ctx);
+        } else {
+          await logWarn('wp-media', `Aucune photo livree et rien en mediatheque pour « ${queries[0]} » — article envoye sans image a la une`, ctx);
+        }
+      } catch (err: any) {
+        await logWarn('wp-media', `Aucune photo livree ; recherche mediatheque echouee (${err?.message || err}) — article envoye sans image`, ctx);
+      }
+    }
+    for (const [index, image] of images.entries()) {
+      try {
+        // Featured image: rollingstone.fr format (1280 x 853, JPEG q90). Originals stay in Dropbox.
+        let upload = { buffer: image.buffer, filename: image.originalname, mimetype: image.mimetype };
+        try {
+          // Body images: web derivative (long side <= 1600 px, JPEG q85).
+          const resized = index === 0
+            ? await toFeaturedJpeg(image.buffer, image.originalname)
+            : await toWebJpeg(image.buffer, image.originalname);
+          upload = { buffer: resized.buffer, filename: resized.filename, mimetype: resized.mimetype };
+        } catch (err: any) {
+          const target = index === 0 ? `${FEATURED_WIDTH}x${FEATURED_HEIGHT}` : `web ${BODY_MAX_SIDE}px`;
+          await logWarn('wp-media', `Redimensionnement ${target} impossible pour "${image.originalname}" (${err?.message || err}) — original envoye`, ctx);
+        }
         const media = await uploadWpMedia({
-          buffer: input.firstImage.buffer,
-          filename: input.firstImage.originalname,
-          mimetype: input.firstImage.mimetype,
+          ...upload,
           caption: payload.photoCredit || undefined,
         });
-        featuredMediaId = media.id;
-        await logInfo('wp-media', `Image a la une prete (media #${media.id})`, ctx);
-      } catch (err) {
-        await logWarn('wp-media', 'Upload image WordPress echoue — article envoye sans image', ctx);
+        if (index === 0) {
+          featuredMediaId = media.id;
+          await logInfo('wp-media', `Image a la une prete (media #${media.id}, ${upload.filename})`, ctx);
+        } else if (media.id === featuredMediaId || bodyMedia.some((m) => m.id === media.id)) {
+          // Meme fichier livre plusieurs fois (ex. doublon pour atteindre le
+          // minimum de photos) : la mediatheque dedoublonne par nom, inutile de
+          // reinserer la meme image dans le corps de l'article.
+          await logInfo('wp-media', `Image "${image.originalname}" deja utilisee — doublon ignore`, ctx);
+        } else {
+          bodyMedia.push(media);
+        }
+      } catch (err: any) {
+        const detail = err?.response?.data?.message || err?.message || String(err);
+        await logWarn('wp-media', `Upload image "${image.originalname}" echoue (ignoree) : ${detail}`, ctx);
       }
+    }
+    if (bodyMedia.length > 0) {
+      await logInfo('wp-media', `${bodyMedia.length} image(s) inseree(s) dans le corps de l'article`, ctx);
+    }
+    let contentHtml = insertImagesIntoBody(payload.contentHtml, bodyMedia, payload.title || input.title);
+    const chronique = isChroniqueType(input.paperTypeName);
+    const reviewScore = chronique ? reviewScoreFromMetadata(input.metadata) : null;
+    if (chronique) {
+      contentHtml = appendReviewRecap(contentHtml);
+      await logInfo('wp-format', `Chronique : shortcode review box ajoute (note ${reviewScore ?? 'n/a'}/5 a reporter dans la Reviews Box)`, ctx);
     }
 
     // 5. Create the draft post — the title carries the review mention so the
     // editorial team spots unreviewed articles at a glance (slug/SEO stay clean)
+    //
+    // Style Music, Main Music Artist et la note Reviewer sont des metas du theme
+    // et d'un plugin : leurs cles ne sont pas devinables et ne sont envoyees que
+    // si elles ont ete renseignees dans le reglage WP_META_MAP.
+    const styleMusicValue = WP_STYLE_MUSIC[payload.styleMusic] || null;
+    const metaMap = await getWpMetaMap();
+    const extraMeta: Record<string, string | number> = {};
+    if (metaMap.styleMusic && styleMusicValue) extraMeta[metaMap.styleMusic] = styleMusicValue;
+    if (metaMap.mainArtist && payload.mainArtist) extraMeta[metaMap.mainArtist] = payload.mainArtist;
+    if (metaMap.reviewScore && reviewScore !== null) extraMeta[metaMap.reviewScore] = reviewScore;
+
     const post = await createWpDraftPost({
       title: `${payload.title || input.title} [EN ATTENTE DE RELECTURE]`,
-      contentHtml: payload.contentHtml,
+      contentHtml,
       slug: payload.slug,
       excerpt: payload.excerpt,
       categories,
@@ -223,7 +446,21 @@ export async function publishDeliveryToWordpress(
         seoTitle: payload.seoTitle,
         metaDescription: payload.metaDescription,
       },
+      extraMeta,
     });
+
+    // WordPress ignore en silence toute meta non enregistree : on le dit haut et
+    // clair au lieu de laisser croire que le champ est rempli.
+    if (post.metaRejected.length > 0) {
+      await logWarn(
+        'wp-meta',
+        `${post.metaRejected.length} champ(s) refuse(s) par WordPress — a saisir a la main`,
+        ctx,
+        `${post.metaRejected.join(', ')} — le mu-plugin scripts/wp/rs-delivery-rest-meta.php n'est pas installe sur le site, ou ces cles n'y sont pas declarees.`,
+      );
+    } else if (Object.keys(extraMeta).length > 0 || payload.focusKeyword) {
+      await logInfo('wp-meta', 'Yoast et metaboxes enregistres par WordPress', ctx);
+    }
 
     // 6. Track on the delivery — wp_payload keeps the editor-only fields
     await saveWpState(input.deliveryId, {
@@ -233,8 +470,19 @@ export async function publishDeliveryToWordpress(
       wp_payload: {
         ...payload,
         categories,
-        styleMusicValue: WP_STYLE_MUSIC[payload.styleMusic] || null,
-        editorTodo: 'A finir dans l\'editeur classique : Yoast (focuskw/titre/meta), Style Music, Main Music Artist.',
+        featuredMediaId: featuredMediaId ?? null,
+        bodyMediaIds: bodyMedia.map((m) => m.id),
+        reviewScore,
+        styleMusicValue,
+        metaRejected: post.metaRejected,
+        editorTodo: buildEditorTodo({
+          chronique,
+          reviewScore,
+          styleMusicValue,
+          mainArtist: payload.mainArtist,
+          metaRejected: post.metaRejected,
+          metaMap,
+        }),
       },
     });
 
@@ -260,13 +508,13 @@ export async function publishDeliveryToWordpress(
 
 /**
  * Re-send an existing delivery to WordPress (admin action).
- * Images are not re-sent (buffers are not stored) — the featured image is
- * reused via media-library deduplication only when it already exists.
+ * Image buffers are not stored in the database: they are fetched back from
+ * the delivery's Dropbox folder (same names, same order as delivered).
  */
 export async function republishDeliveryToWordpress(deliveryId: string) {
   const { data: delivery, error } = await supabaseAdmin
     .from('deliveries')
-    .select('*, paper_type:paper_types(name, fields_config), hebdo:hebdo_config(label), author:profiles(full_name, email)')
+    .select('*, paper_type:paper_types(name, drive_folder_name, fields_config), hebdo:hebdo_config(label), author:profiles(full_name, email)')
     .eq('id', deliveryId)
     .single();
 
@@ -274,13 +522,44 @@ export async function republishDeliveryToWordpress(deliveryId: string) {
     throw new Error('Livraison introuvable');
   }
 
+  const journalistName = delivery.author?.full_name || delivery.author?.email || 'Unknown';
+  const hebdoLabel = delivery.hebdo?.label || '';
+  const ctx: LogContext = {
+    journalistName,
+    hebdoLabel,
+    paperTypeName: delivery.paper_type?.name || 'Papier',
+    title: delivery.title,
+  };
+
+  let images: ImageFile[] = [];
+  try {
+    const wanted = String(delivery.image_filename || '')
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+    images = await fetchDeliveryImages(
+      {
+        hebdoNumber: hebdoLabel,
+        driveFolderName: delivery.paper_type?.drive_folder_name || delivery.paper_type?.name || 'Papier',
+        journalistName,
+        // Same fallback as the upload (uploadDelivery receives `subject || title`)
+        subject: delivery.subject || delivery.title,
+      },
+      wanted,
+    );
+    await logInfo('wp-media', `${images.length} image(s) recuperee(s) depuis Dropbox pour le renvoi`, ctx);
+  } catch (err: any) {
+    await logWarn('wp-media', `Images Dropbox introuvables pour le renvoi (${err?.message || err}) — envoi sans image`, ctx);
+  }
+
   return publishDeliveryToWordpress({
     deliveryId: delivery.id,
     title: delivery.title,
     paperTypeName: delivery.paper_type?.name || 'Papier',
-    journalistName: delivery.author?.full_name || delivery.author?.email || 'Unknown',
-    hebdoLabel: delivery.hebdo?.label || '',
+    journalistName,
+    hebdoLabel,
     metadata: delivery.metadata || {},
     bodyText: delivery.body_corrected || delivery.body_original || '',
+    images,
   });
 }

@@ -1,0 +1,316 @@
+#!/usr/bin/env bash
+#
+# wpe — CLI maison pour WP Engine (Rolling Stone / RS Hebdo Delivery).
+#
+# WP Engine ne fournit aucune CLI officielle. Ce script unifie les trois
+# surfaces reellement exposees :
+#   1. Install WordPress   -> SSH Gateway + WP-CLI  (rollingstone.fr)
+#   2. App Headless        -> webhooks de build     (Rs-hebdo-delivery)
+#   3. Compte WP Engine    -> API REST v1           (installs, backups, cache)
+#
+# Aucun secret dans ce fichier : tout vient de ~/.config/wpe/rs.env (chmod 600).
+
+set -euo pipefail
+
+CONFIG="${WPE_CONFIG:-$HOME/.config/wpe/rs.env}"
+API_BASE="https://api.wpengineapi.com/v1"
+WH_BASE="https://js.wpengineapi.com/wh/v1"
+
+# --- sortie ---------------------------------------------------------------
+if [ -t 1 ]; then
+  R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[1m'; N=$'\033[0m'
+else
+  R=''; G=''; Y=''; B=''; N=''
+fi
+info() { printf '%s\n' "$*" >&2; }
+ok()   { printf '%s✓%s %s\n' "$G" "$N" "$*" >&2; }
+warn() { printf '%s!%s %s\n' "$Y" "$N" "$*" >&2; }
+die()  { printf '%s✗%s %s\n' "$R" "$N" "$*" >&2; exit 1; }
+
+# --- config ---------------------------------------------------------------
+load_config() {
+  [ -f "$CONFIG" ] || die "Config absente : $CONFIG (voir 'wpe doctor')."
+  local perms
+  perms=$(stat -f '%Lp' "$CONFIG" 2>/dev/null || stat -c '%a' "$CONFIG" 2>/dev/null || echo '?')
+  [ "$perms" = "600" ] || warn "$CONFIG est en $perms — attendu 600 (chmod 600 '$CONFIG')."
+  set -a; . "$CONFIG"; set +a
+}
+
+need() {
+  local var="$1" hint="${2:-}"
+  [ -n "${!var:-}" ] || die "Variable '$var' vide dans $CONFIG.${hint:+ $hint}"
+}
+
+ssh_target() {
+  need WPE_INSTALL
+  printf '%s@%s.ssh.wpengine.net' "$WPE_INSTALL" "$WPE_INSTALL"
+}
+
+# --- 1. WordPress : WP-CLI via SSH Gateway --------------------------------
+cmd_wp() {
+  command -v wp >/dev/null 2>&1 || die "WP-CLI introuvable en local (brew install wp-cli)."
+  [ $# -gt 0 ] || die "Usage: wpe wp <commande WP-CLI…>  (ex: wpe wp post list)"
+  need WPE_INSTALL
+  wp --ssh="$(ssh_target)/sites/$WPE_INSTALL" "$@"
+}
+
+cmd_ssh() {
+  need WPE_INSTALL
+  if [ $# -gt 0 ]; then
+    ssh "$(ssh_target)" "$@"
+  else
+    ssh -t "$(ssh_target)"
+  fi
+}
+
+# Dump des taxonomies : les IDs dont wordpressRules.ts a besoin pour mapper
+# categories parent/enfant et tags sur les articles generes.
+cmd_taxonomy() {
+  local out="${1:-}"
+  info "${B}Categories${N} (term_id,name,parent,slug)"
+  cmd_wp term list category --fields=term_id,name,parent,slug --format=csv ${out:+> "$out.categories.csv"}
+  info ""
+  info "${B}Tags${N} (term_id,name,slug)"
+  cmd_wp term list post_tag --fields=term_id,name,slug --format=csv ${out:+> "$out.tags.csv"}
+  [ -n "$out" ] && ok "Ecrit : $out.categories.csv / $out.tags.csv"
+}
+
+# --- 2. Headless : webhooks de build --------------------------------------
+webhook() {
+  local hook="$1" label="$2"
+  need WPE_HEADLESS_ACCOUNT; need WPE_HEADLESS_APP
+  need WPE_HEADLESS_ENV;     need WPE_HEADLESS_TOKEN
+
+  local url="$WH_BASE/accounts/$WPE_HEADLESS_ACCOUNT/apps/$WPE_HEADLESS_APP"
+  url="$url/environments/$WPE_HEADLESS_ENV/webhooks/webhook:$hook?token=$WPE_HEADLESS_TOKEN"
+
+  local code body tmp
+  tmp=$(mktemp)
+  code=$(curl -sS -m 30 -o "$tmp" -w '%{http_code}' -X POST "$url" \
+           -H 'Content-Type: application/json' -d '{}' || echo 000)
+  body=$(cat "$tmp"); rm -f "$tmp"
+
+  if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+    ok "$label declenche (HTTP $code)"
+    [ -n "$body" ] && printf '%s\n' "$body"
+  else
+    printf '%s\n' "$body" >&2
+    die "$label a echoue (HTTP $code). Token expire ? Regenere-le dans le portail."
+  fi
+}
+
+# Un rebuild redeploie l'app en production : confirmation obligatoire.
+confirm() {
+  local what="$1"
+  [ "${WPE_YES:-}" = "1" ] && return 0
+  [ -t 0 ] || die "$what non interactif : relance avec WPE_YES=1 si c'est voulu."
+  printf '%s%s%s — confirmer ? [o/N] ' "$Y" "$what" "$N" >&2
+  local a; read -r a
+  case "$a" in o|O|y|Y) return 0 ;; *) die "Annule." ;; esac
+}
+
+cmd_rebuild()       { confirm "Rebuild de $WPE_HEADLESS_APP (production)";       webhook rebuild      "Rebuild"; }
+cmd_clean_rebuild() { confirm "CLEAN rebuild de $WPE_HEADLESS_APP (cache build purge, plus long)"; webhook cleanRebuild "Clean rebuild"; }
+cmd_purge()         { webhook purgeCache "Purge cache headless"; }
+
+# --- 3. API compte --------------------------------------------------------
+cmd_api() {
+  need WPE_API_USER     "Portail WP Engine > API Access."
+  need WPE_API_PASSWORD "Portail WP Engine > API Access."
+  local method=GET
+  case "${1:-}" in GET|POST|PUT|PATCH|DELETE) method="$1"; shift ;; esac
+  local path="${1:-/installs}"; shift || true
+  curl -sS -m 30 -u "$WPE_API_USER:$WPE_API_PASSWORD" -X "$method" \
+       -H 'Content-Type: application/json' \
+       "$API_BASE/${path#/}" "$@"
+  echo
+}
+
+# Purge du cache Varnish WPE cote WordPress (distinct du cache headless).
+cmd_purge_wp() {
+  need WPE_API_USER "Requiert l'API compte."
+  local id="${1:-${WPE_INSTALL_ID:-}}"
+  [ -n "$id" ] || die "Usage: wpe purge-wp [install_id]  (liste : wpe api /installs)"
+  cmd_api POST "/installs/$id/purge_cache" -d '{"type":"all"}'
+}
+
+
+# --- compat : l'install peut-elle recevoir une livraison RS Delivery ? --------
+# Rejoue les prerequis reels de backend/src/services/wordpress.ts.
+# Varnish cache les GET REST : toutes les sondes sont cache-bustees.
+cmd_compat() {
+  local base="${1:-${WPE_TEST_URL:-https://rollingstonema.wpenginepowered.com}}"
+  local h="$base/index.php" fail=0 warn_n=0
+  probe() { curl -s -m 20 --get "$h" --data-urlencode "rest_route=$1" \
+              --data-urlencode "cb=$RANDOM$RANDOM$$" "${@:2}"; }
+
+  info "${B}Cible${N} : $base"; info ""
+
+  # 1. permaliens — wordpress.ts construit ${baseUrl}/wp-json/wp/v2 en dur
+  info "${B}1. Permaliens (route /wp-json)${N}"
+  local ct code
+  code=$(curl -sL -m 20 -o /dev/null -w '%{http_code}' "$base/wp-json/wp/v2/types?cb=$RANDOM")
+  ct=$(curl -sL -m 20 -o /dev/null -w '%{content_type}' "$base/wp-json/wp/v2/types?cb=$RANDOM")
+  if printf '%s' "$ct" | grep -qi json; then
+    ok "/wp-json sert du JSON (HTTP $code)"
+  else
+    printf '%s✗%s /wp-json renvoie %s (HTTP %s) — permaliens en mode « simple ».\n' "$R" "$N" "$ct" "$code" >&2
+    info "     wordpress.ts:111 code en dur \${baseUrl}/wp-json/wp/v2 : il recevra du HTML en 200,"
+    info "     donc un echec opaque et non une erreur propre."
+    info "     ${B}Fix${N} : Reglages > Permaliens > « Titre de la publication » > Enregistrer."
+    fail=1
+  fi
+
+  # 2. endpoints consommes par le publisher
+  info ""; info "${B}2. Endpoints REST requis${N}"
+  local ep
+  for ep in /wp/v2/posts /wp/v2/categories /wp/v2/tags /wp/v2/media /wp/v2/users; do
+    code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' --get "$h" \
+             --data-urlencode "rest_route=$ep" --data-urlencode "cb=$RANDOM$RANDOM$$")
+    if [ "$code" = "200" ]; then ok "$ep"; else warn "$ep -> HTTP $code"; fail=1; fi
+  done
+
+  # 3. authentification par mot de passe application
+  info ""; info "${B}3. Mots de passe application${N}"
+  if probe "/" | grep -q "application-passwords"; then
+    ok "actives (authorize-application.php annonce)"
+  else
+    warn "non annonces — l'auth Basic du publisher echouera"; fail=1
+  fi
+
+  # 4. Yoast — le publisher envoie meta.yoast_wpseo_*
+  info ""; info "${B}4. Yoast SEO${N}"
+  if probe "/" | grep -q yoast; then
+    ok "present — les champs SEO seront reellement testes"
+  else
+    warn "absent : WP acceptera l'article mais ignorera silencieusement"
+    info "     focuskw / title / metadesc. Le test passera au vert sans rien prouver"
+    info "     sur la moitie SEO. Installe Yoast SEO pour un test representatif."
+    warn_n=1
+  fi
+
+  # 5. taxonomie — wordpressRules.ts code en dur les IDs de rollingstone.fr
+  info ""; info "${B}5. Taxonomie${N}"
+  local ncat ntag
+  ncat=$(probe /wp/v2/categories --data-urlencode "per_page=100" | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
+  ntag=$(probe /wp/v2/tags --data-urlencode "per_page=100" | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
+  info "     $ncat categorie(s), $ntag tag(s)"
+  if [ "$ncat" -lt 5 ]; then
+    printf '%s✗%s taxonomie quasi vide.\n' "$R" "$N" >&2
+    info "     wordpressRules.ts code en dur les IDs de rollingstone.fr (3627 Musique,"
+    info "     6719 News Musique…). Ces termes n'existent pas ici : WP rejettera la"
+    info "     creation en 400. Il faut un mapping d'IDs par environnement."
+    fail=1
+  else ok "taxonomie suffisante"; fi
+
+  # 6. cache Varnish sur les GET REST
+  info ""; info "${B}6. Cache Varnish sur le REST${N}"
+  local xc
+  xc=$(curl -s -m 20 -D- -o /dev/null --get "$h" --data-urlencode "rest_route=/wp/v2/posts" | grep -i '^x-cache:' | tr -d '\r')
+  info "     $xc"
+  warn "les GET REST sont caches : la dedup media (wordpress.ts ~191) peut lire"
+  info "     des donnees perimees. Prevoir un cache-buster ou une purge."
+  warn_n=1
+
+  info ""
+  if [ "$fail" -eq 0 ]; then
+    [ "$warn_n" -eq 0 ] && ok "Compatible." || warn "Compatible avec reserves (voir ci-dessus)."
+  else
+    die "NON compatible en l'etat — corriger les points marques ✗."
+  fi
+}
+
+# --- doctor ---------------------------------------------------------------
+cmd_doctor() {
+  local fail=0
+  info "${B}Config${N}"
+  if [ -f "$CONFIG" ]; then ok "$CONFIG present"; else warn "$CONFIG absent"; fail=1; fi
+
+  info ""; info "${B}Outils locaux${N}"
+  for t in wp ssh curl; do
+    if command -v "$t" >/dev/null 2>&1; then ok "$t : $(command -v $t)"; else warn "$t manquant"; fail=1; fi
+  done
+
+  info ""; info "${B}Install WordPress${N}"
+  if [ -n "${WPE_INSTALL:-}" ]; then
+    ok "install = $WPE_INSTALL"
+    if dig +short "$WPE_INSTALL.ssh.wpengine.net" >/dev/null 2>&1 \
+       && [ -n "$(dig +short "$WPE_INSTALL.ssh.wpengine.net")" ]; then
+      ok "gateway SSH resout"
+      if ssh -o BatchMode=yes -o ConnectTimeout=10 "$(ssh_target)" true 2>/dev/null; then
+        ok "authentification SSH OK"
+      else
+        warn "cle SSH pas encore autorisee — ajoute ta cle publique dans le portail :"
+        info "    $(cat ~/.ssh/id_ed25519.pub 2>/dev/null || echo '(aucune cle id_ed25519.pub)')"
+        fail=1
+      fi
+    else
+      warn "gateway SSH ne resout pas"; fail=1
+    fi
+  else warn "WPE_INSTALL vide"; fail=1; fi
+
+  info ""; info "${B}Headless${N}"
+  if [ -n "${WPE_HEADLESS_TOKEN:-}" ]; then ok "app $WPE_HEADLESS_APP / env ${WPE_HEADLESS_ENV:0:8}… (token present)"
+  else warn "WPE_HEADLESS_TOKEN vide"; fail=1; fi
+
+  info ""; info "${B}API compte${N}"
+  if [ -n "${WPE_API_USER:-}" ] && [ -n "${WPE_API_PASSWORD:-}" ]; then
+    if curl -sf -m 15 -u "$WPE_API_USER:$WPE_API_PASSWORD" "$API_BASE/user" >/dev/null 2>&1; then
+      ok "identifiants API valides"
+    else warn "identifiants API refuses"; fail=1; fi
+  else warn "API non configuree (WPE_API_USER / WPE_API_PASSWORD vides)"; fi
+
+  info ""
+  [ "$fail" -eq 0 ] && ok "Tout est pret." || warn "Points a corriger ci-dessus."
+}
+
+usage() {
+  cat >&2 <<'USAGE'
+wpe — WP Engine pour Rolling Stone (install rollingstonema + app Rs-hebdo-delivery)
+
+WORDPRESS (SSH Gateway + WP-CLI)
+  wpe wp <cmd…>            WP-CLI sur l'install distante
+                             ex: wpe wp post list --post_type=post --posts_per_page=5
+                                 wpe wp option get siteurl
+  wpe ssh [cmd]            shell sur l'install
+  wpe taxonomy [prefixe]   dump categories + tags (IDs pour wordpressRules.ts)
+
+HEADLESS (app Rs-hebdo-delivery)
+  wpe rebuild              rebuild standard        (confirmation)
+  wpe clean-rebuild        rebuild sans cache      (confirmation)
+  wpe purge                purge du cache headless
+
+COMPTE (API v1 — requiert WPE_API_USER/PASSWORD)
+  wpe api [METHODE] <path> ex: wpe api /installs
+  wpe purge-wp <install_id>  purge Varnish cote WordPress
+
+  wpe compat [url]         l'install peut-elle recevoir une livraison RS Delivery ?
+  wpe doctor               diagnostic complet
+
+Config : ~/.config/wpe/rs.env   |   WPE_YES=1 saute les confirmations
+Note : rollingstone.fr est derriere Cloudflare — une purge WPE ne purge pas Cloudflare.
+USAGE
+}
+
+# --- dispatch -------------------------------------------------------------
+main() {
+  local cmd="${1:-}"; shift || true
+  case "$cmd" in
+    ''|-h|--help|help) usage ;;
+    compat)            load_config; cmd_compat "$@" ;;
+    doctor)            load_config 2>/dev/null || true
+                       [ -f "$CONFIG" ] && { set -a; . "$CONFIG"; set +a; }
+                       cmd_doctor ;;
+    wp)                load_config; cmd_wp "$@" ;;
+    ssh)               load_config; cmd_ssh "$@" ;;
+    taxonomy)          load_config; cmd_taxonomy "$@" ;;
+    rebuild)           load_config; cmd_rebuild ;;
+    clean-rebuild)     load_config; cmd_clean_rebuild ;;
+    purge)             load_config; cmd_purge ;;
+    api)               load_config; cmd_api "$@" ;;
+    purge-wp)          load_config; cmd_purge_wp "$@" ;;
+    *)                 usage; die "Commande inconnue : $cmd" ;;
+  esac
+}
+
+main "$@"

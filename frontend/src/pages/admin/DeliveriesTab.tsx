@@ -1,7 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { adminGetDeliveries, adminDeleteDelivery, adminSendDeliveryToWordpress } from '../../services/api.ts';
-import type { Delivery } from '../../types/index.ts';
+import {
+  adminGetDeliveries,
+  adminDeleteDelivery,
+  adminSendDeliveryToWordpress,
+  adminGetJournalists,
+  adminReassignDelivery,
+} from '../../services/api.ts';
+import type { Delivery, Profile } from '../../types/index.ts';
 import { FolderOpen, ExternalLink, AlertCircle, Search, Trash2, Pencil, Globe, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -13,6 +19,16 @@ const STATUS_LABELS: Record<string, { label: string; classes: string }> = {
   draft: { label: 'Brouillon', classes: 'bg-gray-100 text-gray-600' },
 };
 
+/**
+ * Champs obligatoires que WordPress n'a pas pu enregistrer et qui restent a
+ * saisir dans l'editeur classique (Yoast, Style Music, Main Music Artist,
+ * Reviews Box). Calcule par le backend et stocke dans wp_payload.editorTodo.
+ */
+function wpEditorTodo(d: Delivery): string[] {
+  const todo = (d.wp_payload as any)?.editorTodo;
+  return Array.isArray(todo) ? todo : [];
+}
+
 export function DeliveriesTab() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +36,30 @@ export function DeliveriesTab() {
   const [search, setSearch] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [sendingWp, setSendingWp] = useState<string | null>(null);
+  const [journalists, setJournalists] = useState<Profile[]>([]);
+  const [reassigning, setReassigning] = useState<string | null>(null);
+
+  /** Reattribution d'une livraison a un autre journaliste (liste des comptes actifs). */
+  async function handleReassign(d: Delivery, authorId: string) {
+    if (!authorId || authorId === d.author_id) return;
+    setReassigning(d.id);
+    try {
+      await adminReassignDelivery(d.id, authorId);
+      const target = journalists.find((j) => j.id === authorId);
+      setDeliveries((prev) =>
+        prev.map((x) =>
+          x.id === d.id
+            ? { ...x, author_id: authorId, author: target ? { ...(x.author || {}), ...target } : x.author }
+            : x,
+        ),
+      );
+      toast.success(`Livraison attribuee a ${target?.full_name || 'ce journaliste'}`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Erreur de reattribution');
+    } finally {
+      setReassigning(null);
+    }
+  }
 
   async function handleSendWordpress(d: Delivery) {
     if (d.wp_status === 'sent' && !confirm(`"${d.title}" a deja un brouillon WordPress. Renvoyer quand meme (nouveau brouillon) ?`)) {
@@ -27,15 +67,24 @@ export function DeliveriesTab() {
     }
     setSendingWp(d.id);
     try {
-      const { post, message } = await adminSendDeliveryToWordpress(d.id);
+      const { post, message, wp_payload } = await adminSendDeliveryToWordpress(d.id);
       toast.success(message);
       setDeliveries((prev) =>
         prev.map((x) =>
           x.id === d.id
-            ? { ...x, wp_status: 'sent', wp_post_id: post.id, wp_post_url: post.editUrl }
+            ? { ...x, wp_status: 'sent', wp_post_id: post.id, wp_post_url: post.editUrl, wp_payload: wp_payload ?? x.wp_payload }
             : x,
         ),
       );
+      // Ce que WordPress n'a pas pu enregistrer doit se voir : sinon personne ne
+      // sait qu'il reste des champs obligatoires a saisir dans l'editeur.
+      const todo: string[] = Array.isArray(wp_payload?.editorTodo) ? wp_payload.editorTodo : [];
+      if (todo.length > 0) {
+        toast(
+          `${todo.length} champ(s) a finir dans l'editeur :\n${todo.map((t) => `• ${t}`).join('\n')}`,
+          { duration: 12000, icon: '📝', style: { maxWidth: '560px', whiteSpace: 'pre-line' } },
+        );
+      }
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Erreur envoi WordPress (voir Logs)');
     } finally {
@@ -59,8 +108,14 @@ export function DeliveriesTab() {
   useEffect(() => {
     async function load() {
       try {
-        const data = await adminGetDeliveries();
+        // Les journalistes alimentent le selecteur de reattribution ; leur
+        // absence ne doit pas empecher l'affichage des livraisons.
+        const [data, people] = await Promise.all([
+          adminGetDeliveries(),
+          adminGetJournalists().catch(() => [] as Profile[]),
+        ]);
         setDeliveries(data);
+        setJournalists(people.filter((p) => p.is_active));
       } catch {
         setError('Erreur chargement');
       } finally {
@@ -138,7 +193,28 @@ export function DeliveriesTab() {
                   return (
                     <tr key={d.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-rs-black">
-                        {d.author?.full_name || 'N/A'}
+                        {journalists.length > 0 ? (
+                          <select
+                            value={d.author_id || ''}
+                            disabled={reassigning === d.id}
+                            onChange={(e) => handleReassign(d, e.target.value)}
+                            title="Changer le journaliste attribue a cette livraison"
+                            className="max-w-[190px] w-full text-sm font-medium text-rs-black bg-transparent border border-transparent hover:border-gray-300 focus:border-rs-red rounded px-1.5 py-1 cursor-pointer transition-colors disabled:opacity-50"
+                          >
+                            {!journalists.some((j) => j.id === d.author_id) && (
+                              <option value={d.author_id || ''}>
+                                {d.author?.full_name || 'N/A'} (inactif)
+                              </option>
+                            )}
+                            {journalists.map((j) => (
+                              <option key={j.id} value={j.id}>
+                                {j.full_name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          d.author?.full_name || 'N/A'
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
@@ -169,15 +245,27 @@ export function DeliveriesTab() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           {d.wp_status === 'sent' && d.wp_post_url ? (
-                            <a
-                              href={d.wp_post_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1.5 text-green-600 hover:text-green-700 transition-colors"
-                              title={`Brouillon WordPress #${d.wp_post_id} — en attente de relecture`}
-                            >
-                              <Globe size={16} />
-                            </a>
+                            <>
+                              <a
+                                href={d.wp_post_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 text-green-600 hover:text-green-700 transition-colors"
+                                title={`Brouillon WordPress #${d.wp_post_id} — en attente de relecture`}
+                              >
+                                <Globe size={16} />
+                              </a>
+                              {wpEditorTodo(d).length > 0 && (
+                                <span
+                                  className="px-1 text-amber-500 cursor-help"
+                                  title={`A finir dans l'editeur classique :\n${wpEditorTodo(d)
+                                    .map((t) => `• ${t}`)
+                                    .join('\n')}`}
+                                >
+                                  <AlertCircle size={16} />
+                                </span>
+                              )}
+                            </>
                           ) : (
                             <button
                               onClick={() => handleSendWordpress(d)}

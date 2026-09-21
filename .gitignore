@@ -16,3 +16,10 @@ macos/
 # Dossiers de travail locaux (design, deck) — hors dépôt
 Hebdo RS Delivery-design/
 deck/
+
+# Papiers de l'hebdo en cours de production (contenu redactionnel, 90 Mo) —
+# dossier de travail local, jamais sur GitHub.
+HEBDO4septembre/
+
+# Config locale Claude Code (permissions machine)
+.claude/

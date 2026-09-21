@@ -279,10 +279,29 @@ export interface WpCreatePostInput {
   featuredMediaId?: number;
   /** Yoast fields — best effort via REST meta (finished by hand in the editor). */
   yoast?: { focusKeyword: string; seoTitle: string; metaDescription: string };
+  /**
+   * Metas du theme et des plugins (Style Music, Main Music Artist, Reviewer).
+   * Les cles reelles ne sont pas devinables : elles se decouvrent sur le site
+   * puis se declarent dans le reglage WP_META_MAP (voir getWpExtraMeta).
+   * Tant que le reglage est vide, cet objet l'est aussi et rien n'est envoye.
+   */
+  extraMeta?: Record<string, string | number>;
+}
+
+export interface WpCreatePostResult {
+  id: number;
+  link: string;
+  editUrl: string;
+  /**
+   * Cles de meta refusees par WordPress (article cree quand meme, sans elles).
+   * Vide = tout est passe. Permet a l'appelant de dire la verite sur ce qui
+   * reste a saisir a la main, au lieu d'echouer en silence.
+   */
+  metaRejected: string[];
 }
 
 /** Create a DRAFT post. Returns the post ID and its edit URL. */
-export async function createWpDraftPost(input: WpCreatePostInput): Promise<{ id: number; link: string; editUrl: string }> {
+export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCreatePostResult> {
   const config = await getWpConfig();
   const client = wpClient(config);
 
@@ -297,35 +316,72 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<{ id:
   };
   if (input.featuredMediaId) body.featured_media = input.featuredMediaId;
 
-  // Yoast stores its fields as protected meta (_yoast_wpseo_*). WordPress only
-  // accepts them via REST when the site registers them with show_in_rest
-  // (see scripts/wp/rs-delivery-rest-meta.php); otherwise WP ignores or rejects
-  // them, so we retry without meta on 400.
-  const withYoast = input.yoast
-    ? {
-        ...body,
-        meta: {
-          _yoast_wpseo_focuskw: input.yoast.focusKeyword,
-          _yoast_wpseo_title: input.yoast.seoTitle,
-          _yoast_wpseo_metadesc: input.yoast.metaDescription,
-        },
-      }
-    : body;
+  // Yoast et les metaboxes du theme stockent des metas protegees. WordPress ne
+  // les accepte via REST que si le site les enregistre avec show_in_rest (voir
+  // scripts/wp/rs-delivery-rest-meta.php) ; sinon il les ignore ou les rejette.
+  // On les envoie quand meme, et on REMONTE le refus au lieu de le masquer.
+  const meta: Record<string, string | number> = {};
+  if (input.yoast) {
+    meta._yoast_wpseo_focuskw = input.yoast.focusKeyword;
+    meta._yoast_wpseo_title = input.yoast.seoTitle;
+    meta._yoast_wpseo_metadesc = input.yoast.metaDescription;
+  }
+  for (const [key, value] of Object.entries(input.extraMeta || {})) {
+    if (value !== '' && value !== null && value !== undefined) meta[key] = value;
+  }
+
+  const metaKeys = Object.keys(meta);
+  const withMeta = metaKeys.length > 0 ? { ...body, meta } : body;
 
   let data: any;
+  let metaRejected: string[] = [];
   try {
-    ({ data } = await client.post('/posts', withYoast));
+    ({ data } = await client.post('/posts', withMeta));
   } catch (error: any) {
-    if (input.yoast && error?.response?.status === 400) {
+    // 400 = au moins une cle de meta n'est pas enregistree cote WordPress.
+    // L'article doit tout de meme partir, mais l'appelant doit le savoir.
+    if (metaKeys.length > 0 && error?.response?.status === 400) {
+      metaRejected = metaKeys;
       ({ data } = await client.post('/posts', body));
     } else {
       throw error;
     }
   }
 
+  // WordPress peut aussi accepter la requete en ignorant SILENCIEUSEMENT les
+  // metas non enregistrees (cas le plus frequent). On relit ce qu'il a garde.
+  if (metaRejected.length === 0 && metaKeys.length > 0) {
+    const saved = (data?.meta || {}) as Record<string, unknown>;
+    metaRejected = metaKeys.filter((k) => {
+      const v = saved[k];
+      return v === undefined || v === '' || v === null;
+    });
+  }
+
   return {
     id: data.id,
     link: data.link,
     editUrl: `${config.baseUrl}/wp-admin/post.php?post=${data.id}&action=edit`,
+    metaRejected,
   };
+}
+
+/**
+ * Cles de meta du theme / des plugins, lues dans le reglage WP_META_MAP.
+ *
+ * Format attendu (JSON) : {"styleMusic":"<cle>","mainArtist":"<cle>","reviewScore":"<cle>"}
+ * Tant que le reglage est vide ou incomplet, les champs concernes ne sont pas
+ * envoyes — on ne devine JAMAIS un nom de cle. Elles se decouvrent sur le site
+ * via GET /wp-json/rs-delivery/v1/post-meta/{id} (mu-plugin), puis se saisissent
+ * dans l'admin, sans redeploiement.
+ */
+export async function getWpMetaMap(): Promise<Partial<Record<'styleMusic' | 'mainArtist' | 'reviewScore', string>>> {
+  const raw = await getSetting('WP_META_MAP');
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed ? parsed : {};
+  } catch {
+    return {};
+  }
 }

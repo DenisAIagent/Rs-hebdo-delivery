@@ -136,6 +136,12 @@ YOAST SEO :
 - metaDescription : ~150 caracteres (max 155), contient le mot-cle.
 - slug : court, mots-cles separes par des tirets, sans mots vides ni accents.
 
+FORMATS PAR TYPE DE PAPIER :
+- Chronique disque (types « Chroniques », « Disque de la semaine ») : title = « Chronique : Artiste, Album » (ex. « Chronique : Brandon Flowers, Thrasher »). Le H3 chapo resume l'avis (album, contexte, verdict en 2-3 phrases). Titres d'albums en <em>, titres de morceaux en <em>« »</em>. Categories [3627, 6716] (+ 6275 si metal) ; « Disque de la semaine » -> [3627, 23176]. Ne mets PAS le shortcode de la review box ni la note dans le texte : ils sont ajoutes automatiquement.
+- Chronique cinema (type « Chronique Cinema ») : title = « Critique : Titre du film » ; categories [3619, 3, 6714].
+- Interview : categories [3627, 6708] (musique) ou [3619, 6709] (culture).
+- Sujet de couv / grand format : [3627, 6713] (musique) ou [3619, 6712] (culture).
+
 EXCERPT : le chapo en texte brut (sans balises).
 
 Tu reponds UNIQUEMENT via l'outil submit_wp_article.`;

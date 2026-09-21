@@ -16,8 +16,8 @@ export function LoginPage() {
     setError('');
     try {
       await login(email, password);
-      // 2FA obligatoire : verification (ou enrolement) du code TOTP
-      navigate('/mfa');
+      // 2FA (si activee dans l'admin) : verification (ou enrolement) du code TOTP
+      navigate(useAuthStore.getState().mfaRequired ? '/mfa' : '/');
     } catch (err: unknown) {
       setError('Email ou mot de passe incorrect');
     }

@@ -1,0 +1,7 @@
+{
+  "scene": "02-connexion",
+  "duration_s": 31,
+  "rules": ["cursor-click-ripple", "discrete-text-sequence", "press-release-spring", "dynamic-content-sequencing", "spring-pop-entrance"],
+  "exit": { "vector": "static hold; attention ring breathing ±1.2% scale, halo ±3%, 0 px/s", "still_moving": false },
+  "entry": { "vector": "browser frame scale 0.96→1 + opacity 0→1 over 0.7s (≈ 40 px/s edge growth), no translation", "from_rest": true }
+}

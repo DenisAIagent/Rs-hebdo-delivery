@@ -30,3 +30,11 @@ RSH2*/
 __pycache__/
 *.pyc
 supabase/.temp/
+
+# Projet vidéo HyperFrames (videos/) : on versionne les sources, pas les rendus
+videos/**/out/
+videos/**/snapshots/
+videos/**/.hyperframes/
+videos/**/node_modules/
+videos/**/assets/vo/*.wav
+videos/**/assets/vo/*.aiff

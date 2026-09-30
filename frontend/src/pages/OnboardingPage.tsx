@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.ts';
 import {
@@ -16,9 +16,14 @@ import {
   ArrowRight,
   Check,
   X,
+  Play,
 } from 'lucide-react';
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
+
+/** Vidéo de présentation (générée dans videos/rs-hebdo-tuto, copiée dans public/). */
+const TUTO_VIDEO_SRC = '/tuto-rs-hebdo.mp4';
+const TUTO_VIDEO_POSTER = '/tuto-rs-hebdo.jpg';
 
 function getOnboardingKey(userId: string) {
   return `rs-onboarding-done-${userId}`;
@@ -35,6 +40,84 @@ function markOnboardingDone(userId: string) {
 /* ------------------------------------------------------------------ */
 /*  Step components                                                    */
 /* ------------------------------------------------------------------ */
+
+function StepVideo() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [blocked, setBlocked] = useState(false);
+
+  // Lecture automatique au premier affichage ; si le navigateur la refuse
+  // (pas d'interaction préalable), on affiche un grand bouton Lire.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const attempt = el.play();
+    if (attempt && typeof attempt.catch === 'function') {
+      attempt.catch(() => setBlocked(true));
+    }
+    return () => {
+      el.pause();
+    };
+  }, []);
+
+  const playManually = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.play()
+      .then(() => setBlocked(false))
+      .catch(() => setBlocked(true));
+  };
+
+  return (
+    <div className="text-center px-4">
+      <div className="eyebrow" style={{ marginBottom: 8 }}>Présentation vidéo · 5 min</div>
+      <h2
+        className="serif italic"
+        style={{ fontSize: 40, lineHeight: 1.05, marginBottom: 18 }}
+      >
+        Comment livrer un papier
+      </h2>
+      <div
+        className="rs-card thick relative mx-auto overflow-hidden"
+        style={{ maxWidth: 960, background: 'var(--ink)' }}
+      >
+        <video
+          ref={videoRef}
+          src={TUTO_VIDEO_SRC}
+          poster={TUTO_VIDEO_POSTER}
+          controls
+          playsInline
+          preload="auto"
+          className="block w-full"
+          style={{ aspectRatio: '16 / 9' }}
+          aria-label="Vidéo de présentation de RS Hebdo Delivery"
+        />
+        {blocked && (
+          <button
+            type="button"
+            onClick={playManually}
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ background: 'rgba(22, 20, 15, 0.45)' }}
+            aria-label="Lire la vidéo"
+          >
+            <span
+              className="inline-flex items-center gap-2 rs-btn primary lg"
+              style={{ fontSize: 18 }}
+            >
+              <Play size={20} /> Lire la présentation
+            </span>
+          </button>
+        )}
+      </div>
+      <p
+        className="mx-auto mt-6"
+        style={{ color: 'var(--muted)', maxWidth: 560, fontSize: 14 }}
+      >
+        Prenez le temps de la regarder : chaque étape y est montrée lentement.
+        Vous pourrez la revoir à tout moment depuis votre tableau de bord.
+      </p>
+    </div>
+  );
+}
 
 function StepWelcome() {
   return (
@@ -473,6 +556,7 @@ export function OnboardingPage() {
   const isLast = step === TOTAL_STEPS - 1;
 
   const steps = [
+    <StepVideo key="video" />,
     <StepWelcome key="welcome" />,
     <StepDashboard key="dashboard" />,
     <StepDeliver key="deliver" />,
@@ -504,7 +588,7 @@ export function OnboardingPage() {
       {/* Content area */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8">
         <div
-          className={`w-full max-w-2xl transition-all duration-200 ease-in-out ${
+          className={`w-full ${step === 0 ? 'max-w-5xl' : 'max-w-2xl'} transition-all duration-200 ease-in-out ${
             animating
               ? direction === 'next'
                 ? 'opacity-0 translate-x-6'

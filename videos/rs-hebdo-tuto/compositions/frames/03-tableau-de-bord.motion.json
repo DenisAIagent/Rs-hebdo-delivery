@@ -1,0 +1,7 @@
+{
+  "scene": "03-tableau-de-bord",
+  "duration_s": 39,
+  "rules": ["waterfall-entry", "counting-dynamic-scale", "cursor-click-ripple", "dynamic-content-sequencing", "spring-pop-entrance", "svg-path-draw"],
+  "exit": { "vector": "static hold; dropdown open, attention ring breathing ±1.2% scale, halo ±3%, 0 px/s", "still_moving": false },
+  "entry": { "vector": "browser frame already in place; nav items whip up from y+40 starting at 0.15s (≈ 220 px/s), 0 px/s at frame 0", "from_rest": true }
+}

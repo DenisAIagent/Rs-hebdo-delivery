@@ -1,0 +1,305 @@
+<template>
+  <style>
+    @font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: normal; src: url("assets/fonts/instrument-serif-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: italic; src: url("assets/fonts/instrument-serif-400-italic.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 300; src: url("assets/fonts/geist-300-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 400; src: url("assets/fonts/geist-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 500; src: url("assets/fonts/geist-500-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 600; src: url("assets/fonts/geist-600-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 700; src: url("assets/fonts/geist-700-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 400; src: url("assets/fonts/geist-mono-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 500; src: url("assets/fonts/geist-mono-500-normal.woff2") format("woff2"); }
+
+    #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: "Geist", sans-serif; color: #16140F; }
+    #root .clip { position: absolute; inset: 0; }
+
+    .o2-paper { background: #FBF8F2; }
+    .o2-halo { position: absolute; left: 360px; top: -160px; width: 1300px; height: 1000px; border-radius: 50%;
+      background: radial-gradient(closest-side, rgba(225,29,46,0.14), rgba(225,29,46,0) 72%); will-change: transform; }
+    .o2-grain { position: absolute; inset: 0; width: 1920px; height: 1080px; opacity: 0.07; pointer-events: none; }
+    .o2-ghost { position: absolute; left: 1290px; top: 620px; font-family: "Instrument Serif", serif; font-size: 300px; line-height: 0.8;
+      letter-spacing: -0.02em; color: #16140F; opacity: 0.06; white-space: nowrap; }
+    .o2-hrule { position: absolute; left: 0; top: 960px; width: 1920px; height: 2px; background: #E8E2D2; }
+
+    /* ---- cadre navigateur ---- */
+    .o2-browser { position: absolute; left: 280px; top: 110px; width: 1360px; height: 750px; background: #FFFFFF; border: 2px solid #E8E2D2;
+      border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); overflow: hidden; transform-origin: 50% 50%; will-change: transform; opacity: 0; }
+    .o2-bar { position: absolute; left: 0; top: 0; width: 100%; height: 44px; background: #F5F0E6; border-bottom: 2px solid #E8E2D2; display: flex; align-items: center; padding-left: 18px; gap: 8px; }
+    .o2-bar i { width: 12px; height: 12px; border-radius: 50%; background: #D8D0BD; display: block; }
+    .o2-url { position: absolute; left: 480px; top: 8px; width: 400px; height: 28px; border-radius: 8px; background: #FBF8F2; border: 1px solid #E8E2D2;
+      font-family: "Geist Mono", monospace; font-size: 22px; line-height: 26px; color: #6A6557; text-align: center; }
+    .o2-ink { position: absolute; left: 0; top: 44px; width: 544px; height: 704px; background: #16140F; }
+    .o2-ink img { position: absolute; left: 92px; top: 250px; width: 360px; height: 76px; filter: brightness(0) invert(1); }
+    .o2-ink .o2-tag { position: absolute; left: 92px; top: 350px; width: 380px; font-family: "Instrument Serif", serif; font-style: italic; font-size: 36px; line-height: 1.2; color: #FBF8F2; }
+    .o2-ink .o2-tag em { display: block; font-style: italic; color: #6A6557; font-size: 28px; margin-top: 8px; }
+    .o2-page { position: absolute; left: 544px; top: 44px; right: 0; bottom: 0; background: #FBF8F2; }
+
+    /* ---- carte ---- */
+    .o2-card { position: absolute; left: 148px; top: 46px; width: 520px; height: 490px; background: #FFFFFF; border: 2px solid #E8E2D2; border-radius: 14px;
+      box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); }
+    .o2-state { position: absolute; inset: 0; }
+    .o2-eyebrow { position: absolute; left: 40px; top: 40px; font-weight: 700; font-size: 22px; letter-spacing: 0.08em; text-transform: uppercase; color: #E11D2E; opacity: 0; }
+    .o2-field { position: absolute; left: 40px; width: 440px; opacity: 0; }
+    .o2-label { font-weight: 500; font-size: 22px; color: #2C2A23; margin-bottom: 8px; }
+    .o2-label b { color: #E11D2E; font-weight: 700; }
+    .o2-input { position: relative; height: 64px; border: 2px solid #E8E2D2; border-radius: 10px; background: #FFFFFF; padding: 0 18px; display: flex; align-items: center;
+      font-weight: 300; font-size: 26px; color: #16140F; white-space: nowrap; overflow: hidden; }
+    .o2-ph { color: #6A6557; position: absolute; left: 18px; top: 0; line-height: 60px; }
+    .o2-typed { display: inline-block; min-width: 1px; }
+    .o2-caret { display: inline-block; width: 2px; height: 30px; background: #16140F; margin-left: 2px; opacity: 0; }
+    .o2-dots span { display: inline-block; opacity: 0; font-weight: 500; font-size: 30px; letter-spacing: 0.08em; }
+    .o2-btnwrap { position: absolute; left: 40px; top: 346px; width: 440px; height: 60px; opacity: 0; }
+    .o2-burst { position: absolute; left: 0; top: 0; width: 440px; height: 60px; border-radius: 30px; z-index: 1; opacity: 0;
+      background: radial-gradient(closest-side, rgba(179,14,31,0.6), rgba(179,14,31,0)); filter: blur(28px); transform-origin: 50% 50%; }
+    .o2-btn { position: absolute; left: 0; top: 0; width: 440px; height: 60px; z-index: 2; border-radius: 10px; background: #E11D2E; color: #FFFFFF; font-weight: 700; font-size: 26px;
+      display: flex; align-items: center; justify-content: center; gap: 12px; transform-origin: 50% 50%; box-shadow: 0 14px 30px -12px rgba(179,14,31,0.55); will-change: transform; }
+    .o2-link { position: absolute; left: 0; top: 436px; width: 520px; text-align: center; font-weight: 400; font-size: 24px; color: #6A6557; text-decoration: underline; text-underline-offset: 4px; opacity: 0; }
+
+    .o2-2fa { opacity: 0; }
+    .o2-2fa-title { position: absolute; left: 40px; top: 84px; width: 440px; font-family: "Instrument Serif", serif; font-size: 44px; line-height: 1.1; letter-spacing: -0.02em; color: #16140F; }
+    .o2-boxes { position: absolute; left: 40px; top: 180px; width: 440px; height: 80px; display: flex; justify-content: space-between; }
+    .o2-box { width: 64px; height: 80px; border: 2px solid #E8E2D2; border-radius: 10px; background: #FFFFFF; display: flex; align-items: center; justify-content: center;
+      font-family: "Geist Mono", monospace; font-weight: 500; font-size: 36px; color: #16140F; }
+    .o2-box span { display: inline-block; opacity: 0; transform-origin: 50% 50%; }
+    .o2-btnwrap2 { top: 310px; opacity: 1; }
+
+    /* ---- notes de marge ---- */
+    .o2-note { position: absolute; font-family: "Instrument Serif", serif; font-style: italic; font-size: 38px; line-height: 1.15; color: #2C2A23; opacity: 0; }
+    .o2-note::before { content: ""; display: block; width: 44px; height: 3px; background: #E11D2E; margin-bottom: 12px; }
+    .o2-note-l { left: 70px; top: 300px; width: 190px; }
+    .o2-note-r1 { left: 1672px; top: 330px; width: 230px; }
+    .o2-note-r2 { left: 1672px; top: 640px; width: 240px; }
+    .o2-phone { position: absolute; left: 1672px; top: 250px; width: 56px; height: 56px; opacity: 0; }
+    .o2-phone path, .o2-phone rect { fill: none; stroke: #2C2A23; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .o2-env { position: absolute; left: 1204px; top: 626px; width: 56px; height: 48px; opacity: 0; }
+    .o2-env path { fill: #FFFFFF; stroke: #E11D2E; stroke-width: 2.5; stroke-linejoin: round; }
+
+    /* ---- liserés d'attention ---- */
+    .o2-ring { position: absolute; opacity: 0; will-change: transform; }
+    .o2-ring-in { position: absolute; inset: 0; border: 3px solid #E11D2E; border-radius: 12px; transform-origin: 0% 0%; box-shadow: 0 0 0 6px rgba(225,29,46,0.18); }
+
+    /* ---- curseur + ondes ---- */
+    .o2-cursor { position: absolute; left: 0; top: 0; width: 38px; height: 54px; z-index: 50; transform-origin: 3px 3px; pointer-events: none; will-change: transform; }
+    .o2-ripple { position: absolute; width: 100px; height: 100px; border-radius: 50%; border: 2px solid #E11D2E; opacity: 0; z-index: 40; pointer-events: none; transform-origin: 50% 50%; }
+  </style>
+
+  <div id="root" data-composition-id="02-connexion" data-start="0" data-duration="31" data-width="1920" data-height="1080">
+    <div class="clip o2-paper" data-start="0" data-duration="31" data-track-index="0">
+      <div class="o2-halo" id="o2-halo"></div>
+      <div class="o2-ghost" id="o2-ghost">HEBDO</div>
+      <div class="o2-hrule"></div>
+      <svg class="o2-grain" xmlns="http://www.w3.org/2000/svg">
+        <filter id="o2-grain-f"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+        <rect width="1920" height="1080" filter="url(#o2-grain-f)"/>
+      </svg>
+    </div>
+
+    <div class="clip" data-start="0" data-duration="31" data-track-index="1">
+      <div class="o2-browser" id="o2-browser">
+        <div class="o2-bar"><i></i><i></i><i></i><div class="o2-url">hebdo-rs.up.railway.app</div></div>
+        <div class="o2-ink">
+          <img src="assets/logo-rs-france.png" width="360" height="76" alt="">
+          <div class="o2-tag">Hebdo Delivery<em>— édition rédaction</em></div>
+        </div>
+        <div class="o2-page">
+          <div class="o2-card">
+            <!-- état 1 : connexion -->
+            <div class="o2-state o2-login" id="o2-login">
+              <div class="o2-eyebrow" id="o2-eyebrow">Connexion</div>
+              <div class="o2-field" id="o2-f-email" style="top:90px">
+                <div class="o2-label">Email <b>•</b></div>
+                <div class="o2-input" id="o2-in-email"><span class="o2-ph" id="o2-ph-email">prenom@rollingstone.fr</span><span class="o2-typed" id="o2-typed"></span><span class="o2-caret" id="o2-caret"></span></div>
+              </div>
+              <div class="o2-field" id="o2-f-pwd" style="top:216px">
+                <div class="o2-label">Mot de passe <b>•</b></div>
+                <div class="o2-input o2-dots" id="o2-in-pwd"><span class="o2-ph" id="o2-ph-pwd">Votre mot de passe</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span></div>
+              </div>
+              <div class="o2-btnwrap" id="o2-btnwrap">
+                <div class="o2-burst" id="o2-burst1"></div>
+                <div class="o2-btn" id="o2-btn-login">Se connecter <span>→</span></div>
+              </div>
+              <div class="o2-link" id="o2-link">Mot de passe oublié ?</div>
+            </div>
+            <!-- état 2 : double authentification -->
+            <div class="o2-state o2-2fa" id="o2-2fa">
+              <div class="o2-2fa-title">Double authentification</div>
+              <div class="o2-boxes">
+                <div class="o2-box"><span>4</span></div><div class="o2-box"><span>8</span></div><div class="o2-box"><span>2</span></div>
+                <div class="o2-box"><span>9</span></div><div class="o2-box"><span>1</span></div><div class="o2-box"><span>7</span></div>
+              </div>
+              <div class="o2-btnwrap o2-btnwrap2">
+                <div class="o2-burst" id="o2-burst2"></div>
+                <div class="o2-btn" id="o2-btn-verify">Vérifier</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- notes de marge -->
+      <div class="o2-note o2-note-l" id="o2-note-l">Étape 0</div>
+      <svg class="o2-phone" id="o2-phone" viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg"><rect x="16" y="6" width="24" height="44" rx="5"/><path d="M24 44h8"/><path d="M22 14h12"/></svg>
+      <div class="o2-note o2-note-r1" id="o2-note-r1">Code à<br>6 chiffres</div>
+      <svg class="o2-env" id="o2-env" viewBox="0 0 56 48" xmlns="http://www.w3.org/2000/svg"><path d="M4 8h48v32H4z"/><path d="M4 8l24 18 24-18"/></svg>
+      <div class="o2-note o2-note-r2" id="o2-note-r2">Email de<br>réinitialisation</div>
+
+      <!-- liserés -->
+      <div class="o2-ring" id="o2-ring-btn" style="left:1004px;top:538px;width:456px;height:76px"><div class="o2-ring-in"></div></div>
+      <div class="o2-ring" id="o2-ring-verify" style="left:1004px;top:302px;width:456px;height:76px"><div class="o2-ring-in"></div></div>
+      <div class="o2-ring" id="o2-ring-link" style="left:1096px;top:626px;width:272px;height:48px"><div class="o2-ring-in"></div></div>
+
+      <!-- ondes de clic (au centre de chaque cible, présentes dès t=0) -->
+      <div class="o2-ripple" id="o2-rp-email" style="left:1182px;top:306px"></div>
+      <div class="o2-ripple" id="o2-rp-pwd" style="left:1182px;top:432px"></div>
+      <div class="o2-ripple" id="o2-rp-login" style="left:1182px;top:526px"></div>
+      <div class="o2-ripple" id="o2-rp-verify" style="left:1182px;top:490px"></div>
+
+      <svg class="o2-cursor" id="o2-cursor" viewBox="0 0 38 54" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 3 L3 41 L12.5 32 L19 50 L26 47 L19.5 30 L33 30 Z" fill="#16140F" stroke="#FBF8F2" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var ID = "02-connexion";
+      var DUR = 31;
+      var tl = gsap.timeline({ paused: true });
+      var CUR = "#o2-cursor";
+
+      // ---------- helpers ----------
+      // liseré d'attention : se dessine scaleX puis scaleY, respire, puis se retire (tOut = null → tenu jusqu'à la fin)
+      // respiration : chaîne de tweens scale aller/retour (sine.inOut), sans callback, seek-safe
+      function breathe(target, tIn, tEnd, amp, half) {
+        for (var t = tIn, k = 0; t < tEnd - 0.01; t += half, k++) {
+          var d = Math.min(half, tEnd - t);
+          tl.to(target, { scale: k % 2 === 0 ? 1 + amp : 1, duration: d, ease: "sine.inOut" }, t);
+        }
+      }
+      function focus(id, tIn, tOut) {
+        var w = "#" + id, inner = w + " .o2-ring-in", el = document.getElementById(id);
+        tl.set(w, { opacity: 1 }, tIn);
+        tl.fromTo(inner, { scaleX: 0, scaleY: 0.04 }, { scaleX: 1, duration: 0.3, ease: "power2.out" }, tIn);
+        tl.to(inner, { scaleY: 1, duration: 0.3, ease: "power2.out" }, tIn + 0.28);
+        var end = tOut == null ? DUR : tOut;
+        breathe(w, tIn + 0.6, end, 0.012, 0.9);
+        if (tOut != null) tl.to(w, { opacity: 0, duration: 0.3, ease: "power1.out" }, tOut);
+      }
+      // cursor-click-ripple : déplacement power2.inOut, clic = compression 0,12 s, une onde depuis le centre de la cible
+      function moveTo(t, cx, cy, d) {
+        tl.to(CUR, { x: cx - 3, y: cy - 3, duration: d, ease: "power2.inOut" }, t);
+      }
+      function click(t, rippleId) {
+        tl.to(CUR, { scale: 0.85, duration: 0.12, ease: "power2.in" }, t);
+        tl.to(CUR, { scale: 1, duration: 0.12, ease: "power2.out" }, t + 0.12);
+        tl.set("#" + rippleId, { opacity: 1 }, t + 0.04);
+        tl.fromTo("#" + rippleId, { scale: 0 }, { scale: 4, opacity: 0, duration: 0.7, ease: "power2.out", immediateRender: false }, t + 0.04);
+      }
+      // press-release-spring : compression linéaire, retour ressort, halo derrière (burst z1, bouton z2)
+      function press(t, btn, burst) {
+        var PRESS = 0.12;
+        tl.to(btn, { scale: 0.94, boxShadow: "0 4px 10px -6px rgba(179,14,31,0.5)", duration: PRESS, ease: "power1.in" }, t);
+        tl.to(btn, { scale: 1, boxShadow: "0 14px 30px -12px rgba(179,14,31,0.55)", duration: 0.55, ease: "back.out(1.6)" }, t + PRESS);
+        tl.fromTo(burst, { scale: 1, opacity: 0 }, { scale: 3.2, opacity: 0.5, duration: 0.45, ease: "power2.out" }, t + PRESS);
+        tl.to(burst, { opacity: 0, duration: 0.5, ease: "power2.in" }, t + PRESS + 0.4);
+      }
+
+      // ---------- ambiance ----------
+      breathe("#o2-halo", 0, DUR, 0.03, 1.7);
+      tl.fromTo("#o2-ghost", { x: 30 }, { x: -30, duration: DUR, ease: "none" }, 0);
+
+      // ---------- Scene 1 (0–3s) : cadre navigateur à ressort, la carte se compose ----------
+      tl.fromTo("#o2-browser", { scale: 0.96, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.7, ease: "power3.out" }, 0);
+      [["#o2-eyebrow", 0.7], ["#o2-f-email", 0.85], ["#o2-f-pwd", 1.0], ["#o2-btnwrap", 1.15], ["#o2-link", 1.3]].forEach(function (p) {
+        tl.fromTo(p[0], { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, p[1]);
+      });
+      tl.fromTo("#o2-note-l", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" }, 1.8);
+      tl.set(CUR, { x: 1500, y: 790 }, 0);
+
+      // ---------- Scene 2 (3–11s) : email tapé, mot de passe, Se connecter ----------
+      moveTo(3.3, 1232, 356, 0.8);
+      click(4.2, "o2-rp-email");
+      tl.to("#o2-in-email", { borderColor: "#E11D2E", boxShadow: "0 0 0 5px rgba(225,29,46,0.18)", duration: 0.25 }, 4.25);
+      tl.to("#o2-ph-email", { opacity: 0, duration: 0.15 }, 4.5);
+
+      // discrete-text-sequence : états de texte à seuils (≈45 ms/caractère, pauses humaines à « @ » et avant « .fr »)
+      var EMAIL = "camille.roux@rollingstone.fr";
+      var SEQ = [{ t: 0, text: "" }];
+      var tt = 4.6;
+      for (var i = 1; i <= EMAIL.length; i++) {
+        var ch = EMAIL[i - 1];
+        tt += 0.045;
+        if (ch === "@" || (ch === "." && i > 20)) tt += 0.22;
+        SEQ.push({ t: tt, text: EMAIL.substring(0, i) });
+      }
+      // chaque état est posé sur la timeline (saut instantané, seek-safe, sans callback)
+      var typed = document.getElementById("o2-typed");
+      SEQ.forEach(function (st) { tl.set(typed, { textContent: st.text }, st.t); });
+      // caret : clignotement carré déterministe pendant la saisie (0,3 s par demi-période)
+      var caret = document.getElementById("o2-caret");
+      for (var c = 0, tc = 4.3; tc < 7.2; c++, tc += 0.3) tl.set(caret, { opacity: c % 2 === 0 ? 1 : 0 }, tc);
+      tl.set(caret, { opacity: 0 }, 7.2);
+
+      // mot de passe
+      moveTo(6.6, 1232, 482, 0.6);
+      click(7.3, "o2-rp-pwd");
+      tl.to("#o2-in-email", { borderColor: "#E8E2D2", boxShadow: "0 0 0 0px rgba(225,29,46,0)", duration: 0.25 }, 7.35);
+      tl.to("#o2-in-pwd", { borderColor: "#E11D2E", boxShadow: "0 0 0 5px rgba(225,29,46,0.18)", duration: 0.25 }, 7.35);
+      tl.to("#o2-ph-pwd", { opacity: 0, duration: 0.15 }, 7.6);
+      document.querySelectorAll("#o2-in-pwd > span:not(.o2-ph)").forEach(function (d, i) { tl.set(d, { opacity: 1 }, 7.7 + i * 0.08); });
+
+      // Se connecter
+      moveTo(9.2, 1232, 576, 0.8);
+      tl.to("#o2-in-pwd", { borderColor: "#E8E2D2", boxShadow: "0 0 0 0px rgba(225,29,46,0)", duration: 0.25 }, 9.3);
+      click(10.1, "o2-rp-login");
+      press(10.1, "#o2-btn-login", "#o2-burst1");
+      focus("o2-ring-btn", 10.3, 12.3);
+
+      // ---------- Scene 3 (12–24s) : écran 2FA ----------
+      // dynamic-content-sequencing : états de la carte pré-calculés, fondu croisé 0,5 s aux transitions uniquement
+      var XF = 0.5;
+      var STATES = [
+        { el: "#o2-login", start: 0, end: 12.5 },
+        { el: "#o2-2fa", start: 12.5, end: 25.0 },
+        { el: "#o2-login", start: 25.0, end: DUR }
+      ];
+      STATES.forEach(function (s, i) {
+        if (i === 0) return;
+        var prev = STATES[i - 1];
+        tl.to(prev.el, { opacity: 0, duration: XF, ease: "power1.inOut" }, s.start);
+        tl.to(s.el, { opacity: 1, duration: XF, ease: "power1.inOut" }, s.start);
+      });
+      moveTo(12.5, 1560, 720, 0.8);
+      tl.fromTo("#o2-phone", { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" }, 13.5);
+      tl.fromTo("#o2-note-r1", { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" }, 13.7);
+
+      // les six cases se remplissent (0,3 s d'écart)
+      document.querySelectorAll(".o2-box").forEach(function (box, i) {
+        var t = 19.0 + i * 0.3;
+        tl.fromTo(box.querySelector("span"), { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" }, t);
+        tl.to(box, { borderColor: "#E11D2E", duration: 0.12 }, t);
+        tl.to(box, { borderColor: "#E8E2D2", duration: 0.4 }, t + 0.35);
+      });
+
+      // Vérifier
+      moveTo(21.2, 1232, 540, 0.8);
+      click(22.1, "o2-rp-verify");
+      press(22.1, "#o2-btn-verify", "#o2-burst2");
+      focus("o2-ring-verify", 22.3, 24.6);
+
+      // ---------- Scene 4 (24–31s) : retour connexion, « Mot de passe oublié ? » ----------
+      moveTo(25.0, 1470, 770, 0.8);
+      focus("o2-ring-link", 25.6, null);
+      // enveloppe : du lien vers la marge droite
+      tl.fromTo("#o2-env", { opacity: 0, x: 0, y: 0, scale: 0.7 }, { opacity: 1, x: 468, y: -66, scale: 1, duration: 0.9, ease: "power2.inOut" }, 26.2);
+      tl.fromTo("#o2-note-r2", { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" }, 27.0);
+
+      tl.set({}, {}, DUR);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["02-connexion"] = tl;
+      tl.seek(0);
+    })();
+  </script>
+</template>

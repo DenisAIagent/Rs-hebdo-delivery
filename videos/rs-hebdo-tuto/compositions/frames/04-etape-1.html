@@ -1,0 +1,259 @@
+<template>
+<div data-composition-id="04-etape-1" data-width="1920" data-height="1080">
+<style>
+@font-face{font-family:"Instrument Serif";font-weight:400;font-style:normal;src:url("assets/fonts/instrument-serif-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Instrument Serif";font-weight:400;font-style:italic;src:url("assets/fonts/instrument-serif-400-italic.woff2") format("woff2")}
+@font-face{font-family:"Geist";font-weight:300;src:url("assets/fonts/geist-300-normal.woff2") format("woff2")}
+@font-face{font-family:"Geist";font-weight:400;src:url("assets/fonts/geist-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Geist";font-weight:500;src:url("assets/fonts/geist-500-normal.woff2") format("woff2")}
+@font-face{font-family:"Geist";font-weight:600;src:url("assets/fonts/geist-600-normal.woff2") format("woff2")}
+@font-face{font-family:"Geist";font-weight:700;src:url("assets/fonts/geist-700-normal.woff2") format("woff2")}
+@font-face{font-family:"Geist Mono";font-weight:400;src:url("assets/fonts/geist-mono-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Geist Mono";font-weight:500;src:url("assets/fonts/geist-mono-500-normal.woff2") format("woff2")}
+
+#root{position:relative;width:1920px;height:1080px;overflow:hidden;font-family:"Geist",sans-serif;color:#16140F}
+#root *{box-sizing:border-box}
+.clip{position:absolute;inset:0}
+.e1-bg{background:#FBF8F2}
+.e1-halo{position:absolute;left:560px;top:120px;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle,rgba(225,29,46,0.16) 0%,rgba(225,29,46,0) 65%)}
+.e1-grain{position:absolute;inset:0;opacity:0.07;pointer-events:none}
+.e1-ghost{position:absolute;left:1180px;top:40px;font-family:"Instrument Serif",serif;font-size:300px;line-height:1;letter-spacing:-0.02em;color:#16140F;opacity:0.07}
+.e1-rule{position:absolute;left:0;top:884px;width:1920px;height:1px;background:#D8D0BD;transform-origin:0 50%}
+
+/* browser frame */
+.e1-frame{position:absolute;left:260px;top:90px;width:1400px;height:770px;background:#FFFFFF;border:2px solid #E8E2D2;border-radius:14px;box-shadow:0 24px 60px -20px rgba(20,18,12,0.18);overflow:hidden}
+.e1-bar{position:absolute;left:0;top:0;width:100%;height:44px;background:#F5F0E6;border-bottom:1px solid #E8E2D2}
+.e1-dot{position:absolute;top:16px;width:12px;height:12px;border-radius:50%;background:#D8D0BD}
+.e1-url{position:absolute;left:0;right:0;top:9px;text-align:center;font-family:"Geist Mono",monospace;font-size:22px;color:#6A6557}
+.e1-nav{position:absolute;left:0;top:44px;width:100%;height:64px;border-bottom:2px solid #E8E2D2;background:#FFFFFF}
+.e1-logo{position:absolute;left:26px;top:12px;width:40px;height:40px;border-radius:8px;background:#E11D2E;color:#fff;font-family:"Instrument Serif",serif;font-size:26px;line-height:40px;text-align:center}
+.e1-navitem{position:absolute;top:0;height:64px;line-height:64px;font-size:24px;font-weight:500;color:#2C2A23;padding:0 14px}
+.e1-navitem.active{color:#E11D2E;font-weight:600}
+.e1-avatar{position:absolute;right:26px;top:12px;width:40px;height:40px;border-radius:50%;background:#F5F0E6;border:2px solid #D8D0BD;font-size:22px;font-weight:600;line-height:36px;text-align:center;color:#6A6557}
+
+/* dashboard (reduced) */
+.e1-dash{position:absolute;left:0;top:108px;width:1400px;height:662px}
+.e1-dash-title{position:absolute;left:28px;top:26px;font-family:"Instrument Serif",serif;font-size:44px;letter-spacing:-0.02em}
+.e1-block{position:absolute;background:#FFFFFF;border:2px solid #E8E2D2;border-radius:14px}
+.e1-block.tint{background:#FBE4E6;border-color:#FBE4E6}
+.e1-block .lbl{position:absolute;left:22px;top:18px;font-size:22px;color:#6A6557;font-weight:300}
+.e1-block .val{position:absolute;left:22px;top:52px;font-family:"Geist Mono",monospace;font-size:30px;color:#16140F}
+.e1-line{position:absolute;left:22px;right:22px;height:14px;border-radius:7px;background:#F5F0E6}
+
+/* livrer screen */
+.e1-liv{position:absolute;left:0;top:108px;width:1400px;height:662px;opacity:0}
+.e1-steps{position:absolute;left:28px;top:28px;height:44px;display:flex;gap:36px}
+.e1-step{opacity:0;display:flex;align-items:center;gap:12px;font-size:24px;color:#6A6557;font-weight:400;white-space:nowrap}
+.e1-step .n{width:36px;height:36px;border-radius:50%;border:2px solid #D8D0BD;font-size:22px;font-weight:600;line-height:32px;text-align:center;color:#6A6557}
+.e1-step.active{color:#E11D2E;font-weight:600}
+.e1-step.active .n{background:#E11D2E;border-color:#E11D2E;color:#fff}
+.e1-num{position:absolute;left:28px;top:92px;width:1344px;height:110px;background:#FFFFFF;border:2px solid #E8E2D2;border-radius:14px;box-shadow:0 24px 60px -20px rgba(20,18,12,0.18);opacity:0}
+.e1-num .lbl{position:absolute;left:28px;top:18px;font-size:22px;color:#6A6557;font-weight:300}
+.e1-num .rsh{position:absolute;left:28px;top:48px;font-family:"Geist Mono",monospace;font-size:36px;font-weight:500}
+.e1-num .dates{position:absolute;left:340px;top:40px;font-family:"Geist Mono",monospace;font-size:24px;color:#2C2A23}
+.e1-chip{position:absolute;height:40px;padding:0 18px;border-radius:999px;font-size:22px;font-weight:700;line-height:40px;white-space:nowrap;opacity:0}
+.e1-chip.ok{background:#E2F1E8;color:#2D7A4B}
+.e1-chip.red{background:#FBE4E6;color:#B30E1F}
+.e1-chip svg{vertical-align:-3px;margin-right:6px}
+.e1-btnwrap{position:absolute;left:996px;top:25px;width:320px;height:56px}
+.e1-burst{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(179,14,31,0.8) 0%,rgba(179,14,31,0) 70%);filter:blur(30px);opacity:0;z-index:1}
+.e1-btn{position:absolute;inset:0;background:#E11D2E;color:#fff;border-radius:10px;font-size:24px;font-weight:700;line-height:56px;text-align:center;box-shadow:0 14px 30px -10px rgba(179,14,31,0.55);transform-origin:50% 50%;z-index:2}
+
+/* grid */
+.e1-grid{position:absolute;left:28px;top:226px;width:1344px;height:396px}
+.e1-card{position:absolute;width:324px;height:190px;opacity:0}
+.e1-card .in{position:absolute;inset:0;background:#FFFFFF;border:2px solid #E8E2D2;border-radius:14px;box-shadow:0 24px 60px -20px rgba(20,18,12,0.18);transform-origin:50% 50%}
+.e1-card svg{position:absolute;left:24px;top:24px;width:40px;height:40px;stroke:#16140F;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.e1-card .ttl{position:absolute;left:24px;top:84px;font-size:26px;font-weight:600;letter-spacing:-0.01em;white-space:nowrap}
+.e1-card .lim{position:absolute;left:24px;top:132px;font-family:"Geist Mono",monospace;font-size:22px;color:#6A6557}
+.e1-card .e1-chip{right:16px;top:16px;height:36px;line-height:36px;font-size:22px}
+
+/* attention + notes + cursor */
+.e1-att{position:absolute;border:3px solid #E11D2E;border-radius:12px;opacity:0;transform-origin:0 0;pointer-events:none}
+.e1-note{position:absolute;font-family:"Instrument Serif",serif;font-style:italic;font-size:36px;line-height:1.15;color:#2C2A23;opacity:0}
+.e1-note.red{color:#E11D2E}
+.e1-note svg{display:block;margin-bottom:10px}
+.e1-cursor{position:absolute;left:0;top:0;width:37px;height:54px;z-index:50;pointer-events:none;transform-origin:2px 2px}
+.e1-ring{position:absolute;width:100px;height:100px;border-radius:50%;border:2px solid #E11D2E;opacity:0;pointer-events:none;z-index:40}
+</style>
+
+<div class="clip e1-bg" data-start="0" data-duration="38.5" data-track-index="0">
+  <div class="e1-halo" id="e1-halo"></div>
+  <div class="e1-ghost" id="e1-ghost">HEBDO</div>
+  <div class="e1-rule" id="e1-rule"></div>
+  <svg class="e1-grain" width="1920" height="1080"><filter id="e1-noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.09 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 1 0"/></filter><rect width="1920" height="1080" filter="url(#e1-noise)"/></svg>
+</div>
+
+<div class="clip" data-start="0" data-duration="38.5" data-track-index="1">
+  <div class="e1-frame">
+    <div class="e1-bar"><div class="e1-dot" style="left:18px"></div><div class="e1-dot" style="left:38px"></div><div class="e1-dot" style="left:58px"></div><div class="e1-url">hebdo-rs.up.railway.app</div></div>
+    <div class="e1-nav">
+      <div class="e1-logo">RS</div>
+      <div class="e1-navitem" style="left:100px">Mon espace</div>
+      <div class="e1-navitem" id="e1-nav-livrer" style="left:280px">Livrer un papier</div>
+      <div class="e1-avatar">CR</div>
+    </div>
+
+    <div class="e1-dash" id="e1-dash">
+      <div class="e1-dash-title">Bonjour Camille</div>
+      <div class="e1-block tint" style="left:28px;top:96px;width:660px;height:100px"><div class="lbl">Numéro en cours</div><div class="val">RSH 240</div></div>
+      <div class="e1-block" style="left:712px;top:96px;width:660px;height:100px"><div class="lbl">Dropbox</div><div class="e1-line" style="top:56px;width:380px"></div></div>
+      <div class="e1-block" style="left:28px;top:216px;width:324px;height:90px"><div class="lbl">Mes papiers</div><div class="val" style="top:46px;font-size:26px">12</div></div>
+      <div class="e1-block" style="left:368px;top:216px;width:324px;height:90px"><div class="lbl">En cours</div><div class="val" style="top:46px;font-size:26px">2</div></div>
+      <div class="e1-block" style="left:708px;top:216px;width:324px;height:90px"><div class="lbl">Livrés à temps</div><div class="val" style="top:46px;font-size:26px">100 %</div></div>
+      <div class="e1-block" style="left:1048px;top:216px;width:324px;height:90px"><div class="lbl">Signes rédigés</div><div class="val" style="top:46px;font-size:26px">18 420</div></div>
+      <div class="e1-block" style="left:28px;top:326px;width:1344px;height:300px"><div class="lbl">Mes livraisons</div>
+        <div class="e1-line" style="top:70px"></div><div class="e1-line" style="top:120px;right:300px"></div><div class="e1-line" style="top:170px;right:180px"></div><div class="e1-line" style="top:220px;right:420px"></div>
+      </div>
+    </div>
+
+    <div class="e1-liv" id="e1-liv">
+      <div class="e1-steps">
+        <div class="e1-step active" id="e1-st1"><span class="n">1</span>Type de papier</div>
+        <div class="e1-step" id="e1-st2"><span class="n">2</span>Rédaction</div>
+        <div class="e1-step" id="e1-st3"><span class="n">3</span>Correction IA</div>
+        <div class="e1-step" id="e1-st4"><span class="n">4</span>Vérification &amp; envoi</div>
+      </div>
+      <div class="e1-num" id="e1-num">
+        <div class="lbl">Numéro en cours</div>
+        <div class="rsh">RSH 240</div>
+        <div class="dates">26 sept. → 2 oct. 2026</div>
+        <div class="e1-chip ok" id="e1-chip1" style="left:700px;top:12px"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#2D7A4B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Numéro confirmé</div>
+        <div class="e1-chip ok" id="e1-chip2" style="left:700px;top:58px"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#2D7A4B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Dossier préparé</div>
+        <div class="e1-btnwrap"><div class="e1-burst" id="e1-burst"></div><div class="e1-btn" id="e1-btn">Confirmer ce numéro</div></div>
+      </div>
+      <div class="e1-grid" id="e1-grid">
+        <div class="e1-card" data-k="0" style="left:0;top:0"><div class="in"><svg viewBox="0 0 40 40"><rect x="5" y="5" width="30" height="30" rx="3"/><path d="M5 27l9-9 8 8 5-5 8 8"/><circle cx="27" cy="13" r="3"/></svg><div class="ttl">Sujet de couv</div><div class="lim">15 000 signes max</div></div></div>
+        <div class="e1-card" data-k="1" style="left:340px;top:0"><div class="in"><svg viewBox="0 0 40 40"><rect x="14" y="4" width="12" height="20" rx="6"/><path d="M8 18a12 12 0 0 0 24 0M20 30v6M13 36h14"/></svg><div class="ttl">Interview 3000</div><div class="lim">3 000 signes max</div></div></div>
+        <div class="e1-card" data-k="2" style="left:680px;top:0"><div class="in"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16"/><circle cx="20" cy="20" r="4"/><path d="M20 4v6M20 30v6"/></svg><div class="ttl">Disque de la semaine</div><div class="lim">2 500 signes max</div></div></div>
+        <div class="e1-card" data-k="3" style="left:1020px;top:0"><div class="in"><svg viewBox="0 0 40 40"><path d="M8 6h24v28H8zM13 14h14M13 20h14M13 26h9"/></svg><div class="ttl">Chroniques</div><div class="lim">1 500 signes max</div><div class="e1-chip red" id="e1-chip3">Format choisi</div></div></div>
+        <div class="e1-card" data-k="4" style="left:0;top:206px"><div class="in"><svg viewBox="0 0 40 40"><rect x="4" y="9" width="32" height="22" rx="3"/><path d="M4 15h32M4 25h32M10 9v22M30 9v22"/></svg><div class="ttl">Chronique Cinema</div><div class="lim">1 500 signes max</div></div></div>
+        <div class="e1-card" data-k="5" style="left:340px;top:206px"><div class="in"><svg viewBox="0 0 40 40"><path d="M20 34s-13-8-13-17a7 7 0 0 1 13-4 7 7 0 0 1 13 4c0 9-13 17-13 17z"/></svg><div class="ttl">Chronique Coup de Coeur</div><div class="lim">2 500 signes max</div></div></div>
+        <div class="e1-card" data-k="6" style="left:680px;top:206px"><div class="in"><svg viewBox="0 0 40 40"><path d="M6 8h28v24H6zM6 16h28M6 24h28"/></svg><div class="ttl">Frenchie</div><div class="lim">2 500 signes max</div></div></div>
+        <div class="e1-card" data-k="7" style="left:1020px;top:206px"><div class="in"><svg viewBox="0 0 40 40"><path d="M6 8h11a3 3 0 0 1 3 3v22a3 3 0 0 0-3-3H6zM34 8H23a3 3 0 0 0-3 3v22a3 3 0 0 1 3-3h11z"/></svg><div class="ttl">Livres et Expo</div><div class="lim">1 500 signes max</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="e1-att" id="e1-att-nav" style="left:552px;top:138px;width:214px;height:56px"></div>
+  <div class="e1-att" id="e1-att-btn" style="left:1276px;top:308px;width:336px;height:74px"></div>
+
+  <div class="e1-note" id="e1-note-dropbox" style="left:1690px;top:300px;width:210px">Dropbox prêt</div>
+  <div class="e1-note" id="e1-note-limite" style="left:30px;top:600px;width:210px">Limite par format</div>
+  <div class="e1-note red" id="e1-note-warn" style="left:1684px;top:520px;width:220px;font-size:32px"><svg width="40" height="40" viewBox="0 0 40 40"><path d="M20 5L37 34H3z" fill="none" stroke="#E11D2E" stroke-width="3" stroke-linejoin="round"/><path d="M20 15v10M20 29v1" stroke="#E11D2E" stroke-width="3.5" stroke-linecap="round"/></svg>Changer de type vide le formulaire</div>
+
+  <div class="e1-ring" id="e1-ring1"></div>
+  <div class="e1-ring" id="e1-ring2"></div>
+  <div class="e1-ring" id="e1-ring3"></div>
+  <div class="e1-cursor" id="e1-cursor"><svg width="37" height="54" viewBox="0 0 34 50"><path d="M1 1L1 39L10.5 30L17 46L24 43L17.5 27L31 27Z" fill="#16140F" stroke="#FBF8F2" stroke-width="2" stroke-linejoin="round"/></svg></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>
+(function(){
+  var ID="04-etape-1", DUR=38.5, F=1/60;
+  window.__timelines = window.__timelines || {};
+  var tl = gsap.timeline({ paused:true });
+  window.__timelines[ID] = tl;
+
+  // ---- absolute layout constants (frame origin 260,90 ; content origin 288,198)
+  var NAV_C = {x:659, y:166};        // "Livrer un papier" menu item center
+  var BTN_C = {x:1444, y:345};       // "Confirmer ce numéro" center
+  var CHRON_C = {x:1470, y:519};     // Chroniques card center
+
+  // ---- ambient
+  tl.fromTo("#e1-ghost",{x:0},{x:-60,duration:DUR,ease:"none"},0);
+  tl.fromTo("#e1-rule",{scaleX:0},{scaleX:1,duration:1.2,ease:"power2.out"},0.2);
+  var hb=0; for(var i=0;i<6;i++){ tl.to("#e1-halo",{scale:1.06,duration:3.2,ease:"sine.inOut"},hb); tl.to("#e1-halo",{scale:1,duration:3.2,ease:"sine.inOut"},hb+3.2); hb+=6.4; }
+
+  // ---- helpers
+  function attention(sel,at,until){
+    tl.set(sel,{opacity:1,scaleX:0,scaleY:0.05},at);
+    tl.to(sel,{scaleX:1,duration:0.3,ease:"power2.out"},at);
+    tl.to(sel,{scaleY:1,duration:0.3,ease:"power2.out"},at+0.3);
+    var t=at+0.6; while(t+1.6<until){ tl.to(sel,{scale:1.015,duration:0.8,ease:"sine.inOut"},t); tl.to(sel,{scale:1,duration:0.8,ease:"sine.inOut"},t+0.8); t+=1.6; }
+    tl.to(sel,{opacity:0,duration:0.35,ease:"power1.in"},until);
+  }
+  function note(sel,at){ tl.fromTo(sel,{opacity:0,y:24},{opacity:1,y:0,duration:0.7,ease:"power2.out"},at); }
+  function cursorMove(to,at,dur){ tl.to("#e1-cursor",{x:to.x,y:to.y,duration:dur,ease:"power2.inOut"},at); }
+  function cursorPress(at){ tl.to("#e1-cursor",{scale:0.85,duration:0.12,ease:"power2.in"},at); tl.to("#e1-cursor",{scale:1,duration:0.12,ease:"power2.out"},at+0.12); }
+  function ripple(c,at){
+    tl.set(["#e1-ring1","#e1-ring2","#e1-ring3"],{x:c.x-50,y:c.y-50,scale:0,opacity:0},0);
+    tl.set(["#e1-ring1","#e1-ring2","#e1-ring3"],{opacity:1},at);
+    tl.to(["#e1-ring1","#e1-ring2","#e1-ring3"],{scale:4,opacity:0,duration:0.7,ease:"power2.out",stagger:0.08,immediateRender:false},at);
+  }
+
+  // cursor at rest inside the frame
+  tl.set("#e1-cursor",{x:1500,y:740,scale:1},0);
+
+  // ===== Scene 1 (0–5s): click "Livrer un papier", swap to the Livrer screen
+  cursorMove(NAV_C,1.4,0.8);
+  attention("#e1-att-nav",1.5,4.4);
+  cursorPress(2.3);
+  tl.to("#e1-nav-livrer",{scale:0.95,duration:0.12,ease:"power2.in"},2.3);
+  tl.to("#e1-nav-livrer",{scale:1,duration:0.12,ease:"power2.out"},2.42);
+  tl.to("#e1-nav-livrer",{color:"#E11D2E",fontWeight:600,duration:0.2},2.42);
+  ripple(NAV_C,2.34);
+  tl.to("#e1-dash",{opacity:0,duration:0.5,ease:"power1.inOut"},2.8);
+  tl.to("#e1-liv",{opacity:1,duration:0.5,ease:"power1.inOut"},2.9);
+  // stepper waterfall-entry
+  var st=[["#e1-st1",70,0.18],["#e1-st2",48,0.15],["#e1-st3",44,0.14],["#e1-st4",40,0.13]], t=3.3;
+  st.forEach(function(s,i){ tl.set(s[0],{opacity:1,y:s[1]},t); tl.to(s[0],{y:0,duration:s[2],ease:"power4.out"},t); t += s[2] - (i===0?-2*F:F); });
+  cursorMove({x:1180,y:520},3.4,0.9);
+
+  // ===== Scene 2 (5–15s): numéro card, press button, chips
+  tl.fromTo("#e1-num",{opacity:0,scale:0.92,y:20},{opacity:1,scale:1,y:0,duration:0.7,ease:"back.out(1.6)"},7.0);
+  cursorMove(BTN_C,9.3,0.8);
+  attention("#e1-att-btn",9.6,12.8);
+  // press-release-spring (press 10.1 → release 10.22, adjacency keeps continuity)
+  cursorPress(10.1);
+  tl.to("#e1-btn",{scale:0.92,boxShadow:"0 4px 10px -6px rgba(179,14,31,0.6)",backgroundColor:"#B30E1F",duration:0.12,ease:"power1.in"},10.1);
+  tl.to("#e1-btn",{scale:1,boxShadow:"0 14px 30px -10px rgba(179,14,31,0.55)",backgroundColor:"#E11D2E",duration:0.6,ease:"back.out(2)"},10.22);
+  tl.fromTo("#e1-burst",{scale:1,opacity:0},{scale:4,opacity:0.5,duration:0.5,ease:"power2.out"},10.22);
+  tl.to("#e1-burst",{opacity:0,duration:0.5,ease:"power2.in"},10.72);
+  tl.fromTo("#e1-chip1",{opacity:0,scale:0.6},{opacity:1,scale:1,duration:0.45,ease:"back.out(1.8)"},13.0);
+  tl.fromTo("#e1-chip2",{opacity:0,scale:0.6},{opacity:1,scale:1,duration:0.45,ease:"back.out(1.8)"},13.6);
+  note("#e1-note-dropbox",13.9);
+  cursorMove({x:1500,y:760},13.2,0.8);
+
+  // ===== Scene 3 (15–32s): grid waterfall, glow per spoken type, limits in red
+  var cards = gsap.utils.toArray(".e1-card");
+  cards.forEach(function(c,i){ var at=16.0+i*0.18, off=i%4===0?70:50; tl.set(c,{opacity:1,y:off},at); tl.to(c,{y:0,duration:0.2,ease:"power4.out"},at); });
+
+  // asr-keyword-glow on the cards (one linear driver)
+  var ORDER=[0,1,3,4,5,6,7,2], TIM={}; ORDER.forEach(function(k,i){ TIM[k]={start:18.0+i*1.2,end:18.0+i*1.2+0.75}; });
+  var ATT=0.15, REL=0.45, REST=0.12, SELECT_AT=32.85;
+  function env(t,s,e){ if(t<s) return 0; if(t<e) return Math.min((t-s)/ATT,1); var re=e+REL; if(t<re) return 1-((t-e)/REL)*(1-REST); return REST; }
+  function lerp(a,b,t){ return Math.round(a+(b-a)*t); }
+  var ins = cards.map(function(c){ return c.querySelector(".in"); }), ttls = cards.map(function(c){ return c.querySelector(".ttl"); });
+  var drv={t:0};
+  tl.to(drv,{t:DUR,duration:DUR,ease:"none",onUpdate:function(){
+    for(var i=0;i<cards.length;i++){
+      var k=+cards[i].dataset.k, tm=TIM[k], e=env(drv.t,tm.start,tm.end);
+      if(k===3 && drv.t>=SELECT_AT) e=1;
+      ins[i].style.borderColor="rgb("+lerp(232,225,e)+","+lerp(226,29,e)+","+lerp(210,46,e)+")";
+      ins[i].style.backgroundColor="rgb(255,"+lerp(255,228,e)+","+lerp(255,230,e)+")";
+      ins[i].style.transform="scale("+(1+0.04*e)+")";
+      ttls[i].style.textShadow="0 0 "+(18*e)+"px rgba(225,29,46,"+(0.5*e)+")";
+      ttls[i].style.color=e>0.5?"#B30E1F":"#16140F";
+    }
+  }},0);
+
+  tl.to(".e1-card .lim",{color:"#E11D2E",duration:0.25,ease:"power1.out"},29.0);
+  tl.to(".e1-card .lim",{color:"#6A6557",duration:0.5,ease:"power1.inOut"},30.6);
+  note("#e1-note-limite",29.2);
+
+  // ===== Scene 4 (32–38.5s): select Chroniques, warning note, hold
+  cursorMove(CHRON_C,31.8,0.85);
+  cursorPress(32.75);
+  ripple(CHRON_C,32.8);
+  tl.to(cards[3].querySelector(".in"),{boxShadow:"inset 0 0 0 1px #E11D2E, 0 24px 60px -20px rgba(225,29,46,0.35)",duration:0.3},32.85);
+  tl.fromTo("#e1-chip3",{opacity:0,scale:0.6},{opacity:1,scale:1,duration:0.45,ease:"back.out(1.8)"},33.1);
+  cursorMove({x:1560,y:600},33.3,0.7);
+  note("#e1-note-warn",34.2);
+
+  tl.to({},{duration:0.01},DUR-0.01);
+})();
+</script>
+</div>
+</template>

@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>RS Hebdo Delivery — tutoriel</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        background: #fbf8f2;
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #fbf8f2;
+      }
+      [data-composition-id="root"] > div[data-composition-src] {
+        position: absolute;
+        inset: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="root" data-width="1920" data-height="1080" data-duration="314.7">
+      <div
+        id="el-01-ouverture"
+        data-composition-id="01-ouverture"
+        data-composition-src="compositions/frames/01-ouverture.html"
+        data-start="0"
+        data-duration="22.1"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+      ></div>
+
+      <div
+        id="el-02-connexion"
+        data-composition-id="02-connexion"
+        data-composition-src="compositions/frames/02-connexion.html"
+        data-start="21.5"
+        data-duration="30.8"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <div
+        id="el-03-tableau-de-bord"
+        data-composition-id="03-tableau-de-bord"
+        data-composition-src="compositions/frames/03-tableau-de-bord.html"
+        data-start="51.7"
+        data-duration="38.8"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <div
+        id="el-04-etape-1"
+        data-composition-id="04-etape-1"
+        data-composition-src="compositions/frames/04-etape-1.html"
+        data-start="89.9"
+        data-duration="38.5"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <div
+        id="el-05-etape-2"
+        data-composition-id="05-etape-2"
+        data-composition-src="compositions/frames/05-etape-2.html"
+        data-start="127.8"
+        data-duration="62.1"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <div
+        id="el-06-etape-3"
+        data-composition-id="06-etape-3"
+        data-composition-src="compositions/frames/06-etape-3.html"
+        data-start="189.3"
+        data-duration="36.5"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <div
+        id="el-07-etape-4"
+        data-composition-id="07-etape-4"
+        data-composition-src="compositions/frames/07-etape-4.html"
+        data-start="225.2"
+        data-duration="23"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <div
+        id="el-08-ensuite"
+        data-composition-id="08-ensuite"
+        data-composition-src="compositions/frames/08-ensuite.html"
+        data-start="247.6"
+        data-duration="22.5"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <div
+        id="el-09-modifier"
+        data-composition-id="09-modifier"
+        data-composition-src="compositions/frames/09-modifier.html"
+        data-start="269.5"
+        data-duration="25.7"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <div
+        id="el-10-fermeture"
+        data-composition-id="10-fermeture"
+        data-composition-src="compositions/frames/10-fermeture.html"
+        data-start="294.6"
+        data-duration="20.1"
+        data-track-index="1"
+        data-width="1920"
+        data-height="1080"
+        style="opacity: 0"
+      ></div>
+
+      <audio
+        id="vo-01"
+        src="assets/vo/01.wav"
+        data-start="1"
+        data-duration="19.92"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-02"
+        src="assets/vo/02.wav"
+        data-start="22.5"
+        data-duration="28.56"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-03"
+        src="assets/vo/03.wav"
+        data-start="52.7"
+        data-duration="36.63"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-04"
+        src="assets/vo/04.wav"
+        data-start="90.9"
+        data-duration="36.27"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-05"
+        src="assets/vo/05.wav"
+        data-start="128.8"
+        data-duration="59.92"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-06"
+        src="assets/vo/06.wav"
+        data-start="190.3"
+        data-duration="34.33"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-07"
+        src="assets/vo/07.wav"
+        data-start="226.2"
+        data-duration="20.84"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-08"
+        src="assets/vo/08.wav"
+        data-start="248.6"
+        data-duration="20.28"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-09"
+        src="assets/vo/09.wav"
+        data-start="270.5"
+        data-duration="23.49"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+
+      <audio
+        id="vo-10"
+        src="assets/vo/10.wav"
+        data-start="295.6"
+        data-duration="17.93"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+    </div>
+
+    <script>
+      // Généré par scripts/assemble.mjs — la timeline racine ne porte que les fondus enchaînés.
+      const tl = gsap.timeline({ paused: true });
+      tl.to("#el-01-ouverture", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 21.5);
+      tl.fromTo("#el-02-connexion", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 21.5);
+      tl.to("#el-02-connexion", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 51.7);
+      tl.fromTo("#el-03-tableau-de-bord", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 51.7);
+      tl.to("#el-03-tableau-de-bord", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 89.9);
+      tl.fromTo("#el-04-etape-1", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 89.9);
+      tl.to("#el-04-etape-1", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 127.8);
+      tl.fromTo("#el-05-etape-2", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 127.8);
+      tl.to("#el-05-etape-2", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 189.3);
+      tl.fromTo("#el-06-etape-3", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 189.3);
+      tl.to("#el-06-etape-3", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 225.2);
+      tl.fromTo("#el-07-etape-4", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 225.2);
+      tl.to("#el-07-etape-4", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 247.6);
+      tl.fromTo("#el-08-ensuite", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 247.6);
+      tl.to("#el-08-ensuite", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 269.5);
+      tl.fromTo("#el-09-modifier", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 269.5);
+      tl.to("#el-09-modifier", { opacity: 0, duration: 0.6, ease: "power2.inOut" }, 294.6);
+      tl.fromTo("#el-10-fermeture", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 294.6);
+      window.__timelines["root"] = tl;
+    </script>
+  </body>
+</html>

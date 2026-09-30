@@ -1,0 +1,1 @@
+Dernière étape : la vérification. L'application récapitule tout : le type de papier, le titre, le nombre de signes, les photos. Prenez le temps de relire. Puis cliquez sur « Livrer le papier ». L'envoi prend quelques secondes. Quand l'écran « Bravo, c'est envoyé ! » apparaît, votre papier est livré.

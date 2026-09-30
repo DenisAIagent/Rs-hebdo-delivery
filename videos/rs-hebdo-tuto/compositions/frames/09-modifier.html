@@ -1,0 +1,331 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: normal; src: url("assets/fonts/instrument-serif-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: italic; src: url("assets/fonts/instrument-serif-400-italic.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 300; src: url("assets/fonts/geist-300-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 400; src: url("assets/fonts/geist-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 500; src: url("assets/fonts/geist-500-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 600; src: url("assets/fonts/geist-600-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 700; src: url("assets/fonts/geist-700-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 400; src: url("assets/fonts/geist-mono-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 500; src: url("assets/fonts/geist-mono-500-normal.woff2") format("woff2"); }
+
+    #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: "Geist", sans-serif; color: #16140F; }
+    #root * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    .m09-bg { position: absolute; inset: 0; background: #FBF8F2; }
+    .m09-halo { position: absolute; left: 560px; top: 140px; width: 800px; height: 800px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(225,29,46,0.16) 0%, rgba(225,29,46,0.06) 45%, rgba(225,29,46,0) 70%); }
+    .m09-rule { position: absolute; left: 0; top: 880px; width: 1920px; height: 1px; background: #D8D0BD; opacity: 0.6; }
+    .m09-ghost { position: absolute; left: 1180px; top: 40px; font-family: "Instrument Serif", serif; font-size: 300px; line-height: 1; letter-spacing: -0.02em; color: #16140F; opacity: 0.06; }
+    .m09-grain { position: absolute; inset: 0; opacity: 0.07; pointer-events: none; }
+
+    .m09-browser { position: absolute; left: 210px; top: 96px; width: 1500px; height: 740px; background: #FFFFFF; border: 2px solid #E8E2D2; border-radius: 14px;
+      box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); overflow: hidden; }
+    .m09-bar { height: 44px; background: #F5F0E6; border-bottom: 2px solid #E8E2D2; display: flex; align-items: center; padding: 0 18px; gap: 10px; }
+    .m09-dot { width: 12px; height: 12px; border-radius: 50%; background: #D8D0BD; }
+    .m09-url { margin-left: 18px; font-family: "Geist Mono", monospace; font-size: 22px; color: #6A6557; }
+    .m09-pane { position: absolute; left: 0; top: 44px; width: 1496px; height: 692px; }
+    #m09-pane-form, #m09-pane-ok { opacity: 0; visibility: hidden; }
+
+    .m09-nav { height: 72px; border-bottom: 2px solid #E8E2D2; display: flex; align-items: center; padding: 0 48px; gap: 44px; }
+    .m09-brand { font-family: "Instrument Serif", serif; font-size: 30px; letter-spacing: -0.02em; margin-right: 12px; }
+    .m09-link { font-size: 24px; font-weight: 500; color: #6A6557; padding: 22px 0; }
+    .m09-link.on { color: #16140F; border-bottom: 3px solid #E11D2E; }
+    .m09-chip { display: inline-block; border-radius: 999px; font-size: 22px; font-weight: 700; padding: 6px 16px; white-space: nowrap; }
+    .m09-chip.red { background: #FBE4E6; color: #B30E1F; }
+    .m09-chip.ok { background: #E2F1E8; color: #2D7A4B; }
+    .m09-chip.muted { background: #F5F0E6; color: #6A6557; }
+    .m09-nav .m09-chip { margin-left: auto; }
+
+    .m09-h2 { position: absolute; left: 60px; top: 100px; font-size: 28px; font-weight: 600; }
+    .m09-table { position: absolute; left: 60px; top: 158px; width: 1380px; }
+    .m09-row { display: grid; grid-template-columns: 160px 300px 520px 200px 200px; align-items: center; height: 92px; border-bottom: 2px solid #E8E2D2; font-size: 24px; font-weight: 300; }
+    .m09-row.head { height: 52px; font-size: 22px; font-weight: 500; color: #6A6557; border-bottom: 2px solid #D8D0BD; }
+    .m09-num { font-family: "Geist Mono", monospace; font-size: 24px; }
+    .m09-title { font-weight: 400; }
+    .m09-title small { display: block; font-size: 22px; font-weight: 300; color: #6A6557; }
+    .m09-cell { position: relative; display: flex; gap: 12px; align-items: center; height: 92px; }
+    .m09-zoomcell { transform-origin: 50% 50%; background: #FFFFFF; border-radius: 12px; padding: 0 10px; width: 200px; }
+    .m09-ico { width: 48px; height: 48px; border-radius: 10px; border: 2px solid #E8E2D2; display: grid; place-items: center; background: #FFFFFF; transform-origin: 50% 50%; }
+    .m09-ico svg { width: 26px; height: 26px; fill: none; stroke: #2C2A23; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .m09-att { position: absolute; pointer-events: none; overflow: visible; transform-origin: 50% 50%; }
+    .m09-att rect { fill: none; stroke: #E11D2E; stroke-width: 3; }
+
+    .m09-steps { position: absolute; left: 60px; top: 34px; display: flex; gap: 36px; align-items: center; }
+    .m09-step { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 500; color: #6A6557; }
+    .m09-step i { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #D8D0BD; display: grid; place-items: center; font-style: normal; font-family: "Geist Mono", monospace; font-size: 22px; }
+    .m09-step.on { color: #16140F; }
+    .m09-step.on i { background: #E11D2E; border-color: #E11D2E; color: #FFFFFF; }
+    .m09-step.done i { background: #E2F1E8; border-color: #E2F1E8; color: #2D7A4B; }
+    .m09-editchip { position: absolute; right: 60px; top: 36px; }
+    .m09-label { position: absolute; left: 60px; font-size: 22px; font-weight: 500; color: #2C2A23; }
+    .m09-label b { color: #E11D2E; font-weight: 700; }
+    .m09-field { position: absolute; left: 60px; background: #FFFFFF; border: 2px solid #E8E2D2; border-radius: 10px; font-size: 26px; font-weight: 300; line-height: 1.5; padding: 14px 20px; }
+    .m09-field.focus { border-color: #E11D2E; box-shadow: 0 0 0 6px rgba(225,29,46,0.18); }
+    .m09-caret { display: inline-block; width: 2px; height: 30px; background: #E11D2E; vertical-align: -6px; margin-left: 2px; opacity: 0; }
+    .m09-counter { position: absolute; right: 80px; top: 486px; font-family: "Geist Mono", monospace; font-size: 24px; color: #6A6557; }
+    .m09-btn { position: absolute; top: 560px; height: 66px; border-radius: 10px; font-size: 24px; font-weight: 700; display: grid; place-items: center; transform-origin: 50% 50%; }
+    .m09-btn.ghost { left: 60px; width: 200px; border: 2px solid #D8D0BD; color: #16140F; font-weight: 500; }
+    .m09-btn.primary { left: 980px; width: 460px; background: #E11D2E; color: #FFFFFF; box-shadow: 0 18px 30px -14px rgba(179,14,31,0.55); z-index: 2; }
+    .m09-burst { position: absolute; left: 980px; top: 560px; width: 460px; height: 66px; border-radius: 10px; z-index: 1; opacity: 0;
+      background: radial-gradient(ellipse at center, rgba(179,14,31,0.55) 0%, rgba(179,14,31,0) 70%); filter: blur(30px); transform-origin: 50% 50%; }
+    .m09-glow { position: absolute; inset: -300px; opacity: 0; background: radial-gradient(circle at 60% 85%, rgba(225,29,46,0.22) 0%, rgba(225,29,46,0) 55%); pointer-events: none; }
+
+    .m09-success { position: absolute; left: 0; top: 0; width: 1496px; height: 692px; display: grid; place-items: center; }
+    .m09-scard { transform-origin: 50% 50%; text-align: center; }
+    .m09-check { width: 132px; height: 132px; border-radius: 50%; background: #E2F1E8; margin: 0 auto 30px; display: grid; place-items: center; }
+    .m09-check svg { width: 64px; height: 64px; fill: none; stroke: #2D7A4B; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+    .m09-stitle { font-family: "Instrument Serif", serif; font-size: 84px; line-height: 1.05; letter-spacing: -0.02em; }
+    .m09-ssub { margin-top: 18px; font-size: 30px; font-weight: 300; color: #6A6557; }
+
+    .m09-dbx { position: absolute; left: 1300px; top: 556px; width: 400px; background: #FFFFFF; border: 2px solid #E8E2D2; border-radius: 14px; padding: 22px 24px;
+      box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); }
+    .m09-dbx-h { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 600; color: #0E5DAA; }
+    .m09-dbx-h svg { width: 28px; height: 28px; fill: #0E5DAA; }
+    .m09-dbx-f { margin-top: 14px; display: flex; align-items: center; gap: 12px; font-family: "Geist Mono", monospace; font-size: 22px; color: #2C2A23; }
+    .m09-dbx-f svg { width: 30px; height: 30px; fill: none; stroke: #6A6557; stroke-width: 2; flex: none; }
+    .m09-dbx .m09-chip { margin-top: 14px; }
+
+    .m09-note { position: absolute; font-family: "Instrument Serif", serif; font-style: italic; font-size: 38px; line-height: 1.2; color: #2C2A23; letter-spacing: -0.01em; }
+    .m09-note.left { left: 40px; top: 470px; width: 160px; }
+    .m09-note.right { left: 1300px; top: 742px; width: 400px; font-size: 34px; }
+
+    .m09-cursor { position: absolute; left: 0; top: 0; z-index: 50; pointer-events: none; transform-origin: 3px 3px; }
+    .m09-cursor svg { display: block; width: 32px; height: 54px; }
+    .m09-ring { position: absolute; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 2px solid #E11D2E; opacity: 0; z-index: 40; pointer-events: none; }
+  </style>
+
+  <div id="root" data-composition-id="09-modifier" data-start="0" data-duration="25.5" data-width="1920" data-height="1080">
+    <div class="m09-bg clip" data-start="0" data-duration="25.5" data-track-index="0">
+      <div class="m09-halo" id="m09-halo"></div>
+      <div class="m09-ghost" id="m09-ghost">HEBDO</div>
+      <div class="m09-rule"></div>
+    </div>
+
+    <div class="m09-browser clip" id="m09-browser" data-start="0" data-duration="25.5" data-track-index="1">
+      <div class="m09-bar"><span class="m09-dot"></span><span class="m09-dot"></span><span class="m09-dot"></span><span class="m09-url">hebdo-rs.up.railway.app</span></div>
+
+      <div class="m09-pane" id="m09-pane-dash">
+        <div class="m09-nav"><span class="m09-brand">RS Hebdo Delivery</span><span class="m09-link on">Tableau de bord</span><span class="m09-link">Livrer un papier</span><span class="m09-chip muted">Rédactrice</span></div>
+        <div class="m09-h2">Mes livraisons</div>
+        <div class="m09-table">
+          <div class="m09-row head"><span>Numéro</span><span>Type</span><span>Titre</span><span>Statut</span><span>Actions</span></div>
+          <div class="m09-row">
+            <span class="m09-num">RSH 240</span><span>Chroniques</span>
+            <span class="m09-title">« Nuit blanche »<small>Les Marquises</small></span>
+            <span><span class="m09-chip ok">Envoyé</span></span>
+            <span class="m09-cell m09-zoomcell" id="m09-zoomcell">
+              <span class="m09-ico" id="m09-pencil"><svg viewBox="0 0 24 24"><path d="M4 20l4.5-1 10-10-3.5-3.5-10 10z"/><path d="M13.5 6.5l3.5 3.5"/></svg></span>
+              <span class="m09-ico"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span class="m09-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span>
+              <svg class="m09-att" id="m09-att1" style="left:-10px;top:8px" width="220" height="76" viewBox="0 0 220 76"><rect id="m09-att1r" x="1.5" y="1.5" width="217" height="73" rx="12"/></svg>
+            </span>
+          </div>
+          <div class="m09-row">
+            <span class="m09-num">RSH 240</span><span>Interview 3000</span>
+            <span class="m09-title">« Trois soirs à Bruxelles »<small>Les Marquises</small></span>
+            <span><span class="m09-chip red">EN COURS</span></span>
+            <span class="m09-cell">
+              <span class="m09-ico"><svg viewBox="0 0 24 24"><path d="M4 20l4.5-1 10-10-3.5-3.5-10 10z"/><path d="M13.5 6.5l3.5 3.5"/></svg></span>
+              <span class="m09-ico"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span class="m09-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span>
+            </span>
+          </div>
+          <div class="m09-row">
+            <span class="m09-num">RSH 239</span><span>Disque de la semaine</span>
+            <span class="m09-title">« Lumière noire »<small>Les Marquises</small></span>
+            <span><span class="m09-chip ok">Envoyé</span></span>
+            <span class="m09-cell">
+              <span class="m09-ico"><svg viewBox="0 0 24 24"><path d="M4 20l4.5-1 10-10-3.5-3.5-10 10z"/><path d="M13.5 6.5l3.5 3.5"/></svg></span>
+              <span class="m09-ico"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span class="m09-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="m09-pane" id="m09-pane-form">
+        <div class="m09-glow" id="m09-glow"></div>
+        <div class="m09-steps">
+          <span class="m09-step done"><i>1</i>Type de papier</span>
+          <span class="m09-step on"><i>2</i>Rédaction</span>
+          <span class="m09-step"><i>3</i>Correction IA</span>
+          <span class="m09-step"><i>4</i>Vérification &amp; envoi</span>
+        </div>
+        <span class="m09-chip red m09-editchip">Modifier un papier</span>
+        <div class="m09-label" style="top:118px">Titre <b>•</b></div>
+        <div class="m09-field" style="top:152px;width:900px">« Nuit blanche », Les Marquises</div>
+        <div class="m09-label" style="top:246px">Texte <b>•</b></div>
+        <div class="m09-field" id="m09-textarea" style="top:280px;width:1380px;height:240px">
+          <span>Avec « Nuit blanche », Les Marquises signent un troisième album nocturne et tendu, où les guitares s'effacent derrière des nappes de synthés. Enregistré en dix jours à Bruxelles, le disque trouve son équilibre entre pop soyeuse et rugosité live.</span><span id="m09-typed"></span><span class="m09-caret" id="m09-caret"></span>
+        </div>
+        <div class="m09-counter" id="m09-counter">1 248 / 1 500 signes</div>
+        <div class="m09-btn ghost">Annuler</div>
+        <div class="m09-burst" id="m09-burst"></div>
+        <div class="m09-btn primary" id="m09-save">Enregistrer les modifications</div>
+      </div>
+
+      <div class="m09-pane m09-success" id="m09-pane-ok">
+        <div class="m09-scard" id="m09-scard">
+          <div class="m09-check"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></div>
+          <div class="m09-stitle">Modifications enregistrées !</div>
+          <div class="m09-ssub">Papier modifié</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="m09-note left clip" id="m09-note1" data-start="0" data-duration="25.5" data-track-index="2">Texte conservé</div>
+
+    <div class="m09-dbx clip" id="m09-dbx" data-start="0" data-duration="25.5" data-track-index="2">
+      <div class="m09-dbx-h"><svg viewBox="0 0 24 24"><path d="M6 3l6 4-6 4-6-4zm12 0l6 4-6 4-6-4zM6 11l6 4-6 4-6-4zm12 0l6 4-6 4-6-4zM12 16l6 4-6 4-6-4z"/></svg>Dropbox</div>
+      <div class="m09-dbx-f"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/></svg>RSH240_Chroniques.docx</div>
+      <span class="m09-chip ok">mis à jour</span>
+    </div>
+
+    <div class="m09-note right clip" id="m09-note2" data-start="0" data-duration="25.5" data-track-index="2">Photos conservées · remplacées seulement si vous en ajoutez</div>
+
+    <div class="m09-grain clip" data-start="0" data-duration="25.5" data-track-index="3">
+      <svg width="1920" height="1080"><filter id="m09-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.09 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 1 0"/></filter><rect width="1920" height="1080" filter="url(#m09-noise)"/></svg>
+    </div>
+
+    <div class="m09-ring" id="m09-ring1"></div>
+    <div class="m09-ring" id="m09-ring2"></div>
+    <div class="m09-ring" id="m09-ring3"></div>
+    <div class="m09-cursor clip" id="m09-cursor" data-start="0" data-duration="25.5" data-track-index="4">
+      <svg viewBox="0 0 32 54"><path d="M3 3 L3 43 L12.5 33.5 L19 50 L25.5 47.5 L19 31 L31 31 Z" fill="#16140F" stroke="#FBF8F2" stroke-width="2" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var ID = "09-modifier", D = 25.5;
+      var root = document.getElementById("root");
+      var $ = function (id) { return document.getElementById(id); };
+      function pos(el) { var x = 0, y = 0; while (el && el !== root) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; } return { x: x, y: y }; }
+      function center(el) { var p = pos(el); return { x: p.x + el.offsetWidth / 2, y: p.y + el.offsetHeight / 2 }; }
+
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+
+      /* ---- measured targets (offset chain, transform-independent) ---- */
+      var ZOOM = 1.5;
+      var cellC = center($("m09-zoomcell"));
+      var penC = center($("m09-pencil"));
+      var penZ = { x: cellC.x + (penC.x - cellC.x) * ZOOM, y: cellC.y + (penC.y - cellC.y) * ZOOM };
+      var caretP = pos($("m09-caret")); var caretC = { x: caretP.x + 6, y: caretP.y + 14 };
+      var saveC = center($("m09-save"));
+      gsap.set("#m09-ring1", { left: penZ.x, top: penZ.y, scale: 0 });
+      gsap.set("#m09-ring2", { left: caretC.x, top: caretC.y, scale: 0 });
+      gsap.set("#m09-ring3", { left: saveC.x, top: saveC.y, scale: 0 });
+
+      /* attention outline draw setup */
+      var attR = $("m09-att1r"), attLen = attR.getTotalLength() * 1.02;
+      attR.style.strokeDasharray = attLen; attR.style.strokeDashoffset = attLen;
+
+      /* ---- content sequencing: pre-computed pane timeline, crossfade driver ---- */
+      var PANES = [
+        { key: "m09-pane-dash", start: 0 },
+        { key: "m09-pane-form", start: 9.0 },
+        { key: "m09-pane-ok", start: 18.0 }
+      ];
+      var XF = 0.55;
+      var paneEls = PANES.map(function (p) { return $(p.key); });
+      var drv = { t: 0 };
+      tl.to(drv, { t: D, duration: D, ease: "none", onUpdate: function () {
+        var t = drv.t;
+        for (var i = 0; i < PANES.length; i++) {
+          var a = PANES[i].start, b = i + 1 < PANES.length ? PANES[i + 1].start : Infinity;
+          var o = 1;
+          if (i > 0) o = Math.min(o, Math.max(0, (t - a) / XF));
+          if (b !== Infinity) o = Math.min(o, Math.max(0, 1 - (t - b) / XF));
+          paneEls[i].style.opacity = o;
+          paneEls[i].style.visibility = o > 0 ? "visible" : "hidden";
+        }
+      } }, 0);
+
+      /* ---- ambient: halo breath + ghost drift ---- */
+      var amb = { t: 0 };
+      tl.to(amb, { t: D, duration: D, ease: "none", onUpdate: function () {
+        gsap.set("#m09-halo", { scale: 1 + 0.05 * Math.sin(amb.t * 0.7) });
+      } }, 0);
+      tl.fromTo("#m09-ghost", { x: -30 }, { x: 30, duration: D, ease: "none" }, 0);
+
+      /* ---- Scene 1 (0–8s): dashboard in, zoom, click pencil ---- */
+      tl.fromTo("#m09-browser", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" }, 0);
+      tl.fromTo("#m09-cursor", { x: 1500, y: 960, opacity: 0 }, { x: 1180, y: 700, opacity: 1, duration: 0.9, ease: "power2.inOut" }, 1.2);
+
+      // zoom d'élément ×1.5 around its own center (camera locked)
+      tl.set("#m09-zoomcell", { zIndex: 5 }, 3.2);
+      tl.to("#m09-zoomcell", { scale: ZOOM, duration: 1.1, ease: "power3.inOut", boxShadow: "0 24px 60px -20px rgba(20,18,12,0.28)" }, 3.2);
+      tl.to("#m09-att1r", { strokeDashoffset: 0, duration: 0.6, ease: "power2.out" }, 4.0);
+
+      // cursor-click-ripple on the pencil
+      tl.to("#m09-cursor", { x: penZ.x, y: penZ.y, duration: 0.8, ease: "power2.inOut" }, 4.3);
+      tl.to("#m09-cursor", { scale: 0.85, duration: 0.12, ease: "power2.in" }, 5.3);
+      tl.to("#m09-cursor", { scale: 1, duration: 0.12, ease: "power2.out" }, 5.42);
+      tl.to("#m09-pencil", { scale: 0.94, duration: 0.12, ease: "power2.in" }, 5.3);
+      tl.to("#m09-pencil", { scale: 1, duration: 0.12, ease: "power2.out" }, 5.42);
+      tl.set("#m09-pencil", { borderColor: "#E11D2E" }, 5.42);
+      tl.set("#m09-ring1", { opacity: 1 }, 5.34);
+      tl.to("#m09-ring1", { scale: 4, opacity: 0, duration: 0.7, ease: "power2.out", immediateRender: false }, 5.34);
+
+      // outline breathes during its phrase, then retracts; zoom releases
+      tl.to("#m09-att1", { scale: 1.012, duration: 0.6, ease: "sine.inOut" }, 5.6);
+      tl.to("#m09-att1", { scale: 1.0, duration: 0.6, ease: "sine.inOut" }, 6.2);
+      tl.to("#m09-att1", { scale: 1.012, duration: 0.6, ease: "sine.inOut" }, 6.8);
+      tl.to("#m09-att1r", { strokeDashoffset: attLen, duration: 0.45, ease: "power2.in" }, 7.3);
+      tl.to("#m09-zoomcell", { scale: 1, duration: 0.8, ease: "power3.inOut", boxShadow: "0 0 0 0 rgba(20,18,12,0)" }, 7.6);
+      tl.to("#m09-cursor", { x: 1320, y: 740, duration: 0.8, ease: "power2.inOut" }, 7.7);
+
+      /* ---- Scene 2 (8–18s): form in edit mode, typing, save ---- */
+      tl.fromTo(["#m09-pane-form .m09-steps", "#m09-pane-form .m09-editchip"], { y: -14 }, { y: 0, duration: 0.7, ease: "power2.out" }, 9.0);
+      tl.fromTo("#m09-note1", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.7, ease: "power2.out" }, 9.9);
+
+      // click into the text, type a short sentence
+      tl.to("#m09-cursor", { x: caretC.x + 4, y: caretC.y + 6, duration: 0.8, ease: "power2.inOut" }, 12.5);
+      tl.to("#m09-cursor", { scale: 0.85, duration: 0.12, ease: "power2.in" }, 13.35);
+      tl.to("#m09-cursor", { scale: 1, duration: 0.12, ease: "power2.out" }, 13.47);
+      tl.set("#m09-ring2", { opacity: 1 }, 13.4);
+      tl.to("#m09-ring2", { scale: 3, opacity: 0, duration: 0.6, ease: "power2.out", immediateRender: false }, 13.4);
+      tl.set("#m09-textarea", { borderColor: "#E11D2E", boxShadow: "0 0 0 6px rgba(225,29,46,0.18)" }, 13.4);
+      tl.set("#m09-caret", { opacity: 1 }, 13.4);
+      tl.to("#m09-cursor", { x: caretC.x + 90, y: caretC.y + 70, duration: 0.5, ease: "power2.out" }, 13.6);
+
+      var ADD = " Un disque à écouter d'une traite.", BASE = 1248;
+      var typ = { n: 0 }, lastN = -1, typedEl = $("m09-typed"), counterEl = $("m09-counter");
+      function fmt(n) { return String(n).replace(/(\d)(?=(\d{3})+$)/g, "$1 "); }
+      tl.to(typ, { n: ADD.length, duration: 1.7, ease: "none", onUpdate: function () {
+        var k = Math.round(typ.n);
+        if (k !== lastN) { typedEl.textContent = ADD.slice(0, k); counterEl.textContent = fmt(BASE + k) + " / 1 500 signes"; lastN = k; }
+      } }, 13.7);
+      tl.set("#m09-caret", { opacity: 0 }, 15.5);
+      tl.set("#m09-textarea", { borderColor: "#E8E2D2", boxShadow: "0 0 0 0 rgba(225,29,46,0)" }, 15.5);
+
+      // press-release-spring on « Enregistrer les modifications »
+      var PRESS_AT = 16.05, PRESS_DUR = 0.14;
+      tl.to("#m09-cursor", { x: saveC.x, y: saveC.y, duration: 0.7, ease: "power2.inOut" }, 15.3);
+      tl.to("#m09-cursor", { scale: 0.85, duration: 0.12, ease: "power2.in" }, PRESS_AT);
+      tl.to("#m09-cursor", { scale: 1, duration: 0.12, ease: "power2.out" }, PRESS_AT + 0.12);
+      tl.to("#m09-save", { scale: 0.94, boxShadow: "0 4px 8px -4px rgba(179,14,31,0.4)", duration: PRESS_DUR, ease: "power1.in" }, PRESS_AT);
+      tl.to("#m09-save", { scale: 1, boxShadow: "0 18px 30px -14px rgba(179,14,31,0.55)", duration: 0.55, ease: "back.out(1.6)" }, PRESS_AT + PRESS_DUR);
+      tl.fromTo("#m09-burst", { scale: 1, opacity: 0 }, { scale: 3.5, opacity: 0.6, duration: 0.5, ease: "power2.out" }, PRESS_AT + PRESS_DUR);
+      tl.to("#m09-burst", { opacity: 0, duration: 0.5, ease: "power2.in" }, PRESS_AT + PRESS_DUR + 0.5);
+      tl.to("#m09-glow", { opacity: 0.25, duration: 0.8, ease: "power2.out" }, PRESS_AT + PRESS_DUR);
+      tl.set("#m09-ring3", { opacity: 1 }, PRESS_AT + 0.05);
+      tl.to("#m09-ring3", { scale: 4, opacity: 0, duration: 0.7, ease: "power2.out", immediateRender: false }, PRESS_AT + 0.05);
+      tl.to("#m09-cursor", { x: 1500, y: 800, opacity: 0, duration: 0.8, ease: "power2.inOut" }, 17.2);
+
+      /* ---- Scene 3 (18–25.5s): success, Dropbox card, note ---- */
+      tl.fromTo("#m09-scard", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.7, ease: "power3.out" }, 18.1);
+      tl.fromTo("#m09-dbx", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" }, 19.5);
+      tl.fromTo("#m09-dbx .m09-chip", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" }, 20.1);
+      tl.fromTo("#m09-note2", { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.7, ease: "power2.out" }, 22.0);
+
+      window.__timelines[ID] = tl;
+      tl.seek(0);
+    })();
+  </script>
+</template>

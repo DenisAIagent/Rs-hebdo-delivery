@@ -1,0 +1,284 @@
+<template>
+  <style>
+    @font-face { font-family: "Instrument Serif"; font-style: normal; font-weight: 400; src: url("assets/fonts/instrument-serif-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Instrument Serif"; font-style: italic; font-weight: 400; src: url("assets/fonts/instrument-serif-400-italic.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 300; src: url("assets/fonts/geist-300-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 400; src: url("assets/fonts/geist-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 500; src: url("assets/fonts/geist-500-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 600; src: url("assets/fonts/geist-600-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 700; src: url("assets/fonts/geist-700-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 400; src: url("assets/fonts/geist-mono-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 500; src: url("assets/fonts/geist-mono-500-normal.woff2") format("woff2"); }
+
+    #root {
+      position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate;
+      font-family: "Geist", sans-serif; color: #16140F;
+      --paper: #FBF8F2; --paper2: #F5F0E6; --surface: #FFFFFF; --line: #E8E2D2; --line2: #D8D0BD;
+      --ink: #16140F; --ink2: #2C2A23; --mute: #6A6557; --mute2: #6A6557;
+      --red: #E11D2E; --red2: #B30E1F; --redt: #FBE4E6; --ok: #2D7A4B; --okt: #E2F1E8; --star: #E6B400;
+    }
+    #root * { box-sizing: border-box; }
+    .clip { position: absolute; inset: 0; }
+
+    .f07-paper { position: absolute; inset: 0; background: var(--paper); }
+    .f07-halo { position: absolute; left: 560px; top: 100px; width: 900px; height: 900px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(225,29,46,0.16) 0%, rgba(225,29,46,0.06) 45%, rgba(225,29,46,0) 70%); }
+    .f07-grain { position: absolute; inset: 0; opacity: 0.07; }
+    .f07-ghost { position: absolute; left: -260px; top: 440px; font-family: "Instrument Serif", serif; font-size: 420px; line-height: 1;
+      letter-spacing: -0.02em; color: var(--ink); opacity: 0.10; white-space: nowrap; }
+    .f07-rule { position: absolute; left: 0; top: 96px; width: 1920px; height: 1px; background: var(--line2); transform-origin: left center; }
+
+    .f07-title { position: absolute; left: 72px; top: 132px; font-family: "Instrument Serif", serif; font-size: 78px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
+    .f07-title i { display: block; font-size: 42px; color: var(--mute); margin-top: 10px; }
+
+    .f07-browser { position: absolute; left: 400px; top: 110px; width: 1120px; height: 770px; background: var(--surface);
+      border: 2px solid var(--line); border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); overflow: hidden; }
+    .f07-bar { height: 44px; background: var(--paper2); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 16px; gap: 8px; }
+    .f07-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line2); }
+    .f07-url { margin-left: 18px; font-family: "Geist Mono", monospace; font-size: 22px; color: var(--mute2); }
+    .f07-nav { height: 64px; display: flex; align-items: center; padding: 0 36px; gap: 30px; border-bottom: 1px solid var(--line); font-size: 22px; font-weight: 500; color: var(--mute); }
+    .f07-logo { font-family: "Instrument Serif", serif; font-size: 30px; color: var(--red); letter-spacing: -0.02em; margin-right: 8px; }
+    .f07-nav .on { color: var(--ink); }
+    .f07-avatar { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; background: var(--redt); color: var(--red2); font-weight: 700; font-size: 22px; display: grid; place-items: center; }
+
+    .f07-steps { position: absolute; left: 36px; top: 132px; display: flex; gap: 26px; align-items: center; font-size: 22px; color: var(--mute2); }
+    .f07-step { display: flex; align-items: center; gap: 10px; }
+    .f07-step b { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line2); display: grid; place-items: center; font-weight: 700; font-size: 22px; }
+    .f07-step.done b { background: var(--okt); border-color: var(--okt); color: var(--ok); }
+    .f07-step.on { color: var(--ink); font-weight: 600; }
+    .f07-step.on b { background: var(--red); border-color: var(--red); color: #fff; }
+
+    /* recap stage (card + button) — one wrapper so the inverse zoom-through moves it as a surface */
+    .f07-stage { position: absolute; left: 60px; top: 196px; width: 1000px; height: 520px; transform-origin: 50% 50%; }
+    .f07-card { position: absolute; left: 0; top: 0; width: 1000px; height: 396px; background: var(--surface);
+      border: 2px solid var(--line); border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); padding: 22px 34px; }
+    .f07-card-label { font-size: 22px; font-weight: 600; color: var(--mute); height: 40px; }
+    .f07-row { display: flex; align-items: center; height: 62px; border-top: 1px solid var(--line); font-size: 25px; opacity: 0; }
+    .f07-row .k { width: 150px; color: var(--mute); font-weight: 500; }
+    .f07-row .v { flex: 1; color: var(--ink); font-weight: 400; }
+    .f07-row .v.mono { font-family: "Geist Mono", monospace; font-size: 25px; }
+    .f07-row .v.stars { color: var(--star); letter-spacing: 4px; font-size: 28px; }
+    .f07-row .v .dim { color: var(--mute2); }
+    .f07-row svg { width: 30px; height: 30px; }
+    .f07-row circle { fill: var(--okt); }
+    .f07-row path { fill: none; stroke: var(--ok); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+
+    .f07-send { position: absolute; left: 0; top: 428px; width: 1000px; height: 80px; border-radius: 10px; background: var(--red); color: #fff;
+      font-weight: 700; font-size: 28px; overflow: hidden; transform-origin: 50% 50%; box-shadow: 0 18px 40px -18px rgba(179,14,31,0.55); z-index: 2; }
+    .f07-send-track { position: absolute; inset: 0; background: var(--paper2); border: 2px solid var(--line2); border-radius: 10px; opacity: 0; }
+    .f07-send-fill { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: var(--redt); transform: scaleX(0); transform-origin: left center; opacity: 0; }
+    .f07-send-bar { position: absolute; left: 0; bottom: 0; width: 100%; height: 6px; background: var(--red); transform: scaleX(0); transform-origin: left center; opacity: 0; }
+    .f07-send-l1, .f07-send-l2 { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+    .f07-send-l2 { color: var(--ink); opacity: 0; }
+    #f07-burst { position: absolute; left: 0; top: 428px; width: 1000px; height: 80px; border-radius: 10px; z-index: 1; opacity: 0;
+      background: radial-gradient(ellipse at center, rgba(179,14,31,0.8) 0%, rgba(179,14,31,0) 70%); filter: blur(34px); transform-origin: 50% 50%; }
+
+    /* success stage */
+    .f07-success { position: absolute; left: 60px; top: 196px; width: 1000px; height: 520px; display: flex; flex-direction: column; align-items: center; justify-content: center; transform-origin: 50% 50%; opacity: 0; }
+    .f07-disc { width: 150px; height: 150px; border-radius: 50%; background: var(--okt); display: grid; place-items: center; transform-origin: 50% 50%; }
+    .f07-disc svg { width: 80px; height: 80px; }
+    .f07-disc path { fill: none; stroke: var(--ok); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+    .f07-h { margin-top: 30px; font-family: "Instrument Serif", serif; font-size: 66px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); transform-origin: 50% 50%; }
+    .f07-sub { margin-top: 14px; font-size: 26px; color: var(--mute); font-weight: 400; }
+    .f07-actions { margin-top: 42px; display: flex; gap: 20px; }
+    .f07-btn { height: 66px; border-radius: 10px; font-weight: 700; font-size: 24px; display: flex; align-items: center; padding: 0 30px; }
+    .f07-primary { background: var(--red); color: #fff; }
+    .f07-ghost { border: 2px solid var(--line2); color: var(--ink); }
+
+    .f07-field { position: absolute; left: 560px; top: 334px; width: 0; height: 0; z-index: 3; }
+    .f07-p { position: absolute; left: 0; top: 0; border-radius: 2px; opacity: 0; will-change: transform, opacity; }
+
+    .f07-att { position: absolute; border: 3px solid var(--red); border-radius: 12px; pointer-events: none; }
+    .f07-att-h { transform-origin: left center; }
+    .f07-att-v { transform-origin: center top; }
+
+    .f07-bgglow { position: absolute; left: 320px; top: 420px; width: 1280px; height: 560px; border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(225,29,46,0.18) 0%, rgba(225,29,46,0) 65%); opacity: 0; }
+    .f07-cursor { position: absolute; left: 0; top: 0; width: 54px; height: 54px; transform-origin: 20.8% 12.5%; filter: drop-shadow(0 6px 10px rgba(20,18,12,0.3)); z-index: 5; }
+    .f07-ripple { position: absolute; left: 0; top: 0; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid var(--red); opacity: 0; z-index: 4; }
+  </style>
+
+  <div id="root" data-composition-id="07-etape-4" data-start="0" data-duration="23" data-width="1920" data-height="1080">
+    <div class="clip" data-start="0" data-duration="23" data-track-index="0">
+      <div class="f07-paper"></div>
+      <div class="f07-halo" id="f07-halo"></div>
+      <div class="f07-ghost" id="f07-ghost">HEBDO</div>
+      <div class="f07-rule" id="f07-rule"></div>
+      <svg class="f07-grain" xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">
+        <filter id="f07-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" seed="7"/><feColorMatrix values="0 0 0 0 0.09 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0.5 0"/></filter>
+        <rect width="1920" height="1080" filter="url(#f07-noise)"/>
+      </svg>
+    </div>
+
+    <div class="clip" data-start="0" data-duration="23" data-track-index="1">
+      <div class="f07-bgglow" id="f07-bgglow"></div>
+      <div class="f07-title" id="f07-title">Étape 4<i>vérifier et envoyer</i></div>
+
+      <div class="f07-browser" id="f07-browser">
+        <div class="f07-bar"><span class="f07-dot"></span><span class="f07-dot"></span><span class="f07-dot"></span><span class="f07-url">hebdo-rs.up.railway.app</span></div>
+        <div class="f07-nav"><span class="f07-logo">RS</span><span>Mon espace</span><span class="on">Livrer un papier</span><span class="f07-avatar">CR</span></div>
+        <div class="f07-steps">
+          <div class="f07-step done"><b>✓</b>Type de papier</div>
+          <div class="f07-step done"><b>✓</b>Rédaction</div>
+          <div class="f07-step done"><b>✓</b>Correction IA</div>
+          <div class="f07-step on"><b>4</b>Vérification &amp; envoi</div>
+        </div>
+
+        <div class="f07-stage" id="f07-stage">
+          <div class="f07-card" id="f07-card">
+            <div class="f07-card-label">Récapitulatif</div>
+            <div class="f07-row" id="f07-r1"><span class="k">Format</span><span class="v">Chroniques</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path id="f07-k1" d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+            <div class="f07-row" id="f07-r2"><span class="k">Titre</span><span class="v">Les Marquises — Nuit blanche</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path id="f07-k2" d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+            <div class="f07-row" id="f07-r3"><span class="k">Signes</span><span class="v mono">1 486 <span class="dim">/ 1 500</span></span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path id="f07-k3" d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+            <div class="f07-row" id="f07-r4"><span class="k">Note</span><span class="v stars">★★★★<span class="dim">★</span></span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path id="f07-k4" d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+            <div class="f07-row" id="f07-r5"><span class="k">Photos</span><span class="v">1 fichier <span class="dim">· © Marion Delval</span></span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path id="f07-k5" d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+          </div>
+          <div id="f07-burst"></div>
+          <div class="f07-send" id="f07-send">
+            <div class="f07-send-track" id="f07-send-track"></div>
+            <div class="f07-send-fill" id="f07-send-fill"></div>
+            <div class="f07-send-bar" id="f07-send-bar"></div>
+            <div class="f07-send-l1" id="f07-send-l1">Livrer le papier</div>
+            <div class="f07-send-l2" id="f07-send-l2">Envoi en cours…</div>
+          </div>
+        </div>
+
+        <div class="f07-success" id="f07-success">
+          <div class="f07-disc" id="f07-disc"><svg viewBox="0 0 24 24"><path id="f07-bigcheck" d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <div class="f07-h" id="f07-h">Bravo, c'est envoyé !</div>
+          <div class="f07-sub" id="f07-sub">Papier livré</div>
+          <div class="f07-actions"><div class="f07-btn f07-ghost" id="f07-b1">Retour à l'espace</div><div class="f07-btn f07-primary" id="f07-b2">Livrer un autre papier</div></div>
+        </div>
+        <div class="f07-field" id="f07-field"></div>
+      </div>
+
+      <div class="f07-att f07-att-h" id="f07-att1h" style="left:452px;top:726px;width:1016px;height:96px"></div>
+      <div class="f07-att f07-att-v" id="f07-att1v" style="left:452px;top:726px;width:1016px;height:96px"></div>
+
+      <div class="f07-ripple" id="f07-ripple"></div>
+      <svg class="f07-cursor" id="f07-cursor" viewBox="0 0 24 24"><path d="M5 3 L5 19 L9 15 L12 22 L15 20.5 L11.5 14 L18 14 Z" fill="#16140F" stroke="#FBF8F2" stroke-width="0.9" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var D = 23, F = 1 / 60;
+      var tl = gsap.timeline({ paused: true });
+      var q = function (s) { return document.querySelector(s); };
+      var TIP_X = 11.25, TIP_Y = 6.75;
+      function cursorTo(x, y, at, dur) { tl.to("#f07-cursor", { x: x - TIP_X, y: y - TIP_Y, duration: dur, ease: "power2.inOut" }, at); }
+      function click(x, y, at) {
+        tl.to("#f07-cursor", { scale: 0.86, duration: 0.12, ease: "power1.in" }, at);
+        tl.to("#f07-cursor", { scale: 1, duration: 0.22, ease: "power2.out" }, at + 0.12);
+        tl.fromTo("#f07-ripple", { x: x, y: y, scale: 0.3, opacity: 0.8 }, { scale: 1.6, opacity: 0, duration: 0.5, ease: "power2.out" }, at + 0.1);
+      }
+      function drawPath(id, at, dur) {
+        var p = q(id), len = p.getTotalLength();
+        p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
+        tl.to(id, { strokeDashoffset: 0, duration: dur, ease: "power2.out" }, at);
+      }
+
+      gsap.set(["#f07-att1h", "#f07-att1v", "#f07-title", "#f07-card", "#f07-disc", "#f07-h", "#f07-sub", "#f07-b1", "#f07-b2"], { opacity: 0 });
+      gsap.set("#f07-cursor", { x: 1900, y: 700 });
+
+      // ambient
+      var amb = { p: 0 };
+      tl.to(amb, { p: Math.PI * 2 * 4, duration: D, ease: "none", onUpdate: function () { gsap.set(q("#f07-halo"), { scale: 1 + 0.05 * Math.sin(amb.p) }); } }, 0);
+      tl.fromTo("#f07-ghost", { x: 0 }, { x: 40, duration: D, ease: "none" }, 0);
+
+      // ================= Scene 1 (0–10s): recap card, rows waterfall in, checks draw on the voice =================
+      tl.fromTo("#f07-rule", { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: "power2.out" }, 0);
+      tl.fromTo("#f07-browser", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 0);
+      tl.fromTo("#f07-title", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.7, ease: "power2.out" }, 0.2);
+      tl.fromTo("#f07-card", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 0.35);
+      gsap.set("#f07-send", { opacity: 0 });
+
+      // waterfall-entry: binary reveal + whip from below, overlapping starts, shrinking gaps
+      var rows = ["#f07-r1", "#f07-r2", "#f07-r3", "#f07-r4", "#f07-r5"];
+      var offs = [80, 60, 50, 45, 45], durs = [0.2, 0.18, 0.16, 0.15, 0.14], gaps = [0, 2 * F, 0, -F, -2 * F];
+      var t = 3.0;
+      rows.forEach(function (id, i) {
+        if (i > 0) t = t + durs[i - 1] + gaps[i];
+        tl.set(id, { opacity: 1, y: offs[i] }, t);
+        tl.to(id, { y: 0, duration: durs[i], ease: "power4.out" }, t);
+      });
+      // checks draw as the voice names each item (≈ 3.6 → 7.6 s)
+      var CHECK_AT = [3.7, 4.7, 5.8, 6.7, 7.6];
+      ["#f07-k1", "#f07-k2", "#f07-k3", "#f07-k4", "#f07-k5"].forEach(function (id, i) { drawPath(id, CHECK_AT[i], 0.45); });
+      tl.fromTo("#f07-send", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 8.4);
+
+      // ================= Scene 2 (10–16s): press "Livrer le papier", slow progress =================
+      var BX = 452 + 500, BY = 110 + 196 + 428 + 40; // button centre in canvas coords
+      cursorTo(BX + 120, BY + 8, 9.9, 0.9);
+      click(BX + 120, BY + 8, 11.5);
+      var PRESS = 11.5, PD = 0.14, REL = PRESS + PD;
+      tl.to("#f07-send", { scale: 0.94, boxShadow: "0 4px 10px -6px rgba(179,14,31,0.5)", duration: PD, ease: "power1.in" }, PRESS);
+      tl.to("#f07-send", { scale: 1, boxShadow: "0 18px 40px -18px rgba(179,14,31,0.55)", duration: 0.6, ease: "back.out(1.8)" }, REL);
+      tl.fromTo("#f07-burst", { scale: 1, opacity: 0 }, { scale: 2.6, opacity: 0.55, duration: 0.45, ease: "power2.out" }, REL);
+      tl.to("#f07-burst", { opacity: 0, duration: 0.5, ease: "power2.in" }, REL + 0.45);
+      tl.to("#f07-bgglow", { opacity: 0.22, duration: 0.8, ease: "power2.out" }, REL);
+      tl.to("#f07-bgglow", { opacity: 0, duration: 1.4, ease: "power1.out" }, REL + 1.6);
+      tl.fromTo("#f07-att1h", { opacity: 1, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.35, ease: "power2.out" }, 11.7);
+      tl.fromTo("#f07-att1v", { opacity: 0, scaleY: 0 }, { opacity: 1, scaleY: 1, duration: 0.3, ease: "power2.out" }, 12.0);
+      var br = { p: 0 };
+      tl.to(br, { p: Math.PI * 2 * 1.5, duration: 3.6, ease: "none", onUpdate: function () { gsap.set(q("#f07-att1v"), { scaleY: 1 + 0.008 * Math.sin(br.p) }); } }, 12.3);
+      tl.to(["#f07-att1h", "#f07-att1v"], { opacity: 0, duration: 0.4 }, 15.9);
+      cursorTo(BX + 420, BY + 130, 12.2, 0.8);
+
+      // the button becomes a progress track (stat-bars-and-fills: scaleX fill from the left, 3 s)
+      tl.to("#f07-send-l1", { opacity: 0, duration: 0.25 }, 11.95);
+      tl.to("#f07-send-track", { opacity: 1, duration: 0.35 }, 11.95);
+      tl.to("#f07-send", { boxShadow: "0 0 0 0 rgba(179,14,31,0)", duration: 0.4 }, 11.95);
+      tl.to(["#f07-send-fill", "#f07-send-bar"], { opacity: 1, duration: 0.2 }, 12.1);
+      tl.to("#f07-send-l2", { opacity: 1, duration: 0.3 }, 12.15);
+      tl.fromTo(["#f07-send-fill", "#f07-send-bar"], { scaleX: 0 }, { scaleX: 1, duration: 3.0, ease: "power1.inOut" }, 12.2);
+
+      // ================= Scene 3 (16–23s): inverse zoom-through into the success screen + confetti =================
+      // exit: the recap surface recedes (scale 1 → 0.8, blur 0 → 18px, opacity 1 → 0.15 on a linear tween), hard cut at 16.8
+      tl.to("#f07-stage", { scale: 0.8, filter: "blur(18px)", duration: 0.2, ease: "power3.in" }, 16.6);
+      tl.to("#f07-stage", { opacity: 0.15, duration: 0.2, ease: "none" }, 16.6);
+      tl.set("#f07-stage", { opacity: 0 }, 16.8);
+      tl.set("#f07-success", { opacity: 0.15, scale: 1.25, filter: "blur(18px)" }, 16.8);
+      tl.to("#f07-success", { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.5, ease: "expo.out" }, 16.8);
+      // spring-pop on the disc and the title (power3.out settle, no overshoot)
+      tl.fromTo("#f07-disc", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power3.out" }, 16.8);
+      drawPath("#f07-bigcheck", 17.15, 0.5);
+      tl.fromTo("#f07-h", { scale: 0, opacity: 0, y: 16 }, { scale: 1, opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 17.1);
+      tl.fromTo("#f07-sub", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 17.6);
+      tl.fromTo("#f07-b1", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 18.0);
+      tl.fromTo("#f07-b2", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 18.15);
+      cursorTo(1460, 800, 16.4, 0.9);
+
+      // particle-burst: 40 seeded chips, pure ballistic function of the driver, fired on the disc's settle
+      var prand = function (n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+      var field = q("#f07-field"), palette = ["#E11D2E", "#16140F", "#E6B400", "#2D7A4B"], parts = [];
+      var COUNT = 40, SIZE_MIN = 6, SIZE_MAX = 12, CONE = 0.7, SPEED_MIN = 260, SPEED_MAX = 540, SPIN_MAX = 420, G = 1100, FLIGHT = 2.0, FADE_FRAC = 0.3;
+      for (var i = 0; i < COUNT; i++) {
+        var el = document.createElement("div");
+        el.className = "f07-p";
+        var size = SIZE_MIN + prand(i * 3 + 1) * (SIZE_MAX - SIZE_MIN);
+        el.style.width = size.toFixed(2) + "px"; el.style.height = (size * 0.7).toFixed(2) + "px";
+        el.style.background = palette[i % palette.length];
+        field.appendChild(el);
+        var angle = -Math.PI / 2 + (prand(i * 5 + 2) * 2 - 1) * CONE;
+        var speed = SPEED_MIN + prand(i * 7 + 3) * (SPEED_MAX - SPEED_MIN);
+        parts.push({ el: el, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, spin: (prand(i * 11 + 4) * 2 - 1) * SPIN_MAX });
+      }
+      var drive = { T: 0 };
+      tl.fromTo(drive, { T: 0 }, { T: 1, duration: FLIGHT, ease: "none", onUpdate: function () {
+        var tt = drive.T * FLIGHT;
+        var fade = Math.min(1, (1 - drive.T) / FADE_FRAC);
+        var alive = drive.T > 0 && drive.T < 1;
+        parts.forEach(function (p) {
+          var x = p.vx * tt, y = p.vy * tt + 0.5 * G * tt * tt;
+          p.el.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px) rotate(" + (p.spin * tt).toFixed(1) + "deg)";
+          p.el.style.opacity = alive ? fade.toFixed(3) : "0";
+        });
+      } }, 17.3);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["07-etape-4"] = tl;
+    })();
+  </script>
+</template>

@@ -22,7 +22,7 @@ ffmpeg -y -i "$OUT" \
   -c:a aac -b:a 96k -ac 1 \
   "$PUBLIC/tuto-rs-hebdo.mp4"
 
-# Vignette : une image de la scène d'ouverture, une fois le titre posé (14 s).
-ffmpeg -y -ss 14 -i "$OUT" -frames:v 1 -vf "scale=1280:720" -q:v 3 "$PUBLIC/tuto-rs-hebdo.jpg"
+# Vignette : une image de la scène d'ouverture, une fois le titre posé (3 s).
+ffmpeg -y -ss 3 -i "$OUT" -frames:v 1 -vf "scale=1280:720" -q:v 3 "$PUBLIC/tuto-rs-hebdo.jpg"
 
 ls -la "$PUBLIC/tuto-rs-hebdo.mp4" "$PUBLIC/tuto-rs-hebdo.jpg"

@@ -7,14 +7,14 @@ destination: website-embed
 aspect: 1920x1080
 language: fr
 audience: journalistes et pigistes de Rolling Stone France, tous niveaux à l'aise avec le numérique ou non
-length: 5min
-angle: tutorial
-voice: elevenlabs
+length: 45s
+angle: presentation
+voice: elevenlabs-manon
 ---
 
 ## Intent
 
-Vidéo de présentation et tutoriel détaillé de l'application RS Hebdo Delivery,
+Vidéo de présentation courte (45 s maximum, demande du 30/09 après une première version de 5 min jugée trop longue) de l'application RS Hebdo Delivery,
 affichée automatiquement au premier lancement (page d'onboarding) pour chaque
 journaliste. Rythme volontairement lent : chaque écran reste assez longtemps
 pour être lu, chaque action est nommée avant d'être montrée. Voix off française
@@ -30,7 +30,7 @@ des reconstitutions animées des écrans réels plutôt que des captures brutes.
 
 ## Customizations
 
-- Voix off générée sur ElevenLabs (demande explicite de Denis), script validé avant génération.
+- Voix off générée sur ElevenLabs via l'interface web (voix « Manon », modèle Eleven v4, prise 1 de deux), fichier `assets/vo45/manon-take1.mp3` ; la voix système et OpenAI ont été refusées (trop artificielles).
 - Reconstitutions d'interface animées (curseur, clics, saisie) pour chaque étape du formulaire.
 - Sous-titres non demandés ; à proposer après la première relecture.
 

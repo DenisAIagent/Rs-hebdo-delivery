@@ -1,0 +1,7 @@
+{
+  "scene": "s1-ouverture",
+  "duration_s": 6.38,
+  "rules": ["svg-path-draw", "spring-pop-entrance", "waterfall-entry"],
+  "exit": { "vector": "static hold; halo breathing ±3% scale (1.7s half-period), ghost word drifting +6 px/s, 0 px/s on content", "still_moving": false },
+  "entry": { "vector": "rule stroke drawing left→right from x=560, ≈2300 px/s at t=0 (power2.out over 0.7s); halo already in place", "from_rest": false }
+}

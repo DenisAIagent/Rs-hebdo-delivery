@@ -1,0 +1,14 @@
+{
+  "vo": "assets/vo45/manon-take1.mp3",
+  "lead": 1.0,
+  "tail": 1.6,
+  "xfade": 0.5,
+  "beats": [
+    { "id": "s1-ouverture", "start": 0.0 },
+    { "id": "s2-tableau", "start": 5.13 },
+    { "id": "s3-redaction", "start": 9.98 },
+    { "id": "s4-correction", "start": 14.9 },
+    { "id": "s5-envoi", "start": 21.66 },
+    { "id": "s6-fermeture", "start": 28.71 }
+  ]
+}

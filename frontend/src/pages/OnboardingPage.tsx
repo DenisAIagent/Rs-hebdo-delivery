@@ -69,7 +69,7 @@ function StepVideo() {
 
   return (
     <div className="text-center px-4">
-      <div className="eyebrow" style={{ marginBottom: 8 }}>Présentation vidéo · 5 min</div>
+      <div className="eyebrow" style={{ marginBottom: 8 }}>Présentation vidéo · 45 s</div>
       <h2
         className="serif italic"
         style={{ fontSize: 40, lineHeight: 1.05, marginBottom: 18 }}
@@ -112,8 +112,8 @@ function StepVideo() {
         className="mx-auto mt-6"
         style={{ color: 'var(--muted)', maxWidth: 560, fontSize: 14 }}
       >
-        Prenez le temps de la regarder : chaque étape y est montrée lentement.
-        Vous pourrez la revoir à tout moment depuis votre tableau de bord.
+        Quarante-cinq secondes pour voir tout le parcours. Vous pourrez la
+        revoir à tout moment depuis votre tableau de bord.
       </p>
     </div>
   );

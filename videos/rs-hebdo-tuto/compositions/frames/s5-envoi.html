@@ -1,0 +1,287 @@
+<template>
+  <style>
+    @font-face { font-family: "Instrument Serif"; font-style: normal; font-weight: 400; src: url("assets/fonts/instrument-serif-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Instrument Serif"; font-style: italic; font-weight: 400; src: url("assets/fonts/instrument-serif-400-italic.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 300; src: url("assets/fonts/geist-300-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 400; src: url("assets/fonts/geist-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 500; src: url("assets/fonts/geist-500-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 600; src: url("assets/fonts/geist-600-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 700; src: url("assets/fonts/geist-700-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 400; src: url("assets/fonts/geist-mono-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 500; src: url("assets/fonts/geist-mono-500-normal.woff2") format("woff2"); }
+
+    #root {
+      position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate;
+      font-family: "Geist", sans-serif; color: #16140F;
+      --paper: #FBF8F2; --paper2: #F5F0E6; --surface: #FFFFFF; --line: #E8E2D2; --line2: #D8D0BD;
+      --ink: #16140F; --ink2: #2C2A23; --mute: #6A6557; --mute2: #6A6557;
+      --red: #E11D2E; --red2: #B30E1F; --redt: #FBE4E6; --ok: #2D7A4B; --okt: #E2F1E8; --star: #E6B400;
+    }
+    #root * { box-sizing: border-box; }
+    .clip { position: absolute; inset: 0; }
+
+    .s5-envoi-paper { position: absolute; inset: 0; background: var(--paper); }
+    .s5-envoi-halo { position: absolute; left: 560px; top: 100px; width: 900px; height: 900px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(225,29,46,0.16) 0%, rgba(225,29,46,0.06) 45%, rgba(225,29,46,0) 70%); }
+    .s5-envoi-grain { position: absolute; inset: 0; opacity: 0.07; }
+    .s5-envoi-ghost { position: absolute; left: 1250px; top: 700px; font-family: "Instrument Serif", serif; font-size: 420px; line-height: 1;
+      letter-spacing: -0.02em; color: var(--ink); opacity: 0.10; white-space: nowrap; }
+    .s5-envoi-rule { position: absolute; left: 0; top: 96px; width: 1920px; height: 1px; background: var(--line2); }
+
+    .s5-envoi-title { position: absolute; left: 72px; top: 132px; font-family: "Instrument Serif", serif; font-size: 78px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); }
+    .s5-envoi-title i { display: block; font-size: 42px; color: var(--mute); margin-top: 10px; }
+
+    /* browser = the screen, later the hub node (scale 0.55, centre 0.28 × width) */
+    .s5-envoi-browser { position: absolute; left: 400px; top: 110px; width: 1120px; height: 770px; background: var(--surface);
+      border: 2px solid var(--line); border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); overflow: hidden; transform-origin: 50% 50%; }
+    .s5-envoi-bar { height: 44px; background: var(--paper2); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 16px; gap: 8px; }
+    .s5-envoi-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--line2); }
+    .s5-envoi-url { margin-left: 18px; font-family: "Geist Mono", monospace; font-size: 22px; color: var(--mute2); }
+    .s5-envoi-nav { height: 64px; display: flex; align-items: center; padding: 0 36px; gap: 30px; border-bottom: 1px solid var(--line); font-size: 22px; font-weight: 500; color: var(--mute); }
+    .s5-envoi-logo { font-family: "Instrument Serif", serif; font-size: 30px; color: var(--red); letter-spacing: -0.02em; margin-right: 8px; }
+    .s5-envoi-nav .on { color: var(--ink); }
+    .s5-envoi-avatar { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; background: var(--redt); color: var(--red2); font-weight: 700; font-size: 22px; display: grid; place-items: center; }
+
+    .s5-envoi-steps { position: absolute; left: 36px; top: 132px; display: flex; gap: 26px; align-items: center; font-size: 22px; color: var(--mute2); }
+    .s5-envoi-step { display: flex; align-items: center; gap: 10px; }
+    .s5-envoi-step b { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--line2); display: grid; place-items: center; font-weight: 700; font-size: 22px; }
+    .s5-envoi-step.done b { background: var(--okt); border-color: var(--okt); color: var(--ok); }
+    .s5-envoi-step.on { color: var(--ink); font-weight: 600; }
+    .s5-envoi-step.on b { background: var(--red); border-color: var(--red); color: #fff; }
+
+    /* recap stage (card + button) */
+    .s5-envoi-stage { position: absolute; left: 60px; top: 196px; width: 1000px; height: 520px; transform-origin: 50% 50%; }
+    .s5-envoi-card { position: absolute; left: 0; top: 0; width: 1000px; height: 396px; background: var(--surface);
+      border: 2px solid var(--line); border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); padding: 22px 34px; }
+    .s5-envoi-card-label { font-size: 22px; font-weight: 600; color: var(--mute); height: 40px; }
+    .s5-envoi-row { display: flex; align-items: center; height: 62px; border-top: 1px solid var(--line); font-size: 25px; }
+    .s5-envoi-row .k { width: 150px; color: var(--mute); font-weight: 500; }
+    .s5-envoi-row .v { flex: 1; color: var(--ink); font-weight: 400; }
+    .s5-envoi-row .v.mono { font-family: "Geist Mono", monospace; font-size: 25px; }
+    .s5-envoi-row .v.stars { color: var(--star); letter-spacing: 4px; font-size: 28px; }
+    .s5-envoi-row .v .dim { color: var(--mute2); }
+    .s5-envoi-row svg { width: 30px; height: 30px; }
+    .s5-envoi-row circle { fill: var(--okt); }
+    .s5-envoi-row path { fill: none; stroke: var(--ok); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+
+    .s5-envoi-send { position: absolute; left: 0; top: 428px; width: 1000px; height: 80px; border-radius: 10px; background: var(--red); color: #fff;
+      font-weight: 700; font-size: 28px; display: flex; align-items: center; justify-content: center; transform-origin: 50% 50%;
+      box-shadow: 0 18px 40px -18px rgba(179,14,31,0.55); z-index: 2; }
+    #s5-envoi-burst { position: absolute; left: 0; top: 428px; width: 1000px; height: 80px; border-radius: 10px; z-index: 1; opacity: 0;
+      background: radial-gradient(ellipse at center, rgba(179,14,31,0.8) 0%, rgba(179,14,31,0) 70%); filter: blur(34px); transform-origin: 50% 50%; }
+
+    /* success stage */
+    .s5-envoi-success { position: absolute; left: 60px; top: 196px; width: 1000px; height: 520px; display: flex; flex-direction: column; align-items: center; justify-content: center; transform-origin: 50% 50%; }
+    .s5-envoi-disc { width: 150px; height: 150px; border-radius: 50%; background: var(--okt); display: grid; place-items: center; transform-origin: 50% 50%; }
+    .s5-envoi-disc svg { width: 80px; height: 80px; }
+    .s5-envoi-disc path { fill: none; stroke: var(--ok); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+    .s5-envoi-h { margin-top: 30px; font-family: "Instrument Serif", serif; font-size: 66px; line-height: 1; letter-spacing: -0.02em; color: var(--ink); transform-origin: 50% 50%; }
+    .s5-envoi-sub { margin-top: 14px; font-size: 26px; color: var(--mute); font-weight: 400; }
+    .s5-envoi-actions { margin-top: 42px; display: flex; gap: 20px; }
+    .s5-envoi-btn { height: 66px; border-radius: 10px; font-weight: 700; font-size: 24px; display: flex; align-items: center; padding: 0 30px; }
+    .s5-envoi-primary { background: var(--red); color: #fff; }
+    .s5-envoi-ghostbtn { border: 2px solid var(--line2); color: var(--ink); }
+
+    .s5-envoi-bgglow { position: absolute; left: 320px; top: 420px; width: 1280px; height: 560px; border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(225,29,46,0.18) 0%, rgba(225,29,46,0) 65%); }
+
+    /* connectors from the hub (browser right edge, 846/495 once scaled) to the three cards */
+    .s5-envoi-wires { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+    .s5-envoi-wires path { fill: none; stroke: var(--red); stroke-width: 3; stroke-linecap: round; }
+    .s5-envoi-wires circle { fill: var(--red); }
+
+    /* destination cards (from 08-ensuite) */
+    .s5-envoi-dcard { position: absolute; left: 1100px; width: 700px; height: 150px; background: var(--surface); border: 2px solid var(--line); border-radius: 14px;
+      box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); padding: 22px 26px 22px 110px; transform-origin: 0% 50%; }
+    .s5-envoi-dcard .ic { position: absolute; left: 26px; top: 34px; width: 60px; height: 60px; border-radius: 14px; background: var(--paper2); display: grid; place-items: center; }
+    .s5-envoi-dcard .ic svg { width: 34px; height: 34px; fill: none; stroke: var(--ink2); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .s5-envoi-dcard .h { font-size: 26px; font-weight: 600; color: var(--ink); line-height: 1.1; }
+    .s5-envoi-dcard .l { margin-top: 10px; font-family: "Geist Mono", monospace; font-size: 22px; color: var(--mute); white-space: nowrap; display: inline-block; }
+    .s5-envoi-dcard .b { margin-top: 10px; font-size: 24px; font-weight: 300; color: var(--ink2); }
+    .s5-envoi-thumbs { position: absolute; right: 26px; top: 92px; display: flex; gap: 10px; }
+    .s5-envoi-thumb { width: 56px; height: 56px; border-radius: 8px; border: 2px solid var(--line); display: inline-block; }
+    .s5-envoi-thumb.a { background: linear-gradient(135deg, #2C2A23 0%, #6A6557 60%, #D8D0BD 100%); }
+    .s5-envoi-thumb.b { background: linear-gradient(160deg, #B30E1F 0%, #E11D2E 55%, #FBE4E6 100%); }
+    .s5-envoi-chip { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; font-size: 22px; font-weight: 700; }
+    .s5-envoi-chip.muted { background: var(--paper2); color: var(--mute); font-weight: 600; margin-top: 12px; }
+    #s5-envoi-c1 { top: 140px; height: 170px; }
+    #s5-envoi-c2 { top: 375px; }
+    #s5-envoi-c3 { top: 600px; }
+
+    .s5-envoi-cursor { position: absolute; left: 0; top: 0; width: 54px; height: 54px; transform-origin: 20.8% 12.5%; filter: drop-shadow(0 6px 10px rgba(20,18,12,0.3)); z-index: 5; }
+    .s5-envoi-ripple { position: absolute; left: 0; top: 0; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid var(--red); z-index: 4; }
+  </style>
+
+  <div id="root" data-composition-id="s5-envoi" data-start="0" data-duration="7.55" data-width="1920" data-height="1080">
+    <div class="clip" data-start="0" data-duration="7.55" data-track-index="0">
+      <div class="s5-envoi-paper"></div>
+      <div class="s5-envoi-halo" id="s5-envoi-halo"></div>
+      <div class="s5-envoi-ghost" id="s5-envoi-ghost">HEBDO</div>
+      <div class="s5-envoi-rule"></div>
+      <svg class="s5-envoi-grain" xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">
+        <filter id="s5-envoi-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" seed="7"/><feColorMatrix values="0 0 0 0 0.09 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0.5 0"/></filter>
+        <rect width="1920" height="1080" filter="url(#s5-envoi-noise)"/>
+      </svg>
+    </div>
+
+    <div class="clip" data-start="0" data-duration="7.55" data-track-index="1">
+      <div class="s5-envoi-bgglow" id="s5-envoi-bgglow"></div>
+      <div class="s5-envoi-title">Étape 4<i>vérifier et envoyer</i></div>
+
+      <svg class="s5-envoi-wires" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+        <path id="s5-envoi-p1" d="M 846 495 C 980 495, 970 225, 1100 225"/>
+        <path id="s5-envoi-p2" d="M 846 495 C 980 495, 970 450, 1100 450"/>
+        <path id="s5-envoi-p3" d="M 846 495 C 980 495, 970 675, 1100 675"/>
+        <circle id="s5-envoi-o1" cx="1100" cy="225" r="7"/>
+        <circle id="s5-envoi-o2" cx="1100" cy="450" r="7"/>
+        <circle id="s5-envoi-o3" cx="1100" cy="675" r="7"/>
+      </svg>
+
+      <div class="s5-envoi-browser" id="s5-envoi-browser">
+        <div class="s5-envoi-bar"><span class="s5-envoi-dot"></span><span class="s5-envoi-dot"></span><span class="s5-envoi-dot"></span><span class="s5-envoi-url">hebdo-rs.up.railway.app</span></div>
+        <div class="s5-envoi-nav"><span class="s5-envoi-logo">RS</span><span>Mon espace</span><span class="on">Livrer un papier</span><span class="s5-envoi-avatar">CR</span></div>
+        <div class="s5-envoi-steps">
+          <div class="s5-envoi-step done"><b>✓</b>Type de papier</div>
+          <div class="s5-envoi-step done"><b>✓</b>Rédaction</div>
+          <div class="s5-envoi-step done"><b>✓</b>Correction IA</div>
+          <div class="s5-envoi-step on"><b>4</b>Vérification &amp; envoi</div>
+        </div>
+
+        <div class="s5-envoi-stage" id="s5-envoi-stage">
+          <div class="s5-envoi-card">
+            <div class="s5-envoi-card-label">Récapitulatif</div>
+            <div class="s5-envoi-row"><span class="k">Format</span><span class="v">Chroniques</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+            <div class="s5-envoi-row"><span class="k">Titre</span><span class="v">Les Marquises — Nuit blanche</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+            <div class="s5-envoi-row"><span class="k">Signes</span><span class="v mono">1 486 <span class="dim">/ 1 500</span></span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+            <div class="s5-envoi-row"><span class="k">Note</span><span class="v stars">★★★★<span class="dim">★</span></span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+            <div class="s5-envoi-row"><span class="k">Photos</span><span class="v">1 fichier <span class="dim">· © Marion Delval</span></span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/><path d="M7 12.5l3.2 3.2L17 9"/></svg></div>
+          </div>
+          <div id="s5-envoi-burst"></div>
+          <div class="s5-envoi-send" id="s5-envoi-send">Livrer le papier</div>
+        </div>
+
+        <div class="s5-envoi-success" id="s5-envoi-success">
+          <div class="s5-envoi-disc" id="s5-envoi-disc"><svg viewBox="0 0 24 24"><path id="s5-envoi-bigcheck" d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <div class="s5-envoi-h" id="s5-envoi-h">Bravo, c'est envoyé !</div>
+          <div class="s5-envoi-sub" id="s5-envoi-sub">Papier livré</div>
+          <div class="s5-envoi-actions" id="s5-envoi-actions"><div class="s5-envoi-btn s5-envoi-ghostbtn">Retour à l'espace</div><div class="s5-envoi-btn s5-envoi-primary">Livrer un autre papier</div></div>
+        </div>
+      </div>
+
+      <div class="s5-envoi-dcard" id="s5-envoi-c1">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 7.5V18a1.5 1.5 0 0 0 1.5 1.5h15A1.5 1.5 0 0 0 21 18V9.5A1.5 1.5 0 0 0 19.5 8H12l-2-2.5H4.5A1.5 1.5 0 0 0 3 7z"/></svg></div>
+        <div class="h">Dropbox</div>
+        <div class="l" id="s5-envoi-file">RSH240 - Chroniques - Les Marquises.docx</div>
+        <div class="s5-envoi-thumbs"><span class="s5-envoi-thumb a" id="s5-envoi-th1"></span><span class="s5-envoi-thumb b" id="s5-envoi-th2"></span></div>
+      </div>
+      <div class="s5-envoi-dcard" id="s5-envoi-c2">
+        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg></div>
+        <div class="h">rollingstone.fr</div>
+        <span class="s5-envoi-chip muted" id="s5-envoi-chip2">Brouillon · En attente de relecture</span>
+      </div>
+      <div class="s5-envoi-dcard" id="s5-envoi-c3">
+        <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6.5L20.5 7"/></svg></div>
+        <div class="h">Rédaction en chef</div>
+        <div class="b" id="s5-envoi-mail">Nouveau papier livré — RSH 240</div>
+      </div>
+
+      <div class="s5-envoi-ripple" id="s5-envoi-ripple"></div>
+      <svg class="s5-envoi-cursor" id="s5-envoi-cursor" viewBox="0 0 24 24"><path d="M5 3 L5 19 L9 15 L12 22 L15 20.5 L11.5 14 L18 14 Z" fill="#16140F" stroke="#FBF8F2" stroke-width="0.9" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var D = 7.55, F = 1 / 60;
+      var tl = gsap.timeline({ paused: true });
+      var q = function (s) { return document.querySelector(s); };
+      var TIP_X = 11.25, TIP_Y = 6.75;
+      function cursorTo(x, y, at, dur) { tl.to("#s5-envoi-cursor", { x: x - TIP_X, y: y - TIP_Y, duration: dur, ease: "power2.inOut" }, at); }
+      function click(x, y, at) {
+        tl.to("#s5-envoi-cursor", { scale: 0.86, duration: 0.12, ease: "power1.in" }, at);
+        tl.to("#s5-envoi-cursor", { scale: 1, duration: 0.22, ease: "power2.out" }, at + 0.12);
+        tl.fromTo("#s5-envoi-ripple", { x: x, y: y, scale: 0.3, opacity: 0.8 }, { scale: 1.6, opacity: 0, duration: 0.5, ease: "power2.out" }, at + 0.1);
+      }
+      function prep(id, over) {
+        var p = q(id), len = p.getTotalLength() * (over || 1);
+        p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
+      }
+
+      // ---- initial states (outside the timeline, seek-safe) ----
+      // t = 0 already shows the checked recap inside the browser; only the named elements arrive later.
+      gsap.set(["#s5-envoi-success", "#s5-envoi-disc", "#s5-envoi-h", "#s5-envoi-sub", "#s5-envoi-actions",
+                "#s5-envoi-c1", "#s5-envoi-c2", "#s5-envoi-c3", "#s5-envoi-file", "#s5-envoi-th1", "#s5-envoi-th2",
+                "#s5-envoi-chip2", "#s5-envoi-mail", "#s5-envoi-o1", "#s5-envoi-o2", "#s5-envoi-o3",
+                "#s5-envoi-bgglow", "#s5-envoi-ripple"], { opacity: 0 });
+      gsap.set("#s5-envoi-cursor", { x: 1500 - TIP_X, y: 700 - TIP_Y });
+      prep("#s5-envoi-bigcheck");
+      prep("#s5-envoi-p1", 1.02); prep("#s5-envoi-p2", 1.02); prep("#s5-envoi-p3", 1.02);
+
+      // ---- ambient ----
+      var amb = { p: 0 };
+      tl.to(amb, { p: Math.PI * 2 * 1.5, duration: D, ease: "none", onUpdate: function () { gsap.set(q("#s5-envoi-halo"), { scale: 1 + 0.05 * Math.sin(amb.p) }); } }, 0);
+      tl.fromTo("#s5-envoi-ghost", { x: 0 }, { x: 14, duration: D, ease: "none" }, 0);
+
+      // ================= Scene 1 (0–1.5 s): "Vérifiez, livrez" — cursor presses « Livrer le papier » at 0.9 =================
+      var BX = 462 + 500, BY = 110 + 196 + 428 + 40; // button centre in canvas coords
+      cursorTo(BX + 110, BY + 8, 0.25, 0.6);
+      click(BX + 110, BY + 8, 0.9);
+      // press-release-spring: linear press, spring release, burst behind, environmental glow
+      var PRESS = 0.9, PD = 0.12, REL = PRESS + PD;
+      tl.to("#s5-envoi-send", { scale: 0.94, boxShadow: "0 4px 10px -6px rgba(179,14,31,0.5)", duration: PD, ease: "power1.in" }, PRESS);
+      tl.to("#s5-envoi-send", { scale: 1, boxShadow: "0 18px 40px -18px rgba(179,14,31,0.55)", duration: 0.5, ease: "back.out(1.8)" }, REL);
+      tl.fromTo("#s5-envoi-burst", { scale: 1, opacity: 0 }, { scale: 2.6, opacity: 0.55, duration: 0.4, ease: "power2.out" }, REL);
+      tl.to("#s5-envoi-burst", { opacity: 0, duration: 0.4, ease: "power2.in" }, REL + 0.4);
+      tl.to("#s5-envoi-bgglow", { opacity: 0.22, duration: 0.6, ease: "power2.out" }, REL);
+      tl.to("#s5-envoi-bgglow", { opacity: 0, duration: 1.0, ease: "power1.out" }, REL + 0.9);
+      cursorTo(1560, 820, 1.25, 0.8);
+
+      // ================= Scene 2 (1.5–2.5 s): inverse zoom-through into « Bravo, c'est envoyé ! » — no confetti =================
+      tl.to("#s5-envoi-stage", { scale: 0.8, filter: "blur(18px)", duration: 0.2, ease: "power3.in" }, 1.3);
+      tl.to("#s5-envoi-stage", { opacity: 0.15, duration: 0.2, ease: "none" }, 1.3);
+      tl.set("#s5-envoi-stage", { opacity: 0 }, 1.5);
+      tl.fromTo("#s5-envoi-success", { opacity: 0.15, scale: 1.25, filter: "blur(18px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.5, ease: "expo.out" }, 1.5);
+      // spring-pop-entrance: disc then title, power3.out settle
+      tl.fromTo("#s5-envoi-disc", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power3.out" }, 1.5);
+      tl.to("#s5-envoi-bigcheck", { strokeDashoffset: 0, duration: 0.45, ease: "power2.out" }, 1.8);
+      tl.fromTo("#s5-envoi-h", { scale: 0, opacity: 0, y: 16 }, { scale: 1, opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 1.75);
+      tl.fromTo("#s5-envoi-sub", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 2.1);
+      tl.fromTo("#s5-envoi-actions", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 2.25);
+
+      // ================= Scene 3 (2.5–7.55 s): the browser becomes the hub, three wires, three cards on the voice =================
+      // macro move: browser centre (960,495) → (538,495), scale 0.55, 2.4 → 3.0 s; halo rides along
+      tl.to("#s5-envoi-browser", { x: -422, scale: 0.55, duration: 0.6, ease: "power2.inOut" }, 2.4);
+      tl.to("#s5-envoi-halo", { x: -400, duration: 0.6, ease: "power2.inOut" }, 2.4);
+      tl.to("#s5-envoi-cursor", { x: 1700 - TIP_X, y: 820 - TIP_Y, duration: 0.7, ease: "power2.inOut" }, 2.4);
+
+      // svg-path-draw wires (power2.out), landing dot, then spring-pop-entrance anchored at the wire tip (origin 0% 50%)
+      var WIRES = [["#s5-envoi-p1", "#s5-envoi-o1", "#s5-envoi-c1", 3.0], ["#s5-envoi-p2", "#s5-envoi-o2", "#s5-envoi-c2", 4.3], ["#s5-envoi-p3", "#s5-envoi-o3", "#s5-envoi-c3", 5.9]];
+      WIRES.forEach(function (w) {
+        var at = w[3];
+        tl.to(w[0], { strokeDashoffset: 0, duration: 0.45, ease: "power2.out" }, at - 0.4);
+        tl.fromTo(w[1], { opacity: 0, scale: 0.3, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.3, ease: "power3.out" }, at - 0.05);
+        tl.fromTo(w[2], { scale: 0, opacity: 0, y: 16 }, { scale: 1, opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, at);
+      });
+
+      // Dropbox card contents: waterfall-entry (binary reveal + whip from below, overlapping starts)
+      var t0 = 3.0 + 0.35;
+      tl.set("#s5-envoi-file", { opacity: 1, y: 60 }, t0);
+      tl.to("#s5-envoi-file", { y: 0, duration: 0.18, ease: "power4.out" }, t0);
+      var t1 = t0 + 0.18 + 2 * F;
+      tl.set("#s5-envoi-th1", { opacity: 1, y: 45 }, t1);
+      tl.to("#s5-envoi-th1", { y: 0, duration: 0.15, ease: "power4.out" }, t1);
+      var t2 = t1 + 0.15 - F;
+      tl.set("#s5-envoi-th2", { opacity: 1, y: 40 }, t2);
+      tl.to("#s5-envoi-th2", { y: 0, duration: 0.14, ease: "power4.out" }, t2);
+
+      // chip and mail line arrive just after their card settles
+      tl.fromTo("#s5-envoi-chip2", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 4.3 + 0.45);
+      tl.fromTo("#s5-envoi-mail", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 5.9 + 0.45);
+      // hold to 7.55 (ambient halo / ghost carry the tail)
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["s5-envoi"] = tl;
+    })();
+  </script>
+</template>

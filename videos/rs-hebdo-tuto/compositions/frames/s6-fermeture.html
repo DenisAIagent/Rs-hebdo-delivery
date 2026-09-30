@@ -1,0 +1,105 @@
+<template>
+  <style>
+    @font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: normal; src: url("assets/fonts/instrument-serif-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: italic; src: url("assets/fonts/instrument-serif-400-italic.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 300; src: url("assets/fonts/geist-300-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 400; src: url("assets/fonts/geist-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 500; src: url("assets/fonts/geist-500-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 600; src: url("assets/fonts/geist-600-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 700; src: url("assets/fonts/geist-700-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 400; src: url("assets/fonts/geist-mono-400-normal.woff2") format("woff2"); }
+
+    #root { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; isolation: isolate; font-family: "Geist", sans-serif; color: #16140F; }
+    #root * { box-sizing: border-box; margin: 0; padding: 0; }
+    .clip { position: absolute; inset: 0; }
+
+    .s6-fermeture-bg { position: absolute; inset: 0; background: #FBF8F2; }
+    .s6-fermeture-halo { position: absolute; left: 560px; top: 140px; width: 800px; height: 800px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(225,29,46,0.16) 0%, rgba(225,29,46,0.06) 45%, rgba(225,29,46,0) 70%); }
+    .s6-fermeture-rule { position: absolute; left: 0; top: 860px; width: 1920px; height: 1px; background: #D8D0BD; opacity: 0.6; }
+    .s6-fermeture-ghost { position: absolute; left: 1180px; top: 40px; font-family: "Instrument Serif", serif; font-size: 300px; line-height: 1; letter-spacing: -0.02em; color: #16140F; opacity: 0.10; }
+    .s6-fermeture-grain { position: absolute; inset: 0; opacity: 0.07; pointer-events: none; }
+
+    /* Scene 1: the figure and its line */
+    .s6-fermeture-stat { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+    .s6-fermeture-num { position: absolute; left: 0; top: 300px; width: 1920px; text-align: center; font-family: "Instrument Serif", serif; font-size: 160px; line-height: 1;
+      letter-spacing: -0.02em; color: #16140F; transform-origin: 50% 50%; white-space: nowrap; }
+    .s6-fermeture-num i { font-style: italic; color: #E11D2E; }
+    .s6-fermeture-line { position: absolute; left: 0; top: 500px; width: 1920px; text-align: center; font-family: "Geist", sans-serif; font-weight: 300; font-size: 40px; line-height: 1.2; color: #2C2A23; white-space: nowrap; }
+    .s6-fermeture-line span { display: inline-block; margin: 0 6px; }
+
+    /* Scene 2: the lockup */
+    .s6-fermeture-lockup { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+    .s6-fermeture-logo { position: absolute; left: 570px; top: 350px; width: 780px; height: 164px; transform-origin: 50% 50%; }
+    .s6-fermeture-sign { position: absolute; left: 0; top: 556px; width: 1920px; text-align: center; font-family: "Instrument Serif", serif; font-size: 92px; line-height: 1.05; letter-spacing: -0.02em; color: #16140F; white-space: nowrap; }
+    .s6-fermeture-sign span { display: inline-block; }
+    .s6-fermeture-filet { position: absolute; left: 750px; top: 690px; width: 420px; height: 4px; overflow: visible; }
+    .s6-fermeture-filet path { fill: none; stroke: #E11D2E; stroke-width: 3; stroke-linecap: round; }
+  </style>
+
+  <div id="root" data-composition-id="s6-fermeture" data-start="0" data-duration="5.58" data-width="1920" data-height="1080">
+    <div class="s6-fermeture-bg clip" data-start="0" data-duration="5.58" data-track-index="0">
+      <div class="s6-fermeture-halo" id="s6-fermeture-halo"></div>
+      <div class="s6-fermeture-ghost" id="s6-fermeture-ghost">HEBDO</div>
+      <div class="s6-fermeture-rule" id="s6-fermeture-rule"></div>
+    </div>
+
+    <div class="s6-fermeture-stat clip" id="s6-fermeture-stat" data-start="0" data-duration="5.58" data-track-index="1">
+      <div class="s6-fermeture-num" id="s6-fermeture-num">5 <i>min</i></div>
+      <div class="s6-fermeture-line" id="s6-fermeture-line"><span>sans</span><span>email</span><span>ni</span><span>pièce</span><span>jointe</span></div>
+    </div>
+
+    <div class="s6-fermeture-lockup clip" id="s6-fermeture-lockup" data-start="0" data-duration="5.58" data-track-index="2">
+      <img class="s6-fermeture-logo" id="s6-fermeture-logo" src="assets/logo-rs-france.png" width="780" height="164" alt="" />
+      <div class="s6-fermeture-sign" id="s6-fermeture-sign"><span>RS</span> <span>Hebdo</span> <span>Delivery</span></div>
+      <svg class="s6-fermeture-filet" viewBox="0 0 420 4"><path id="s6-fermeture-filet-p" d="M2 2 L418 2"/></svg>
+    </div>
+
+    <div class="s6-fermeture-grain clip" data-start="0" data-duration="5.58" data-track-index="3">
+      <svg width="1920" height="1080"><filter id="s6-fermeture-noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.09 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 1 0"/></filter><rect width="1920" height="1080" filter="url(#s6-fermeture-noise)"/></svg>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var ID = "s6-fermeture", D = 5.58;
+      var $ = function (id) { return document.getElementById(id); };
+      var tl = gsap.timeline({ paused: true });
+
+      // svg-path-draw setup: measured length, hidden until drawn
+      var filet = $("s6-fermeture-filet-p"), filetLen = filet.getTotalLength() * 1.02;
+      filet.style.strokeDasharray = filetLen; filet.style.strokeDashoffset = filetLen;
+
+      // initial states (outside the timeline, seek-safe) — t = 0 shows the paper, halo and ghost word only
+      gsap.set(["#s6-fermeture-num", "#s6-fermeture-line span", "#s6-fermeture-logo", "#s6-fermeture-sign span"], { opacity: 0 });
+
+      // ambient: halo breathes, ghost drifts
+      var amb = { p: 0 };
+      tl.to(amb, { p: Math.PI * 2 * 1.2, duration: D, ease: "none", onUpdate: function () { gsap.set($("s6-fermeture-halo"), { scale: 1 + 0.05 * Math.sin(amb.p) }); } }, 0);
+      tl.fromTo("#s6-fermeture-ghost", { x: -12 }, { x: 12, duration: D, ease: "none" }, 0);
+
+      /* ---- Scene 1 (0–2.4 s): « Cinq minutes » → the figure pops at 0.3; « sans email ni pièce jointe » → the line composes at 1.1 ---- */
+      // spring-pop-entrance, calm settle (power3.out, no overshoot)
+      tl.fromTo("#s6-fermeture-num", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power3.out" }, 0.3);
+      // annotation glide: 24 px rise with fade, word by word
+      tl.fromTo("#s6-fermeture-line span", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out", stagger: 0.08 }, 1.1);
+
+      /* ---- Scene 2 (2.4–5.58 s): final frame — the figure and line clear (2.6 → 3.0), lockup lands on « Bienvenue » ---- */
+      tl.to("#s6-fermeture-num", { opacity: 0, scale: 0.96, y: -12, duration: 0.4, ease: "power2.inOut" }, 2.6);
+      tl.to("#s6-fermeture-line span", { opacity: 0, y: -12, duration: 0.35, ease: "power2.inOut", stagger: 0.03 }, 2.6);
+
+      // spring-pop-entrance — the logo, smooth long-tail settle
+      tl.fromTo("#s6-fermeture-logo", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.7, ease: "power3.out" }, 3.0);
+      // the signature composes
+      tl.fromTo("#s6-fermeture-sign span", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: "power2.out", stagger: 0.12 }, 3.5);
+      // svg-path-draw — the filet under the signature
+      tl.to("#s6-fermeture-filet-p", { strokeDashoffset: 0, duration: 0.6, ease: "power2.out" }, 4.0);
+      // halo calms; hold to the end (the root owns the final fade to paper)
+      tl.to("#s6-fermeture-halo", { opacity: 0.45, duration: 2.5, ease: "power1.inOut" }, 3.0);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines[ID] = tl;
+    })();
+  </script>
+</template>

@@ -1,0 +1,7 @@
+{
+  "scene": "s2-tableau",
+  "duration_s": 5.35,
+  "rules": ["cursor-click-ripple", "dynamic-content-sequencing", "waterfall-entry"],
+  "exit": { "vector": "static hold; attention ring on « Mes livraisons » breathing ±1.2% scale, halo ±3%, 0 px/s on content", "still_moving": false },
+  "entry": { "vector": "browser frame + filled login screen static at t=0; cursor starts moving at 0.04s from (1500,790) toward the button, ≈0 px/s at frame 0", "from_rest": true }
+}

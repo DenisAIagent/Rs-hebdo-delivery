@@ -1,0 +1,318 @@
+<template>
+  <style>
+    @font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: normal; src: url("assets/fonts/instrument-serif-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Instrument Serif"; font-weight: 400; font-style: italic; src: url("assets/fonts/instrument-serif-400-italic.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 300; src: url("assets/fonts/geist-300-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 400; src: url("assets/fonts/geist-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 500; src: url("assets/fonts/geist-500-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 600; src: url("assets/fonts/geist-600-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist"; font-weight: 700; src: url("assets/fonts/geist-700-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 400; src: url("assets/fonts/geist-mono-400-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Geist Mono"; font-weight: 500; src: url("assets/fonts/geist-mono-500-normal.woff2") format("woff2"); }
+
+    #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: "Geist", sans-serif; color: #16140F; }
+    #root .clip { position: absolute; inset: 0; }
+
+    .s2-tableau-paper { background: #FBF8F2; }
+    .s2-tableau-halo { position: absolute; left: 360px; top: -160px; width: 1300px; height: 1000px; border-radius: 50%;
+      background: radial-gradient(closest-side, rgba(225,29,46,0.14), rgba(225,29,46,0) 72%); will-change: transform; }
+    .s2-tableau-grain { position: absolute; inset: 0; width: 1920px; height: 1080px; opacity: 0.07; pointer-events: none; }
+    .s2-tableau-ghost { position: absolute; left: 1290px; top: 620px; font-family: "Instrument Serif", serif; font-size: 300px; line-height: 0.8;
+      letter-spacing: -0.02em; color: #16140F; opacity: 0.06; white-space: nowrap; }
+    .s2-tableau-hrule { position: absolute; left: 0; top: 960px; width: 1920px; height: 2px; background: #E8E2D2; }
+
+    /* ---- cadre navigateur (en place dès t=0) ---- */
+    .s2-tableau-browser { position: absolute; left: 280px; top: 110px; width: 1360px; height: 750px; background: #FBF8F2; border: 2px solid #E8E2D2;
+      border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); overflow: hidden; }
+    .s2-tableau-bar { position: absolute; left: 0; top: 0; width: 100%; height: 44px; background: #F5F0E6; border-bottom: 2px solid #E8E2D2; display: flex; align-items: center; padding-left: 18px; gap: 8px; z-index: 5; }
+    .s2-tableau-bar i { width: 12px; height: 12px; border-radius: 50%; background: #D8D0BD; display: block; }
+    .s2-tableau-url { position: absolute; left: 480px; top: 8px; width: 400px; height: 28px; border-radius: 8px; background: #FBF8F2; border: 1px solid #E8E2D2;
+      font-family: "Geist Mono", monospace; font-size: 22px; line-height: 26px; color: #6A6557; text-align: center; }
+    .s2-tableau-screen { position: absolute; left: 0; top: 44px; width: 1356px; height: 702px; }
+
+    /* ---- écran 1 : connexion (déjà remplie) ---- */
+    .s2-tableau-ink { position: absolute; left: 0; top: 0; width: 544px; height: 702px; background: #16140F; }
+    .s2-tableau-ink img { position: absolute; left: 92px; top: 250px; width: 360px; height: 76px; filter: brightness(0) invert(1); }
+    .s2-tableau-ink .s2-tableau-tag { position: absolute; left: 92px; top: 350px; width: 380px; font-family: "Instrument Serif", serif; font-style: italic; font-size: 36px; line-height: 1.2; color: #FBF8F2; }
+    .s2-tableau-ink .s2-tableau-tag em { display: block; font-style: italic; color: #6A6557; font-size: 28px; margin-top: 8px; }
+    .s2-tableau-page { position: absolute; left: 544px; top: 0; right: 0; bottom: 0; background: #FBF8F2; }
+    .s2-tableau-card { position: absolute; left: 148px; top: 46px; width: 520px; height: 490px; background: #FFFFFF; border: 2px solid #E8E2D2; border-radius: 14px;
+      box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); }
+    .s2-tableau-eyebrow { position: absolute; left: 40px; top: 40px; font-weight: 700; font-size: 22px; letter-spacing: 0.08em; text-transform: uppercase; color: #E11D2E; }
+    .s2-tableau-field { position: absolute; left: 40px; width: 440px; }
+    .s2-tableau-label { font-weight: 500; font-size: 22px; color: #2C2A23; margin-bottom: 8px; }
+    .s2-tableau-label b { color: #E11D2E; font-weight: 700; }
+    .s2-tableau-input { position: relative; height: 64px; border: 2px solid #E8E2D2; border-radius: 10px; background: #FFFFFF; padding: 0 18px; display: flex; align-items: center;
+      font-weight: 300; font-size: 26px; color: #16140F; white-space: nowrap; overflow: hidden; }
+    .s2-tableau-dots span { display: inline-block; font-weight: 500; font-size: 30px; letter-spacing: 0.08em; }
+    .s2-tableau-btnwrap { position: absolute; left: 40px; top: 346px; width: 440px; height: 60px; }
+    .s2-tableau-burst { position: absolute; left: 0; top: 0; width: 440px; height: 60px; border-radius: 30px; z-index: 1;
+      background: radial-gradient(closest-side, rgba(179,14,31,0.6), rgba(179,14,31,0)); filter: blur(28px); transform-origin: 50% 50%; }
+    .s2-tableau-btn { position: absolute; left: 0; top: 0; width: 440px; height: 60px; z-index: 2; border-radius: 10px; background: #E11D2E; color: #FFFFFF; font-weight: 700; font-size: 26px;
+      display: flex; align-items: center; justify-content: center; gap: 12px; transform-origin: 50% 50%; box-shadow: 0 14px 30px -12px rgba(179,14,31,0.55); will-change: transform; }
+    .s2-tableau-link { position: absolute; left: 0; top: 436px; width: 520px; text-align: center; font-weight: 400; font-size: 24px; color: #6A6557; text-decoration: underline; text-underline-offset: 4px; }
+
+    /* ---- écran 2 : tableau de bord ---- */
+    .s2-tableau-nav { position: absolute; left: 0; top: 0; width: 1356px; height: 64px; background: #FFFFFF; border-bottom: 2px solid #E8E2D2; }
+    .s2-tableau-nav > * { position: absolute; will-change: transform; }
+    .s2-tableau-nav img { left: 36px; top: 16px; width: 152px; height: 32px; }
+    .s2-tableau-navitem { top: 18px; font-weight: 500; font-size: 24px; color: #2C2A23; }
+    .s2-tableau-navitem.on { color: #16140F; border-bottom: 3px solid #E11D2E; padding-bottom: 8px; }
+    .s2-tableau-avatar { right: 36px; top: 12px; width: 40px; height: 40px; border-radius: 50%; background: #16140F; color: #FBF8F2; font-weight: 700; font-size: 22px; display: flex; align-items: center; justify-content: center; }
+
+    .s2-tableau-title { position: absolute; left: 36px; top: 78px; font-family: "Instrument Serif", serif; font-size: 56px; line-height: 1.1; letter-spacing: -0.02em; white-space: nowrap; }
+    .s2-tableau-title span { display: inline-block; will-change: transform; }
+    .s2-tableau-title span + span { margin-left: 0.25em; }
+
+    .s2-tableau-dcard { position: absolute; background: #FFFFFF; border: 2px solid #E8E2D2; border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(20,18,12,0.18); will-change: transform; }
+    .s2-tableau-issue { left: 36px; top: 156px; width: 620px; height: 116px; background: #FBE4E6; border-color: #F3C9CE; }
+    .s2-tableau-chip { display: inline-block; height: 28px; line-height: 26px; padding: 0 12px; border-radius: 999px; font-weight: 700; font-size: 22px; letter-spacing: 0.04em; }
+    .s2-tableau-chip.red { background: #FFFFFF; color: #B30E1F; border: 1px solid #F3C9CE; }
+    .s2-tableau-chip.ok { background: #E2F1E8; color: #2D7A4B; }
+    .s2-tableau-issue .s2-tableau-chip { position: absolute; left: 22px; top: 16px; }
+    .s2-tableau-rsh { position: absolute; left: 22px; top: 52px; font-family: "Geist Mono", monospace; font-weight: 500; font-size: 42px; line-height: 1; color: #B30E1F; }
+    .s2-tableau-bouclage { position: absolute; right: 24px; top: 22px; text-align: right; }
+    .s2-tableau-bouclage small { display: block; font-weight: 500; font-size: 22px; color: #6A6557; letter-spacing: 0.06em; text-transform: uppercase; }
+    .s2-tableau-bouclage span { display: block; margin-top: 8px; font-family: "Geist Mono", monospace; font-size: 26px; color: #16140F; }
+
+    .s2-tableau-dropbox { left: 684px; top: 156px; width: 640px; height: 116px; }
+    .s2-tableau-dropbox svg { position: absolute; left: 24px; top: 32px; width: 52px; height: 52px; }
+    .s2-tableau-dropbox svg path { fill: none; stroke: #0E5DAA; stroke-width: 2.5; stroke-linejoin: round; }
+    .s2-tableau-dropbox b { position: absolute; left: 96px; top: 26px; font-weight: 600; font-size: 26px; color: #16140F; }
+    .s2-tableau-dropbox code { position: absolute; left: 96px; top: 64px; font-family: "Geist Mono", monospace; font-size: 22px; color: #6A6557; }
+
+    .s2-tableau-stat { top: 292px; width: 301px; height: 90px; }
+    .s2-tableau-stat small { position: absolute; left: 20px; top: 14px; font-weight: 600; font-size: 22px; letter-spacing: 0.06em; text-transform: uppercase; color: #6A6557; }
+    .s2-tableau-stat .s2-tableau-num { position: absolute; left: 20px; top: 42px; display: flex; align-items: baseline; width: 260px; }
+    .s2-tableau-stat .s2-tableau-val { display: inline-block; font-family: "Geist Mono", monospace; font-weight: 500; font-size: 38px; line-height: 1; font-variant-numeric: tabular-nums; color: #16140F; }
+    .s2-tableau-stat .s2-tableau-suf { display: inline-block; font-family: "Geist Mono", monospace; font-size: 26px; margin-left: 6px; color: #6A6557; }
+
+    .s2-tableau-listhead { position: absolute; left: 36px; top: 404px; width: 1288px; height: 40px; will-change: transform; }
+    .s2-tableau-listhead h3 { margin: 0; font-family: "Instrument Serif", serif; font-size: 34px; letter-spacing: -0.02em; line-height: 40px; font-weight: 400; }
+    .s2-tableau-ghostbtn { position: absolute; right: 0; top: 0; width: 220px; height: 40px; border: 2px solid #D8D0BD; border-radius: 10px; background: transparent; color: #16140F;
+      font-weight: 600; font-size: 22px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .s2-tableau-ghostbtn svg { width: 16px; height: 16px; }
+
+    .s2-tableau-table { position: absolute; left: 36px; top: 448px; width: 1288px; }
+    .s2-tableau-tr { display: flex; align-items: center; height: 50px; border-bottom: 1px solid #E8E2D2; font-size: 22px; font-weight: 400; color: #16140F; will-change: transform; background: #FFFFFF; }
+    .s2-tableau-th { height: 36px; background: #F5F0E6; font-weight: 600; font-size: 22px; color: #6A6557; letter-spacing: 0.04em; text-transform: uppercase; border-radius: 8px 8px 0 0; }
+    .s2-tableau-td { padding-left: 14px; white-space: nowrap; overflow: hidden; }
+    .s2-tableau-c1 { width: 130px; font-family: "Geist Mono", monospace; } .s2-tableau-c2 { width: 170px; color: #6A6557; } .s2-tableau-c3 { width: 480px; font-weight: 500; }
+    .s2-tableau-c4 { width: 130px; } .s2-tableau-c5 { width: 150px; font-family: "Geist Mono", monospace; color: #6A6557; } .s2-tableau-c6 { width: 228px; display: flex; justify-content: flex-end; padding-right: 12px; }
+    .s2-tableau-acts { display: flex; gap: 16px; }
+    .s2-tableau-acts svg { width: 28px; height: 28px; }
+    .s2-tableau-acts svg path { fill: none; stroke: #2C2A23; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ---- note de marge ---- */
+    .s2-tableau-note { position: absolute; font-family: "Instrument Serif", serif; font-style: italic; font-size: 38px; line-height: 1.15; color: #2C2A23; }
+    .s2-tableau-note::before { content: ""; display: block; width: 44px; height: 3px; background: #E11D2E; margin-bottom: 12px; }
+    .s2-tableau-note-r { left: 1672px; top: 640px; width: 230px; }
+
+    /* ---- liseré d'attention, curseur, onde ---- */
+    .s2-tableau-ring { position: absolute; will-change: transform; }
+    .s2-tableau-ring-in { position: absolute; inset: 0; border: 3px solid #E11D2E; border-radius: 12px; transform-origin: 0% 0%; box-shadow: 0 0 0 6px rgba(225,29,46,0.18); }
+    .s2-tableau-cursor { position: absolute; left: 0; top: 0; width: 38px; height: 54px; z-index: 50; transform-origin: 3px 3px; pointer-events: none; will-change: transform; }
+    .s2-tableau-ripple { position: absolute; width: 100px; height: 100px; border-radius: 50%; border: 2px solid #E11D2E; z-index: 40; pointer-events: none; transform-origin: 50% 50%; }
+  </style>
+
+  <div id="root" data-composition-id="s2-tableau" data-start="0" data-duration="5.35" data-width="1920" data-height="1080">
+    <div class="clip s2-tableau-paper" data-start="0" data-duration="5.35" data-track-index="0">
+      <div class="s2-tableau-halo" id="s2-tableau-halo"></div>
+      <div class="s2-tableau-ghost" id="s2-tableau-ghost">HEBDO</div>
+      <div class="s2-tableau-hrule"></div>
+      <svg class="s2-tableau-grain" xmlns="http://www.w3.org/2000/svg">
+        <filter id="s2-tableau-grain-f"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+        <rect width="1920" height="1080" filter="url(#s2-tableau-grain-f)"/>
+      </svg>
+    </div>
+
+    <div class="clip" data-start="0" data-duration="5.35" data-track-index="1">
+      <div class="s2-tableau-browser" id="s2-tableau-browser">
+        <div class="s2-tableau-bar"><i></i><i></i><i></i><div class="s2-tableau-url">hebdo-rs.up.railway.app</div></div>
+
+        <!-- écran 1 : connexion, déjà remplie -->
+        <div class="s2-tableau-screen" id="s2-tableau-login">
+          <div class="s2-tableau-ink">
+            <img src="assets/logo-rs-france.png" width="360" height="76" alt="">
+            <div class="s2-tableau-tag">Hebdo Delivery<em>— édition rédaction</em></div>
+          </div>
+          <div class="s2-tableau-page">
+            <div class="s2-tableau-card">
+              <div class="s2-tableau-eyebrow">Connexion</div>
+              <div class="s2-tableau-field" style="top:90px">
+                <div class="s2-tableau-label">Email <b>•</b></div>
+                <div class="s2-tableau-input">camille.roux@rollingstone.fr</div>
+              </div>
+              <div class="s2-tableau-field" style="top:216px">
+                <div class="s2-tableau-label">Mot de passe <b>•</b></div>
+                <div class="s2-tableau-input s2-tableau-dots"><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span><span>•</span></div>
+              </div>
+              <div class="s2-tableau-btnwrap">
+                <div class="s2-tableau-burst" id="s2-tableau-burst"></div>
+                <div class="s2-tableau-btn" id="s2-tableau-btn">Se connecter <span>→</span></div>
+              </div>
+              <div class="s2-tableau-link">Mot de passe oublié ?</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- écran 2 : tableau de bord -->
+        <div class="s2-tableau-screen" id="s2-tableau-dash">
+          <div class="s2-tableau-nav">
+            <img class="s2-tableau-nv" src="assets/logo-rs-france.png" width="152" height="32" alt="">
+            <div class="s2-tableau-navitem s2-tableau-nv on" style="left:260px">Mon espace</div>
+            <div class="s2-tableau-navitem s2-tableau-nv" style="left:440px">Livrer un papier</div>
+            <div class="s2-tableau-avatar s2-tableau-nv">CR</div>
+          </div>
+          <div class="s2-tableau-title"><span class="s2-tableau-cas" id="s2-tableau-t1">Bonjour</span><span class="s2-tableau-cas" id="s2-tableau-t2">Camille</span></div>
+
+          <div class="s2-tableau-dcard s2-tableau-issue s2-tableau-cas" id="s2-tableau-issue">
+            <span class="s2-tableau-chip red">EN COURS</span>
+            <div class="s2-tableau-rsh">RSH 240</div>
+            <div class="s2-tableau-bouclage"><small>Bouclage</small><span>26 sept. → 2 oct. 2026</span></div>
+          </div>
+          <div class="s2-tableau-dcard s2-tableau-dropbox s2-tableau-cas" id="s2-tableau-dropbox">
+            <svg viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg"><path d="M6 14h14l5 5h21v24H6z"/><path d="M6 22h40"/></svg>
+            <b>Voir Dropbox</b>
+            <code>/Hebdo Delivery/RSH240/Camille Roux</code>
+          </div>
+
+          <div class="s2-tableau-dcard s2-tableau-stat s2-tableau-cas" style="left:36px"><small>Mes papiers</small><div class="s2-tableau-num"><span class="s2-tableau-val">12</span></div></div>
+          <div class="s2-tableau-dcard s2-tableau-stat s2-tableau-cas" style="left:365px"><small>En cours</small><div class="s2-tableau-num"><span class="s2-tableau-val">2</span></div></div>
+          <div class="s2-tableau-dcard s2-tableau-stat s2-tableau-cas" style="left:694px"><small>Livrés à temps</small><div class="s2-tableau-num"><span class="s2-tableau-val">100</span><span class="s2-tableau-suf">%</span></div></div>
+          <div class="s2-tableau-dcard s2-tableau-stat s2-tableau-cas" style="left:1023px"><small>Signes rédigés</small><div class="s2-tableau-num"><span class="s2-tableau-val">18 420</span></div></div>
+
+          <div class="s2-tableau-listhead s2-tableau-cas" id="s2-tableau-listhead">
+            <h3>Mes livraisons</h3>
+            <div class="s2-tableau-ghostbtn">Tous les numéros <svg viewBox="0 0 16 16"><path d="M3 6l5 5 5-5" fill="none" stroke="#16140F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          </div>
+
+          <div class="s2-tableau-table">
+            <div class="s2-tableau-tr s2-tableau-th s2-tableau-cas"><div class="s2-tableau-td s2-tableau-c1">Numéro</div><div class="s2-tableau-td s2-tableau-c2">Type</div><div class="s2-tableau-td s2-tableau-c3">Titre</div><div class="s2-tableau-td s2-tableau-c4">Statut</div><div class="s2-tableau-td s2-tableau-c5">Date</div><div class="s2-tableau-td s2-tableau-c6">Actions</div></div>
+            <div class="s2-tableau-tr s2-tableau-cas"><div class="s2-tableau-td s2-tableau-c1">RSH 240</div><div class="s2-tableau-td s2-tableau-c2">Chroniques</div><div class="s2-tableau-td s2-tableau-c3">Les Marquises — Nuit blanche</div><div class="s2-tableau-td s2-tableau-c4"><span class="s2-tableau-chip ok">Livré</span></div><div class="s2-tableau-td s2-tableau-c5">29 sept.</div>
+              <div class="s2-tableau-td s2-tableau-c6"><div class="s2-tableau-acts">
+                <svg viewBox="0 0 28 28"><path d="M3 8h8l3 3h11v12H3z"/></svg>
+                <svg viewBox="0 0 28 28"><path d="M5 23l4-1 12-12-3-3L6 19z"/><path d="M16 9l3 3"/></svg>
+                <svg viewBox="0 0 28 28"><path d="M11 17l6-6"/><path d="M13 8l2-2a4 4 0 0 1 6 6l-2 2"/><path d="M15 20l-2 2a4 4 0 0 1-6-6l2-2"/></svg>
+              </div></div></div>
+            <div class="s2-tableau-tr s2-tableau-cas"><div class="s2-tableau-td s2-tableau-c1">RSH 239</div><div class="s2-tableau-td s2-tableau-c2">Interview 3000</div><div class="s2-tableau-td s2-tableau-c3">Shinedown, la revanche</div><div class="s2-tableau-td s2-tableau-c4"><span class="s2-tableau-chip ok">Livré</span></div><div class="s2-tableau-td s2-tableau-c5">22 sept.</div>
+              <div class="s2-tableau-td s2-tableau-c6"><div class="s2-tableau-acts">
+                <svg viewBox="0 0 28 28"><path d="M3 8h8l3 3h11v12H3z"/></svg>
+                <svg viewBox="0 0 28 28"><path d="M5 23l4-1 12-12-3-3L6 19z"/><path d="M16 9l3 3"/></svg>
+                <svg viewBox="0 0 28 28"><path d="M11 17l6-6"/><path d="M13 8l2-2a4 4 0 0 1 6 6l-2 2"/><path d="M15 20l-2 2a4 4 0 0 1-6-6l2-2"/></svg>
+              </div></div></div>
+            <div class="s2-tableau-tr s2-tableau-cas"><div class="s2-tableau-td s2-tableau-c1">RSH 239</div><div class="s2-tableau-td s2-tableau-c2">Frenchie</div><div class="s2-tableau-td s2-tableau-c3">Rubber Legs</div><div class="s2-tableau-td s2-tableau-c4"><span class="s2-tableau-chip ok">Livré</span></div><div class="s2-tableau-td s2-tableau-c5">21 sept.</div>
+              <div class="s2-tableau-td s2-tableau-c6"><div class="s2-tableau-acts">
+                <svg viewBox="0 0 28 28"><path d="M3 8h8l3 3h11v12H3z"/></svg>
+                <svg viewBox="0 0 28 28"><path d="M5 23l4-1 12-12-3-3L6 19z"/><path d="M16 9l3 3"/></svg>
+                <svg viewBox="0 0 28 28"><path d="M11 17l6-6"/><path d="M13 8l2-2a4 4 0 0 1 6 6l-2 2"/><path d="M15 20l-2 2a4 4 0 0 1-6-6l2-2"/></svg>
+              </div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- note de marge droite -->
+      <div class="s2-tableau-note s2-tableau-note-r" id="s2-tableau-note-r">Vos livraisons</div>
+
+      <!-- liseré d'attention : carte « EN COURS · RSH 240 » (abs 318,312 → 636×116), puis tableau (abs 318,604 → 1288×186) -->
+      <div class="s2-tableau-ring" id="s2-tableau-ring" style="left:308px;top:302px;width:636px;height:132px"><div class="s2-tableau-ring-in" id="s2-tableau-ring-in"></div></div>
+
+      <!-- onde de clic au centre du bouton « Se connecter » (abs 1232,576), présente dès t=0 -->
+      <div class="s2-tableau-ripple" id="s2-tableau-rp" style="left:1182px;top:526px"></div>
+      <svg class="s2-tableau-cursor" id="s2-tableau-cursor" viewBox="0 0 38 54" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 3 L3 41 L12.5 32 L19 50 L26 47 L19.5 30 L33 30 Z" fill="#16140F" stroke="#FBF8F2" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      var ID = "s2-tableau";
+      var DUR = 5.35;
+      var tl = gsap.timeline({ paused: true });
+      var CUR = "#s2-tableau-cursor";
+
+      // ---------- états initiaux (hors timeline) : connexion visible, tableau de bord caché ----------
+      var navEls = Array.prototype.slice.call(document.querySelectorAll(".s2-tableau-nv"));
+      var casEls = Array.prototype.slice.call(document.querySelectorAll(".s2-tableau-cas"));
+      gsap.set("#s2-tableau-dash", { opacity: 0 });
+      gsap.set(navEls.concat(casEls), { opacity: 0 });
+      gsap.set("#s2-tableau-ring", { opacity: 0 });
+      gsap.set("#s2-tableau-ring-in", { scaleX: 0, scaleY: 0.04 });
+      gsap.set("#s2-tableau-rp", { opacity: 0, scale: 0 });
+      gsap.set("#s2-tableau-burst", { opacity: 0 });
+      gsap.set("#s2-tableau-note-r", { opacity: 0 });
+      gsap.set(CUR, { x: 1500, y: 790 });
+
+      // respiration : chaîne de tweens scale aller/retour (sine.inOut), seek-safe
+      function breathe(target, tIn, tEnd, amp, half) {
+        for (var t = tIn, k = 0; t < tEnd - 0.01; t += half, k++) {
+          var d = Math.min(half, tEnd - t);
+          tl.to(target, { scale: k % 2 === 0 ? 1 + amp : 1, duration: d, ease: "sine.inOut" }, t);
+        }
+      }
+      // waterfall-entry : opacité binaire via set, fouettement depuis le bas, power4.out
+      function waterfall(els, t0, gap, y, d) {
+        els.forEach(function (el, i) {
+          var t = t0 + i * gap;
+          tl.set(el, { opacity: 1, y: y }, t);
+          tl.to(el, { y: 0, duration: d, ease: "power4.out" }, t);
+        });
+      }
+
+      // ---------- ambiance ----------
+      breathe("#s2-tableau-halo", 0, DUR, 0.03, 1.7);
+      tl.fromTo("#s2-tableau-ghost", { x: 16 }, { x: -16, duration: DUR, ease: "none" }, 0);
+
+      // ---------- Scene 1 (0–1.4s) : écran de connexion déjà rempli ; le curseur presse « Se connecter → » à 0,5 s ----------
+      // cursor-click-ripple : déplacement power2.inOut, clic = compression 0,12 s + onde depuis le centre du bouton
+      var CLICK = 0.5;
+      tl.to(CUR, { x: 1232 - 3, y: 576 - 3, duration: 0.42, ease: "power2.inOut" }, 0.04);
+      tl.to(CUR, { scale: 0.85, duration: 0.12, ease: "power2.in" }, CLICK);
+      tl.to(CUR, { scale: 1, duration: 0.12, ease: "power2.out" }, CLICK + 0.12);
+      // bouton comprimé puis relâché (ressort), halo rouge derrière
+      tl.to("#s2-tableau-btn", { scale: 0.94, boxShadow: "0 4px 10px -6px rgba(179,14,31,0.5)", duration: 0.12, ease: "power1.in" }, CLICK);
+      tl.to("#s2-tableau-btn", { scale: 1, boxShadow: "0 14px 30px -12px rgba(179,14,31,0.55)", duration: 0.55, ease: "back.out(1.6)" }, CLICK + 0.12);
+      tl.fromTo("#s2-tableau-burst", { scale: 1, opacity: 0 }, { scale: 3.2, opacity: 0.5, duration: 0.45, ease: "power2.out" }, CLICK + 0.12);
+      tl.to("#s2-tableau-burst", { opacity: 0, duration: 0.4, ease: "power2.in" }, CLICK + 0.5);
+      // onde
+      tl.set("#s2-tableau-rp", { opacity: 1 }, CLICK + 0.04);
+      tl.fromTo("#s2-tableau-rp", { scale: 0 }, { scale: 4, opacity: 0, duration: 0.7, ease: "power2.out", immediateRender: false }, CLICK + 0.04);
+
+      // ---------- Scene 2 (1.4–3.4s) : le contenu du navigateur se remplace (fondu croisé 0,4 s), cascade serrée 0,07 s ----------
+      // dynamic-content-sequencing : états de l'écran pré-calculés, fondu croisé aux transitions uniquement
+      var XF = 0.4;
+      var STATES = [
+        { el: "#s2-tableau-login", start: 0 },
+        { el: "#s2-tableau-dash", start: 1.4 }
+      ];
+      STATES.forEach(function (s, i) {
+        if (i === 0) return;
+        tl.to(STATES[i - 1].el, { opacity: 0, duration: XF, ease: "power1.inOut" }, s.start);
+        tl.fromTo(s.el, { opacity: 0 }, { opacity: 1, duration: XF, ease: "power1.inOut" }, s.start);
+      });
+      // le curseur s'écarte vers la marge pendant la bascule
+      tl.to(CUR, { x: 1560, y: 820, duration: 0.8, ease: "power2.inOut" }, 1.4);
+      // cascade : nav, « Bonjour Camille », carte rouge, Dropbox, quatre compteurs, en-tête de liste, tableau
+      waterfall(navEls.concat(casEls), 1.5, 0.07, 44, 0.18);
+
+      // liseré d'attention sur « EN COURS · RSH 240 » à 2,3 s : se dessine scaleX puis scaleY, respire
+      var RING = "#s2-tableau-ring", RIN = "#s2-tableau-ring-in";
+      tl.set(RING, { opacity: 1 }, 2.3);
+      tl.fromTo(RIN, { scaleX: 0, scaleY: 0.04 }, { scaleX: 1, duration: 0.3, ease: "power2.out" }, 2.3);
+      tl.to(RIN, { scaleY: 1, duration: 0.3, ease: "power2.out" }, 2.58);
+      breathe(RING, 2.9, DUR, 0.012, 0.9);
+
+      // ---------- Scene 3 (3.4–5.35s) : le liseré glisse sur « Mes livraisons », note de marge à 3,6 s, tenue ----------
+      tl.to(RING, { y: 292, width: 1308, height: 206, duration: 0.6, ease: "power2.inOut" }, 3.4);
+      tl.fromTo("#s2-tableau-note-r", { opacity: 0, x: 24 }, { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" }, 3.6);
+
+      tl.set({}, {}, DUR);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines[ID] = tl;
+      tl.seek(0);
+    })();
+  </script>
+</template>

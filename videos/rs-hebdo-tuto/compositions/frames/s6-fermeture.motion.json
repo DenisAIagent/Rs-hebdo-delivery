@@ -1,0 +1,7 @@
+{
+  "scene": "s6-fermeture",
+  "duration_s": 5.58,
+  "rules": ["spring-pop-entrance", "svg-path-draw"],
+  "exit": { "vector": "static hold from 4.6 s; halo settled at 45 % opacity breathing ±5 % scale, ghost word drifting +x at ~4 px/s; no directional travel (root adds the final fade)", "still_moving": true },
+  "entry": { "vector": "from rest; paper + halo + ghost static at frame 0, figure pops in at 0.3 s (scale 0→1), 0 px/s translation", "from_rest": true }
+}

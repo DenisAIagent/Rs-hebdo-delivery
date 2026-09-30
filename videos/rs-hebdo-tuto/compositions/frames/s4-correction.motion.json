@@ -1,0 +1,7 @@
+{
+  "scene": "s4-correction",
+  "duration_s": 7.26,
+  "rules": ["press-release-spring", "asr-keyword-glow", "dynamic-content-sequencing", "discrete-text-sequence", "cursor-click-ripple"],
+  "exit": { "vector": "held layout; attention frame breathing ±1.5 % scale around the final-text card, halo breathing, ghost word drifting -x at ~1.4 px/s; cursor settled at 7.2 s; no directional travel", "still_moving": true },
+  "entry": { "vector": "from rest; browser, step rail and text card fully in place at frame 0, cursor starts its glide to the button at 0.15 s (≈ 1 400 px/s peak)", "from_rest": true }
+}

@@ -25,8 +25,18 @@ const TOTAL_STEPS = 6;
 const TUTO_VIDEO_SRC = '/tuto-rs-hebdo.mp4';
 const TUTO_VIDEO_POSTER = '/tuto-rs-hebdo.jpg';
 
+/**
+ * Clé versionnée : incrémenter ONBOARDING_VERSION force tous les journalistes
+ * à revoir la présentation une fois à leur prochaine connexion (v2 = vidéo).
+ */
+const ONBOARDING_VERSION = 2;
+
 function getOnboardingKey(userId: string) {
-  return `rs-onboarding-done-${userId}`;
+  return `rs-onboarding-done-v${ONBOARDING_VERSION}-${userId}`;
+}
+
+export function resetOnboarding(userId: string) {
+  localStorage.removeItem(getOnboardingKey(userId));
 }
 
 export function isOnboardingDone(userId: string): boolean {

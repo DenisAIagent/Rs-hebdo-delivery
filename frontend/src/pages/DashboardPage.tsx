@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.ts';
-import { isOnboardingDone } from './OnboardingPage.tsx';
+import { isOnboardingDone, resetOnboarding } from './OnboardingPage.tsx';
 import { getMyDeliveries, getNextHebdo } from '../services/api.ts';
 import type { Delivery, HebdoConfig } from '../types/index.ts';
 import {
@@ -633,7 +633,7 @@ function ReplayCard() {
 
   const handleReplay = () => {
     if (user) {
-      localStorage.removeItem(`rs-onboarding-done-${user.id}`);
+      resetOnboarding(user.id);
     }
     navigate('/onboarding');
   };

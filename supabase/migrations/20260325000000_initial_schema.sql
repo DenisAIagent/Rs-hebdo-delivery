@@ -125,13 +125,14 @@ CREATE POLICY "Admins can read all deliveries"
 -- SEED DATA: Default paper types
 -- ================================================
 
+-- Noms alignes sur la production (voir supabase-schema.sql pour fields_config).
 INSERT INTO paper_types (name, sign_limit, drive_folder_name, sort_order) VALUES
-  ('Rolling Stone Interview', 15000, 'Rolling Stone Interview', 1),
-  ('Interview', 5000, 'Interview', 2),
-  ('Chronique Cinema', 1500, 'Chronique cinema', 3),
-  ('Chronique Coup de Coeur', 2500, 'Chronique coup de coeur', 4),
-  ('Chroniques Musique', 1500, 'Chroniques Musique', 5),
-  ('Disque de la Semaine', 2500, 'Disque de la semaine', 6),
+  ('Sujet de couv', 15000, 'Sujet de couv', 1),
+  ('Interview 3000', 3000, 'Interview 3000', 2),
+  ('Disque de la semaine', 2500, 'Disque de la semaine', 3),
+  ('Chroniques', 1500, 'Chroniques', 4),
+  ('Chronique Cinema', 1500, 'Chronique cinema', 5),
+  ('Chronique Coup de Coeur', 2500, 'Chronique coup de coeur', 6),
   ('Frenchie', 2500, 'frenchie', 7),
   ('Livres et Expo', 1500, 'Livres et expo', 8);
 

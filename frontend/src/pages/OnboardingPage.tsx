@@ -102,8 +102,9 @@ function StepDashboard() {
         className="mx-auto"
         style={{ color: 'var(--muted)', maxWidth: 520, marginBottom: 32 }}
       >
-        Le dashboard affiche toutes vos livraisons et le numéro d'hebdo en cours.
-        Filtrez par numéro pour retrouver facilement vos papiers.
+        Le tableau de bord affiche le numéro en cours, votre dossier Dropbox et
+        toutes vos livraisons. Le menu « Tous les numéros » permet de retrouver
+        vos anciens papiers.
       </p>
 
       <div className="rs-card mx-auto text-left" style={{ maxWidth: 420 }}>
@@ -115,7 +116,7 @@ function StepDashboard() {
           }}
         >
           <span style={{ fontSize: 13, fontWeight: 600 }}>Mes livraisons</span>
-          <span className="rs-chip red">RSH 226</span>
+          <span className="rs-chip red">RSH 240</span>
         </div>
         <div
           className="flex items-center justify-between"
@@ -144,8 +145,8 @@ function StepDashboard() {
               Anatomie d'une chute…
             </span>
           </div>
-          <span className="rs-chip info">
-            <Sparkles size={11} /> Corrigé
+          <span className="rs-chip ok">
+            <Check size={11} /> Livré
           </span>
         </div>
       </div>
@@ -155,7 +156,7 @@ function StepDashboard() {
         style={{ fontSize: 11, color: 'var(--muted)' }}
       >
         <ArrowRight size={12} />
-        Utilisez le filtre pour naviguer entre les numéros.
+        Chaque livraison ouvre son dossier Dropbox d'un clic.
       </p>
     </div>
   );
@@ -240,6 +241,10 @@ function StepDeliver() {
           Chaque type de papier a une limite de signes à respecter.
         </p>
         <p className="flex items-start gap-2">
+          <ImageIcon size={14} className="mt-0.5 shrink-0" />
+          Au moins une photo est demandée sur la plupart des formats (25 Mo max par fichier).
+        </p>
+        <p className="flex items-start gap-2">
           <StarHalf size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--star)' }} />
           Étoiles : clic gauche = demi, clic droit = entière.
         </p>
@@ -314,7 +319,7 @@ function StepEdit() {
         </p>
         <p className="flex items-start gap-2">
           <Sparkles size={14} className="mt-0.5 shrink-0" />
-          La correction IA sera relancée sur le texte modifié.
+          Vous pourrez relancer la correction IA sur le texte modifié.
         </p>
       </div>
     </div>

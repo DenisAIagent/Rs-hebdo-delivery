@@ -106,6 +106,7 @@ rs-hebdo-delivery/
 │   ├── config.toml      # Config locale (TOTP activé)
 │   └── migrations/      # 7 migrations SQL (source de vérité)
 ├── scripts/
+│   ├── build-guide.py   # Guide journaliste -> frontend/public/guide.html
 │   ├── livrer_hebdo.py  # Livraison en lot via l'API
 │   ├── wpe              # CLI WP Engine (SSH/WP-CLI, webhooks, API)
 │   ├── wp/              # mu-plugin WordPress + note d'installation
@@ -135,6 +136,7 @@ Côté site, le mu-plugin `scripts/wp/rs-delivery-rest-meta.php` expose les mét
 
 | Script | Usage |
 |---|---|
+| `python3 scripts/build-guide.py` | Régénère `frontend/public/guide.html` (carte « Guide écrit pas-à-pas » du tableau de bord) à partir de `TUTO-JOURNALISTE.md`. À relancer et commiter après chaque modification du tuto (`pip install markdown`) |
 | `scripts/livrer_hebdo.py <papiers.json>` | Livraison en lot d'un hebdo : correction IA puis `POST /api/deliveries` avec `author_id`, images en original. Variables `RS_ADMIN_PASSWORD`, `RS_HEBDO_ID`, `RS_BASE` |
 | `scripts/wpe <commande>` | CLI WP Engine : `wp` (WP-CLI via SSH), `ssh`, `taxonomy`, `rebuild`, `purge`, `api`, `doctor`… Config dans `~/.config/wpe/rs.env` (chmod 600), aucun secret dans le script |
 | `node scripts/authorship/sign.mjs` | Signe l'empreinte des sources (clé privée hors dépôt) et régénère les fichiers `provenance.ts` |

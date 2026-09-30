@@ -456,7 +456,7 @@ export async function publishDeliveryToWordpress(
         'wp-meta',
         `${post.metaRejected.length} champ(s) refuse(s) par WordPress — a saisir a la main`,
         ctx,
-        `${post.metaRejected.join(', ')} — le mu-plugin scripts/wp/rs-delivery-rest-meta.php n'est pas installe sur le site, ou ces cles n'y sont pas declarees.`,
+        `${post.metaRejected.join(', ')} — refusees par l'API standard ET par le mu-plugin scripts/wp/rs-delivery-rest-meta.php (absent, ou cles hors de ses prefixes autorises : _yoast_wpseo_, rwp_, sm_, _sm_, mat_, _mat_).`,
       );
     } else if (Object.keys(extraMeta).length > 0 || payload.focusKeyword) {
       await logInfo('wp-meta', 'Yoast et metaboxes enregistres par WordPress', ctx);

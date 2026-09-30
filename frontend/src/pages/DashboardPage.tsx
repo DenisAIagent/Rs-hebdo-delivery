@@ -574,7 +574,7 @@ export function DashboardPage() {
             eyebrow="Documentation"
             title="Guide écrit pas-à-pas"
             cta="Lire"
-            href="https://rollingstone.fr"
+            href="/guide.html"
           />
           <HelpCard
             icon={<Mail size={18} />}
@@ -731,7 +731,7 @@ function HelpCard({ icon, eyebrow, title, cta, href }: HelpCardProps) {
   return (
     <a
       href={href}
-      target={href.startsWith('http') ? '_blank' : undefined}
+      target={href.startsWith('http') || href.endsWith('.html') ? '_blank' : undefined}
       rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
       className="rs-card flex items-center gap-4"
       style={{

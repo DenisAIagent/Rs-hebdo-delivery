@@ -358,12 +358,53 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
     });
   }
 
+  // Secours : les metas refusees par l'API standard sont retentees via le
+  // mu-plugin (POST /wp-json/rs-delivery/v1/post-meta/{id}), qui ecrit les cles
+  // Yoast, Reviewer (rwp_), Style Music (sm_/_sm_) et Main Artist (mat_/_mat_).
+  // Sans mu-plugin (404) ou si la cle n'est pas dans ses prefixes, le refus reste.
+  if (metaRejected.length > 0) {
+    const retry: Record<string, string | number> = {};
+    for (const k of metaRejected) retry[k] = meta[k];
+    const written = await writeWpMetaViaMuPlugin(client, config, data.id, retry);
+    metaRejected = metaRejected.filter((k) => !written.includes(k));
+  }
+
   return {
     id: data.id,
     link: data.link,
     editUrl: `${config.baseUrl}/wp-admin/post.php?post=${data.id}&action=edit`,
     metaRejected,
   };
+}
+
+/**
+ * Ecrit des metas via le mu-plugin scripts/wp/rs-delivery-rest-meta.php.
+ * Renvoie la liste des cles effectivement ecrites ; [] si le plugin est absent
+ * (404), refuse la cle, ou repond en erreur. Ne jette jamais : l'article est deja
+ * cree, l'appelant doit seulement savoir ce qui reste a saisir a la main.
+ */
+async function writeWpMetaViaMuPlugin(
+  client: AxiosInstance,
+  config: WpConfig,
+  postId: number,
+  meta: Record<string, string | number>,
+): Promise<string[]> {
+  if (Object.keys(meta).length === 0) return [];
+  try {
+    // URL absolue : axios ignore alors le baseURL (/wp-json/wp/v2) du client.
+    const { data } = await client.post(
+      `${config.baseUrl}/wp-json/rs-delivery/v1/post-meta/${postId}`,
+      { meta },
+    );
+    const written = (data?.written || {}) as Record<string, unknown>;
+    return Object.keys(written);
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status !== 404) {
+      console.warn(`[wordpress] mu-plugin post-meta ${postId} -> HTTP ${status ?? 'n/a'}`);
+    }
+    return [];
+  }
 }
 
 /**

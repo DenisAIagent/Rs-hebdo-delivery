@@ -13,7 +13,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '../utils/supabase';
 import { logInfo, logError, logWarn, type LogContext } from './deliveryLogger';
 import { notifyWordpressError } from './email';
-import { getApiKey, getClaudeModel, DEFAULT_CLAUDE_MODEL } from './claude';
+import { getAnthropicClient, getClaudeModel, DEFAULT_CLAUDE_MODEL } from './claude';
 import {
   isWordpressEnabled,
   searchWpPosts,
@@ -241,8 +241,7 @@ async function formatArticleForWp(
   input: WpPublishInput,
   internalCandidates: WpPostCandidate[],
 ): Promise<WpArticlePayload> {
-  const apiKey = await getApiKey();
-  const anthropic = new Anthropic({ apiKey, timeout: 120_000 });
+  const anthropic = await getAnthropicClient(120_000);
   let model = await getClaudeModel();
 
   const candidatesBlock = internalCandidates.length > 0

@@ -743,6 +743,7 @@ Stockage des clés API et paramètres configurables par les admins depuis l'inte
 | Clé | Secret ? | Rôle |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | oui | Correction Claude + mise en forme WordPress |
+| `ANTHROPIC_WORKSPACE_ID` | non | Identifiant de workspace (`wrkspc_…`) envoyé en en-tête `anthropic-workspace-id` ; obligatoire seulement si la clé a été créée au niveau de l'organisation (sinon l'API répond `This API key is not scoped to a workspace`) |
 | `GEMINI_API_KEY`, `MISTRAL_API_KEY` | oui | Moteurs de correction alternatifs |
 | `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN` | oui | Dropbox |
 | `WORDPRESS_APP_PASSWORD` | oui | Mot de passe application WordPress (vide en prod : variable Railway) |

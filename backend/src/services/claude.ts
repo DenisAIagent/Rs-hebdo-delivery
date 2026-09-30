@@ -31,6 +31,38 @@ export async function getApiKey(): Promise<string> {
 }
 
 /**
+ * Identifiant de workspace Anthropic (optionnel). Une cle creee au niveau de
+ * l'organisation (et non dans un workspace) est refusee par l'API tant que
+ * l'en-tete `anthropic-workspace-id` n'est pas envoye. Reglage admin
+ * ANTHROPIC_WORKSPACE_ID (non secret), sinon variable d'environnement.
+ */
+export async function getWorkspaceId(): Promise<string | undefined> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'ANTHROPIC_WORKSPACE_ID')
+      .single();
+    const dbValue = data?.value?.trim();
+    if (dbValue) return dbValue;
+  } catch {
+    // ignore, fall through to env
+  }
+  return process.env.ANTHROPIC_WORKSPACE_ID?.trim() || undefined;
+}
+
+/** Client Anthropic pret a l'emploi (cle + en-tete workspace si configure). */
+export async function getAnthropicClient(timeout: number): Promise<Anthropic> {
+  const apiKey = await getApiKey();
+  const workspaceId = await getWorkspaceId();
+  return new Anthropic({
+    apiKey,
+    timeout,
+    ...(workspaceId ? { defaultHeaders: { 'anthropic-workspace-id': workspaceId } } : {}),
+  });
+}
+
+/**
  * Modèle Claude à utiliser pour la correction.
  * Choisi par l'admin (app_settings.CLAUDE_MODEL), sinon env, sinon défaut.
  */
@@ -60,8 +92,7 @@ export interface ClaudeModelInfo {
  * (triés du plus récent au plus ancien). Couvre automatiquement les modèles futurs.
  */
 export async function listClaudeModels(): Promise<ClaudeModelInfo[]> {
-  const apiKey = await getApiKey();
-  const anthropic = new Anthropic({ apiKey, timeout: 30_000 });
+  const anthropic = await getAnthropicClient(30_000);
   const out: ClaudeModelInfo[] = [];
   for await (const m of anthropic.models.list({ limit: 100 })) {
     if (!m.id?.startsWith('claude-')) continue;
@@ -112,10 +143,9 @@ const CORRECTION_TOOL = {
 };
 
 export async function correctText(text: string): Promise<CorrectionResult> {
-  const apiKey = await getApiKey();
   const promptText = await getPromptFromDB();
 
-  const anthropic = new Anthropic({ apiKey, timeout: 120_000 });
+  const anthropic = await getAnthropicClient(120_000);
   let model = await getClaudeModel();
   const numberedText = numberEmptyLines(text);
 

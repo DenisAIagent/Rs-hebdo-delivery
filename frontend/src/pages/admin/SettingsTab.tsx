@@ -34,6 +34,12 @@ const SECRET_SECTIONS: SettingSection[] = [
         description: 'Utilisee quand le moteur IA selectionne est Anthropic.',
       },
       {
+        key: 'ANTHROPIC_WORKSPACE_ID',
+        label: 'Workspace Anthropic (optionnel)',
+        description:
+          "A renseigner seulement si la cle a ete creee au niveau de l'organisation : identifiant du workspace (wrkspc_...), visible dans la console Anthropic, Settings > Workspaces.",
+      },
+      {
         key: 'GEMINI_API_KEY',
         label: 'Cle API Google Gemini',
         description: 'Utilisee quand le moteur IA selectionne est Gemini (modele gemini-3.5-flash).',

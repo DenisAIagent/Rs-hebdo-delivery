@@ -803,6 +803,8 @@ const NON_SECRET_KEYS = new Set([
   'REQUIRE_MFA',
   'AI_PROVIDER',
   'CLAUDE_MODEL',
+  // Identifiant de workspace Anthropic : un identifiant, pas un secret.
+  'ANTHROPIC_WORKSPACE_ID',
   'WORDPRESS_ENABLED',
   'WORDPRESS_URL',
   'WORDPRESS_USERNAME',

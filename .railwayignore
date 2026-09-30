@@ -24,3 +24,7 @@ macos/
 
 # Bruit macOS
 .DS_Store
+
+# Dossiers de travail des hebdos en cours : toujours en local, jamais deployes
+HEBDO*/
+RSH2*/

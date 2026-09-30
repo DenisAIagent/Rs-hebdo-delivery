@@ -1,6 +1,7 @@
 # RS Hebdo Delivery — FAQ & Problèmes connus
 
 > Toutes les questions et problèmes que vous pouvez rencontrer en tant que journaliste sur la plateforme.
+> Mise à jour le 30 septembre 2026.
 
 ---
 
@@ -72,6 +73,36 @@ Oui. Sur la page de connexion, cliquez sur **"Mot de passe oublié ?"**. Vous re
 - Assurez-vous d'utiliser l'email exact avec lequel votre compte a été créé
 - Si le problème persiste, contactez l'administrateur
 
+Le nouveau mot de passe doit faire **au moins 6 caractères** et être saisi deux fois à l'identique (*"Les mots de passe ne correspondent pas."*).
+
+---
+
+### Q : On me demande un code à 6 chiffres après la connexion, c'est quoi ?
+
+C'est la **double authentification (2FA)**, activée par l'administrateur pour toute la rédaction.
+
+- **Première fois** : la page « Activez la 2FA pour continuer » affiche un QR code. Scannez-le avec une application d'authentification (Google Authenticator, 1Password, Authy…), saisissez le code à 6 chiffres puis cliquez sur **Activer et continuer**. Si vous ne pouvez pas scanner, cliquez sur la clé sous le QR code pour la copier dans l'application.
+- **Ensuite** : à chaque connexion, saisissez le code affiché par l'application et cliquez sur **Vérifier**.
+
+---
+
+### Q : Mon code 2FA est refusé
+
+**Message affiché** : *"Code invalide ou expiré. Réessayez."*
+
+**Causes possibles :**
+- Le code a changé pendant la saisie (il se renouvelle toutes les 30 secondes)
+- L'heure de votre téléphone est décalée
+- Vous avez plusieurs comptes dans l'application et lisez le mauvais
+
+**Solution :** Attendez le code suivant et ressaisissez-le. Si rien ne fonctionne, contactez un administrateur.
+
+---
+
+### Q : J'ai changé ou perdu mon téléphone, je ne peux plus générer le code
+
+Contactez un administrateur : il peut **réinitialiser votre 2FA** depuis l'onglet Journalistes. À la connexion suivante, vous referez l'activation avec un nouveau QR code.
+
 ---
 
 ## 2. Dashboard
@@ -83,21 +114,38 @@ Oui. Sur la page de connexion, cliquez sur **"Mot de passe oublié ?"**. Vous re
 - Le filtre hebdo sélectionné ne correspond pas à vos livraisons
 - Vous êtes connecté avec un autre compte
 
-**Solution :** Vérifiez le sélecteur d'hebdo en haut de page. Sélectionnez "Tous" ou l'hebdo correct pour voir l'ensemble de vos livraisons.
+**Solution :** Vérifiez le menu déroulant au-dessus de la liste (par défaut, le numéro en cours est sélectionné). Choisissez **Tous les numéros** ou le bon numéro. Vérifiez aussi que le champ **Rechercher un titre…** est vide.
 
 ---
 
-### Q : Le compteur de livraisons affiche 0 alors que j'ai déjà livré
+### Q : Le compteur "En cours" affiche 0 alors que j'ai déjà livré
 
-**Cause :** Le compteur est filtré par l'hebdo actuellement sélectionné. Vos livraisons sont peut-être rattachées à un autre numéro d'hebdo.
+**Cause :** Ce compteur ne compte que les papiers du **numéro en cours**. Vos livraisons sont peut-être rattachées à un numéro précédent.
 
-**Solution :** Changez l'hebdo dans le sélecteur pour retrouver vos livraisons passées.
+**Solution :** Regardez le compteur **Mes papiers** (total depuis votre arrivée) ou changez de numéro dans le menu déroulant.
+
+---
+
+### Q : Que signifient les quatre compteurs en haut du tableau de bord ?
+
+| Compteur | Signification |
+|----------|---------------|
+| **Mes papiers** | Nombre total de livraisons depuis votre arrivée |
+| **Signes rédigés** | Somme des signes de tous vos papiers (avec un équivalent en colonnes magazine) |
+| **Livrés à temps** | Pourcentage de vos papiers au statut Livré |
+| **En cours** | Nombre de papiers livrés pour le numéro en cours |
+
+---
+
+### Q : Comment revoir la présentation de départ ?
+
+Cliquez sur **Revoir la présentation** dans la barre du haut, ou sur la carte du même nom en bas du tableau de bord.
 
 ---
 
 ### Q : Quel est le statut de mes livraisons ?
 
-Actuellement, toutes les livraisons soumises ont le statut **Livré** — cela signifie que le DOCX a été généré, les fichiers uploadés sur Dropbox, et la rédaction notifiée par email. Il n'y a pas de système de brouillon : une fois le formulaire soumis, la livraison est définitive (mais modifiable ensuite).
+Toutes les livraisons soumises ont le statut **Livré** — cela signifie que le DOCX a été généré, les fichiers envoyés sur Dropbox, et la rédaction notifiée par email. Il n'y a pas de brouillon côté plateforme : rien n'est enregistré tant que vous n'avez pas cliqué sur **Livrer le papier**. Une fois livré, le papier reste **modifiable** (icône crayon).
 
 ---
 
@@ -122,17 +170,36 @@ En cas de doute, demandez à votre rédacteur en chef.
 
 ---
 
-### Q : Je ne peux pas passer à l'étape suivante du formulaire
+### Q : Le bouton "Confirmer ce numéro" ne fait rien / affiche une erreur
 
-**Message affiché** : *"Ce champ est obligatoire"*
+**Message affiché** : *"Erreur préparation des dossiers Dropbox"*
 
-**Cause :** Un ou plusieurs champs obligatoires ne sont pas remplis.
+**Cause :** La plateforme n'a pas réussi à créer les dossiers du numéro sur Dropbox (Dropbox indisponible, réseau).
 
-**Solution :** Remplissez tous les champs marqués comme obligatoires (indiqués par un astérisque ou un encadré rouge). Les champs concernés peuvent être :
-- Texte court (artiste, titre...)
-- Zone de texte (corps de l'article, accroche...)
-- Note étoiles (si requise pour ce type de papier)
-- Images (si un minimum est exigé)
+**Solution :** Attendez quelques secondes et recliquez sur **Confirmer ce numéro**. Cette confirmation est demandée **5 fois par heure maximum** : au-delà, patientez.
+
+---
+
+### Q : "Aucun numéro programmé" s'affiche à l'étape 1
+
+**Cause :** L'administrateur n'a pas encore créé ou activé le numéro de la semaine.
+
+**Solution :** Vous ne pouvez pas livrer tant qu'un numéro n'est pas programmé. Prévenez l'administrateur.
+
+---
+
+### Q : Je ne peux pas lancer la correction / passer à l'étape suivante
+
+**Message affiché** : *"Champs manquants : Artiste, Corps du texte, Photos (1 minimum)…"* et *"Ce champ est obligatoire"* sous chaque champ en rouge
+
+**Cause :** Un ou plusieurs champs obligatoires (marqués d'un **point rouge •**) ne sont pas remplis. La vérification se fait au clic sur **Corriger le texte avec l'IA**.
+
+**Solution :** Remplissez les champs listés dans le message. Ils peuvent être :
+- Texte court (artiste, album, accroche...)
+- Zone de texte (corps du texte)
+- Note étoiles (au moins une demi-étoile)
+- Photos (nombre minimum indiqué dans la zone de dépôt)
+- Pour Sujet de couv et Interview 3000 : photos **ou** lien Drive (*"Renseignez un lien ou ajoutez des photos ci-dessous"*)
 
 ---
 
@@ -142,16 +209,16 @@ En cas de doute, demandez à votre rédacteur en chef.
 
 **Solution :**
 - Retournez à l'étape 1 pour vérifier que le type de papier est bien sélectionné
-- Vérifiez que le champ titre est rempli dans les métadonnées
-- Vérifiez que l'hebdo est bien attribué (normalement automatique)
+- Remplissez le champ qui sert de titre : l'**artiste** (Sujet de couv, Interview 3000, Chroniques), l'**album** ou l'artiste (Disque de la semaine), ou le premier champ texte du formulaire pour les autres formats
+- Vérifiez que le numéro est bien confirmé (normalement automatique)
 
 ---
 
 ### Q : J'ai dépassé la limite de signes, est-ce bloquant ?
 
-**Message affiché** : *"Dépassement de X signes"* (en rouge)
+**Message affiché** : *"Dépassement de X signes"* (en rouge), jauge « Dépassement » dans le panneau de droite
 
-**Non, ce n'est pas bloquant.** Le compteur de signes s'affiche en rouge mais la soumission reste possible. Cependant, il est fortement recommandé de respecter la limite pour faciliter le travail de la rédaction.
+**Non, ce n'est pas bloquant.** Le compteur passe en rouge mais la livraison reste possible. Il est toutefois fortement recommandé de respecter la limite pour faciliter le travail de la rédaction. Le panneau de droite vous guide : « Texte un peu court » (moins de la moitié), « Bonne longueur », « Au taquet » (plus de 95 %).
 
 ---
 
@@ -193,7 +260,19 @@ C'est un comportement attendu qui améliore la qualité typographique du texte.
 
 **Message affiché** : *"Veuillez sélectionner une note"*
 
-**Solution :** Cliquez sur les étoiles pour attribuer une note (de 1 à 5). Si le champ est obligatoire, vous devez sélectionner au moins 1 étoile.
+**Solution :** Cliquez sur les étoiles pour attribuer une note de **0,5 à 5** : la moitié gauche d'une étoile donne une demi-étoile, la moitié droite une étoile entière. Recliquer sur la même valeur remet la note à zéro. Si le champ est obligatoire (Chroniques, Chronique Cinéma, Coup de Coeur, Frenchie), il faut au moins une demi-étoile.
+
+---
+
+### Q : À quoi sert le champ "Crédits" ?
+
+Il reçoit le **crédit photo** (© Nom du photographe) des visuels que vous joignez. Il est facultatif mais très utile à la rédaction pour la mise en ligne : renseignez-le dès que vous connaissez l'auteur des photos.
+
+---
+
+### Q : Puis-je changer de type de papier après avoir commencé ?
+
+Oui, avec le bouton **Type de papier** en bas de l'étape Rédaction. Attention : **changer de type vide le formulaire** (texte et photos).
 
 ---
 
@@ -201,29 +280,46 @@ C'est un comportement attendu qui améliore la qualité typographique du texte.
 
 ### Q : Mon image est refusée
 
-**Message affiché** : *"Seules les images sont acceptées"* ou *"{filename}: File is larger than 25 MB"*
+**Messages affichés** : *"{filename}: File is larger than 25 MB"*, *"{filename}: File type must be …"*, *"Les images SVG ne sont pas acceptées"*, *"Fichier « x » : contenu non reconnu comme une image valide"*
 
 **Contraintes à respecter :**
 
 | Contrainte | Limite |
 |------------|--------|
 | Taille max par fichier | **25 Mo** |
-| Nombre max de fichiers | **10 images** par livraison |
+| Nombre max de fichiers | **20 photos** par envoi (moins si le format impose un maximum) |
 | Formats acceptés | JPG, JPEG, PNG, WebP, GIF, HEIC, HEIF, TIFF, BMP, AVIF |
-| Formats refusés | PDF, Word, vidéos, et tout fichier non-image |
+| Formats refusés | SVG, PDF, Word, vidéos, et tout fichier non-image |
+
+Le serveur vérifie le **contenu réel** du fichier, pas seulement son extension : un PDF renommé en `.jpg` est refusé.
 
 **Solutions :**
 - Compressez vos images si elles dépassent 25 Mo
 - Convertissez les fichiers non supportés en JPG ou PNG
-- Réduisez le nombre d'images si vous dépassez la limite de 10
+- Réduisez le nombre d'images
 
 ---
 
-### Q : Le message "{X} photo(s) minimum requise(s)" s'affiche
+### Q : Le message "{X} photo(s) minimum requise(s)" ou "Au moins une photo est requise" s'affiche
 
-**Cause :** Le type de papier sélectionné exige un nombre minimum d'images.
+**Cause :** Le type de papier sélectionné exige un nombre minimum de photos. Depuis septembre 2026, **tous les formats** demandent au moins une photo :
 
-**Solution :** Ajoutez le nombre de photos requis via la zone de dépôt (glisser-déposer ou clic pour parcourir).
+| Type de papier | Photos |
+|----------------|--------|
+| Sujet de couv | Photos **ou** lien Drive |
+| Interview 3000 | **2 minimum** ou lien Drive |
+| Disque de la semaine, Chroniques, Chronique Cinéma, Coup de Coeur, Frenchie | **1 minimum** |
+| Livres et Expo | **1 exactement** (maximum 1) |
+
+**Solution :** Ajoutez le nombre de photos requis via la zone de dépôt (glisser-déposer ou clic pour parcourir). Pour Sujet de couv et Interview 3000, un **lien Drive** dans le champ prévu remplace les photos.
+
+---
+
+### Q : "Ce format accepte une seule photo" / "Ce format accepte X photos maximum"
+
+**Cause :** Le format impose un nombre maximum de visuels (Livres et Expo : une seule photo).
+
+**Solution :** Les photos en trop sont ignorées. Retirez celle que vous ne voulez pas (croix sur la vignette) et gardez la bonne.
 
 ---
 
@@ -231,7 +327,7 @@ C'est un comportement attendu qui améliore la qualité typographique du texte.
 
 **En mode création :** Supprimez l'image de la liste (clic sur la croix) puis ajoutez la nouvelle.
 
-**En mode édition :** Les images existantes sont indiquées dans la zone de dépôt. Ajoutez de nouvelles images pour **remplacer** les anciennes. Si vous n'ajoutez rien, les images existantes sur Dropbox sont conservées.
+**En mode modification :** Les photos existantes sont rappelées par leur nom sous la zone de dépôt (« Images existantes : … »). Ajoutez de nouvelles photos pour **remplacer** la liste. Si vous n'ajoutez rien, les photos déjà sur Dropbox sont conservées.
 
 ---
 
@@ -258,15 +354,15 @@ C'est un comportement attendu qui améliore la qualité typographique du texte.
 **Message affiché** : *"Correction automatique indisponible — texte original conservé"*
 
 **Causes possibles :**
-- Le service IA (Claude) met plus de **2 minutes** à répondre (timeout)
-- La clé API Anthropic est invalide ou expirée
+- Le service IA met plus de **5 minutes** à répondre (délai maximum côté serveur ; un Sujet de couv prend normalement 30 à 90 secondes)
+- Le service IA configuré par l'administrateur est indisponible ou saturé
 - Le texte dépasse **100 000 signes**
 - Problème réseau temporaire
 
+**Ce qui se passe :** vous passez quand même à l'étape 3 avec votre **texte d'origine** dans la zone « Texte final (modifiable) ». Vous pouvez le relire vous-même et livrer sans correction IA.
+
 **Solution :**
-- Patientez et réessayez après quelques minutes
-- Si le texte est très long, divisez-le en sections plus courtes
-- En dernier recours, vous pouvez passer l'étape de correction et soumettre le texte original
+- Relisez et livrez, ou revenez en arrière (**Modifier le texte**) et relancez la correction après quelques minutes
 
 ---
 
@@ -280,9 +376,17 @@ C'est un comportement attendu qui améliore la qualité typographique du texte.
 
 ---
 
-### Q : Puis-je corriger seulement une partie des suggestions ?
+### Q : Puis-je refuser une partie des corrections ?
 
-**Oui.** La correction affiche un comparatif côte à côte avec la liste des modifications. Vous pouvez accepter ou refuser chaque correction individuellement. Seules les corrections acceptées sont appliquées.
+**Oui, en éditant le texte.** L'étape 3 affiche la liste des corrections appliquées (`original → corrigé (type)`) puis le **Texte final (modifiable)**. Il n'y a pas de validation correction par correction : pour en refuser une, retapez le passage comme vous le souhaitez dans la zone de texte. C'est ce texte final qui est livré.
+
+---
+
+### Q : "Trop de corrections demandées"
+
+**Cause :** Vous avez lancé plus de **30 corrections en une heure**.
+
+**Solution :** Patientez quelques minutes. Vous pouvez livrer sans correction IA entre-temps.
 
 ---
 
@@ -330,31 +434,39 @@ C'est un comportement attendu qui améliore la qualité typographique du texte.
 
 1. **Problème Dropbox** : le service est temporairement indisponible ou le token a expiré
 2. **Fichiers trop volumineux** : la somme de toutes les images dépasse la capacité de traitement
-3. **Timeout réseau** : connexion trop lente pour uploader dans les temps (5 min max)
+3. **Timeout réseau** : connexion trop lente pour envoyer dans les temps (15 min max côté serveur)
 4. **Erreur serveur** : problème technique côté backend
 
 **Solutions :**
-- Réessayez la soumission (le système fait déjà 3 tentatives automatiques en cas d'erreur Dropbox)
-- Réduisez la taille/nombre de vos images
+- Réessayez la livraison (le système fait déjà plusieurs tentatives automatiques en cas d'erreur Dropbox)
+- Réduisez la taille/nombre de vos photos
 - Vérifiez votre connexion internet
-- Si le problème persiste après 2-3 tentatives, contactez l'administrateur
+- Si le problème persiste après 2-3 tentatives, contactez l'administrateur en indiquant l'heure : chaque échec est tracé dans les logs de la plateforme
 
 ---
 
 ### Q : La soumission est très lente
 
-**Cause :** La soumission implique plusieurs opérations séquentielles :
+**Cause :** La livraison implique plusieurs opérations séquentielles :
 1. Génération du fichier Word (.docx)
 2. Création des dossiers sur Dropbox
-3. Upload du DOCX sur Dropbox
-4. Upload de chaque image sur Dropbox (une par une)
+3. Envoi du DOCX sur Dropbox
+4. Envoi de chaque photo sur Dropbox (une par une)
 5. Création des liens de partage
 6. Enregistrement en base de données
 7. Envoi de l'email de notification
 
-**Temps estimé :** De 10 secondes (texte seul) à plusieurs minutes (10 images volumineuses).
+En parallèle, un **brouillon** de l'article est créé sur rollingstone.fr (voir ci-dessous) ; cette étape ne ralentit pas et ne bloque jamais votre livraison.
 
-**Conseil :** Ne fermez pas la page pendant la soumission. Un timeout de 5 minutes est configuré côté serveur.
+**Temps estimé :** De 10 secondes (texte seul) à plusieurs minutes (photos volumineuses).
+
+**Conseil :** Ne fermez pas la page pendant l'envoi (« Envoi en cours… »). Un délai maximum de 15 minutes est configuré côté serveur.
+
+---
+
+### Q : Mon papier est aussi envoyé sur le site rollingstone.fr ?
+
+Oui, quand l'administrateur a activé cette option. À chaque livraison, la plateforme crée en parallèle un **brouillon** sur le site, marqué « en attente de relecture ». Il n'est **pas visible du public** : la rédaction le relit, complète les champs qu'elle seule maîtrise et décide de la publication. Vous n'avez rien à faire de plus, et un échec de cette étape n'empêche jamais la livraison Dropbox (l'administrateur est prévenu par email).
 
 ---
 
@@ -364,19 +476,21 @@ L'arborescence suit cette structure :
 
 ```
 Hebdo Delivery/
-└── RSH226/                          ← Numéro d'hebdo
+└── RSH240/                                        ← Numéro d'hebdo
     ├── Interview 3000/
-    │   └── Interview NomArtiste/    ← Sous-dossier par sujet
-    │       ├── article.docx
+    │   └── NomArtiste/                            ← Sous-dossier par sujet
+    │       ├── RSH240 - Interview 3000 - NomArtiste.docx
     │       └── photo.jpg
     ├── Chroniques/
-    │   └── VotreNom/                ← Sous-dossier par journaliste
-    │       ├── chronique.docx
-    │       └── image.png
+    │   └── VotreNom/                              ← Sous-dossier par journaliste
+    │       ├── RSH240 - Chroniques - Artiste.docx
+    │       └── pochette.jpg
     ├── Disque de la semaine/
-    │   └── article.docx
+    │   └── RSH240 - Disque de la semaine - Album.docx
     └── ...
 ```
+
+Le fichier Word est toujours nommé `RSHxxx - Type de papier - Titre.docx`.
 
 **Note :** Certains types de papier (Chroniques, Livres et Expo) créent un sous-dossier à votre nom. D'autres types (Interview) créent un sous-dossier au nom du sujet.
 
@@ -408,7 +522,7 @@ Hebdo Delivery/
 
 ### Q : Mon article a été livré mais la rédaction n'a pas reçu l'email
 
-**Cause :** L'envoi d'email est **non bloquant** : si le serveur SMTP rencontre une erreur, la livraison est quand même enregistrée.
+**Cause :** L'envoi d'email est **non bloquant** : si le service d'email rencontre une erreur, la livraison est quand même enregistrée. L'email part aux administrateurs actifs avec l'objet `[RSHxxx] Type de papier — Titre (Votre nom)`.
 
 **Votre article est bien livré.** Vous pouvez partager le lien Dropbox manuellement ou prévenir la rédaction directement.
 
@@ -434,13 +548,24 @@ Hebdo Delivery/
 
 ### Q : Que se passe-t-il quand je modifie une livraison ?
 
-Lors d'une modification :
+Lors d'une modification (icône **crayon**, puis **Enregistrer les modifications**) :
+- Le formulaire s'ouvre directement à l'étape Rédaction, pré-rempli
 - Le fichier Word (.docx) est **régénéré** avec le nouveau contenu
-- Les fichiers sont **ré-uploadés** sur Dropbox (même dossier)
+- Les fichiers sont **renvoyés** sur Dropbox (même dossier)
 - La base de données est **mise à jour**
-- Un nouvel email de notification est envoyé
+- La correction IA est relancée sur le texte modifié
+
+**Ce qui ne se passe pas :** aucun nouvel email n'est envoyé à la rédaction, et aucun nouveau brouillon n'est créé sur le site. Prévenez la rédaction si la modification est importante.
 
 **Attention :** Les anciennes versions du DOCX sur Dropbox sont écrasées.
+
+---
+
+### Q : "Erreur lors de la modification"
+
+**Cause :** Une étape de la mise à jour a échoué (Dropbox, réseau, fichier invalide).
+
+**Solution :** Réessayez. Si le problème persiste, contactez l'administrateur en indiquant l'heure.
 
 ---
 
@@ -494,17 +619,17 @@ Lors d'une modification :
 - Compressez vos images avant upload (qualité JPG 80-90% suffit)
 - Évitez les formats non compressés (TIFF, BMP) : préférez JPG ou PNG
 - Si possible, utilisez une connexion filaire pour les envois volumineux
-- Ne fermez pas l'onglet pendant l'upload (timeout serveur : 5 minutes)
+- Ne fermez pas l'onglet pendant l'envoi (délai maximum serveur : 15 minutes)
 
 ---
 
 ## 9. Navigateur & session
 
-### Q : Le tutoriel d'onboarding s'affiche à chaque connexion
+### Q : La présentation de départ s'affiche à chaque connexion
 
-**Cause :** Le flag d'onboarding est stocké dans le `localStorage` de votre navigateur. Si celui-ci est vidé (nettoyage de cache, navigation privée, changement de navigateur), le tutoriel se réaffiche.
+**Cause :** Le marqueur « présentation vue » est stocké dans votre navigateur. Si celui-ci est vidé (nettoyage de cache, navigation privée, changement de navigateur ou d'ordinateur), la présentation se réaffiche.
 
-**Solution :** Complétez le tutoriel à nouveau. Il ne réapparaîtra pas tant que le localStorage n'est pas vidé.
+**Solution :** Parcourez-la à nouveau jusqu'au bout. Vous pouvez aussi la relancer volontairement via **Revoir la présentation**.
 
 ---
 
@@ -525,7 +650,7 @@ Lors d'une modification :
 
 **Oui**, la plateforme est accessible depuis un navigateur mobile. Cependant, l'expérience est optimisée pour un écran d'ordinateur, notamment pour :
 - Le formulaire multi-étapes
-- Le comparatif de correction côte à côte
+- La liste des corrections et le texte final
 - L'upload d'images (glisser-déposer non disponible sur mobile)
 
 ---
@@ -535,8 +660,8 @@ Lors d'une modification :
 **Oui.** Votre session est stockée dans le navigateur. Sur un ordinateur partagé :
 - Déconnectez-vous systématiquement après utilisation
 - Utilisez la navigation privée si possible
-- Ne cochez pas "Se souvenir de moi" (si proposé)
 - Videz le cache après utilisation
+- La double authentification, si elle est active, protège votre compte même si votre mot de passe est connu
 
 ---
 
@@ -547,18 +672,27 @@ Lors d'une modification :
 | *Email ou mot de passe incorrect* | Identifiants invalides | Vérifier email/mot de passe |
 | *Compte desactive* | Compte désactivé par l'admin | Contacter l'administrateur |
 | *Token invalide* | Session expirée | Se reconnecter |
+| *Code invalide ou expiré. Réessayez.* | Code 2FA faux ou périmé | Attendre le code suivant |
+| *Champs manquants : …* | Champs obligatoires non remplis (au clic sur Corriger) | Remplir les champs listés |
 | *Ce champ est obligatoire* | Champ requis non rempli | Remplir le champ |
+| *Renseignez un lien ou ajoutez des photos ci-dessous* | Ni photos ni lien Drive (Sujet de couv, Interview 3000) | Fournir l'un des deux |
 | *Champs obligatoires manquants* | Type, titre ou hebdo manquant | Vérifier formulaire complet |
+| *Aucun numéro programmé* | Pas de numéro actif | Contacter l'administrateur |
 | *Dépassement de X signes* | Texte trop long (avertissement) | Réduire le texte (non bloquant) |
-| *Seules les images sont acceptées* | Fichier non-image uploadé | Utiliser JPG/PNG/WebP |
+| *File type must be …* / *Seules les images sont acceptées* | Fichier non-image | Utiliser JPG/PNG/WebP |
+| *Les images SVG ne sont pas acceptées* | Fichier SVG | Convertir en PNG ou JPG |
+| *contenu non reconnu comme une image valide* | Fichier corrompu ou renommé | Réexporter l'image |
 | *File is larger than 25 MB* | Image trop volumineuse | Compresser l'image |
-| *X photo(s) minimum requise(s)* | Pas assez d'images | Ajouter les images requises |
+| *X photo(s) minimum requise(s)* / *Au moins une photo est requise* | Pas assez de photos | Ajouter les photos requises |
+| *Ce format accepte une seule photo* | Trop de photos pour le format | Garder une seule photo |
 | *Veuillez sélectionner une note* | Note étoiles requise non remplie | Cliquer sur les étoiles |
 | *Texte requis* | Texte vide envoyé à la correction | Remplir le champ texte |
 | *Texte trop long (max 100 000 signes)* | Texte dépasse 100k caractères | Raccourcir le texte |
-| *Correction automatique indisponible* | Timeout ou erreur IA | Réessayer ou soumettre sans correction |
+| *Correction automatique indisponible* | Timeout ou erreur IA | Relire le texte d'origine ou réessayer |
+| *Trop de corrections demandées* | Plus de 30 corrections en 1 h | Attendre |
 | *Erreur préparation des dossiers Dropbox* | Dropbox inaccessible | Réessayer dans quelques secondes |
-| *Erreur lors de la livraison* | Erreur serveur à la soumission | Réessayer, puis contacter l'admin |
+| *Erreur lors de la livraison* | Erreur serveur à la livraison | Réessayer, puis contacter l'admin |
+| *Erreur lors de la modification* | Erreur serveur à la mise à jour | Réessayer, puis contacter l'admin |
 | *Livraison introuvable* | ID invalide ou livraison supprimée | Vérifier sur le Dashboard |
 | *Livraison introuvable ou non autorisée* | Tentative de modifier la livraison d'un autre | Seul l'auteur peut modifier |
 | *Hebdo introuvable* | Hebdo sélectionné n'existe plus | Rafraîchir la page |
@@ -571,7 +705,7 @@ Lors d'une modification :
 En cas de problème non résolu par cette FAQ :
 
 - **Problème technique** → Contactez l'administrateur de la plateforme
-- **Question éditoriale** → Contactez votre rédacteur en chef
+- **Question éditoriale** → Contactez votre rédacteur en chef (carte **Rédaction en chef** en bas du tableau de bord)
 - **Problème de compte** → Contactez l'administrateur pour la création/réactivation de compte
 
 ---

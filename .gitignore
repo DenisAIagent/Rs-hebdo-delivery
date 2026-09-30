@@ -20,6 +20,13 @@ deck/
 # Papiers de l'hebdo en cours de production (contenu redactionnel, 90 Mo) —
 # dossier de travail local, jamais sur GitHub.
 HEBDO4septembre/
+HEBDO*/
+RSH2*/
 
 # Config locale Claude Code (permissions machine)
 .claude/
+
+# Caches et fichiers temporaires
+__pycache__/
+*.pyc
+supabase/.temp/

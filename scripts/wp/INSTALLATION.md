@@ -1,5 +1,7 @@
 # Note pour le développeur de rollingstone.fr
 
+> **État au 30 septembre 2026 : le fichier est installé et actif.** `GET https://www.rollingstone.fr/wp-json/` liste le namespace `rs-delivery/v1` et sa route `post-meta/(?P<id>\d+)` ; le schéma de `wp/v2/posts` accepte les trois métas Yoast. Il reste à lire les métas d'un article de référence (étape « Vérification » ci-dessous) pour renseigner le réglage `WP_META_MAP` de l'application (Style Music, Main Music Artist, note Reviewer).
+
 ## Ce qu'on demande
 
 Déposer **un seul fichier** sur le site :
@@ -56,13 +58,15 @@ enregistré. Vérifiable avec `GET /wp-json/wp/v2/posts?per_page=1`.
 ## Vérification après installation
 
 ```bash
-# 1. Le namespace doit apparaître
-curl -s https://www.rollingstone.fr/wp-json/ | grep -o 'rs-delivery/v1'
+# 1. Le namespace doit apparaître (le pare-feu Cloudflare exige un User-Agent de navigateur)
+curl -s -A "Mozilla/5.0" https://www.rollingstone.fr/wp-json/ | grep -o 'rs-delivery/v1'
 
 # 2. Lecture d'un article de référence (chronique déjà notée)
-curl -s -u 'rs_delivery:<mot-de-passe-applicatif>' \
+curl -s -A "Mozilla/5.0" -u 'rs_delivery:<mot-de-passe-applicatif>' \
   https://www.rollingstone.fr/wp-json/rs-delivery/v1/post-meta/156730
 ```
+
+Un `404` sur un ID inexistant (ex. `post-meta/1`) est normal et ne signifie pas que le plugin est absent.
 
 La seconde commande doit renvoyer les métas de l'article, dont celles du plugin Reviewer avec la
 note 4. C'est tout ce dont nous avons besoin : nous en déduisons les clés, et l'application prend

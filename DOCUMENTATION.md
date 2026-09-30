@@ -1,8 +1,8 @@
 # RS Hebdo Delivery — Documentation Technique
 
-**Version** : 1.1.0  
-**Date** : 2026-04-10  
-**Auteur** : Documentation générée à partir du code source
+**Version** : 1.3.0  
+**Date** : 2026-09-30  
+**Auteur** : Documentation générée à partir du code source (état du dépôt au commit `3e63e25`, 27 septembre 2026)
 
 ---
 
@@ -28,21 +28,23 @@
 
 ## 1. Vue d'ensemble
 
-RS Hebdo Delivery est la plateforme interne de Rolling Stone France qui gère la remise des papiers par les journalistes. L'outil couvre l'intégralité du cycle de vie d'un papier : saisie du contenu dans un formulaire structuré par type de papier, correction orthographique et stylistique automatisée via Claude (IA d'Anthropic), génération du fichier DOCX formaté, dépôt dans Dropbox dans la bonne arborescence, et notification email à la rédaction en chef.
+RS Hebdo Delivery est la plateforme interne de Rolling Stone France qui gère la remise des papiers par les journalistes. L'outil couvre l'intégralité du cycle de vie d'un papier : saisie du contenu dans un formulaire structuré par type de papier, correction orthographique et stylistique automatisée par IA (Claude d'Anthropic par défaut, Gemini ou Mistral au choix de l'admin), génération du fichier DOCX formaté, dépôt dans Dropbox dans la bonne arborescence, notification email à la rédaction en chef et, si le module est activé, création d'un **brouillon WordPress** sur rollingstone.fr.
 
 ### Acteurs principaux
 
 | Acteur | Rôle |
 |---|---|
 | Journaliste | Remise des papiers via le formulaire, consultation de ses livraisons |
-| Administrateur | Gestion des hebdos, types de papier, journalistes, consultation des logs, paramétrage des clés API et du prompt IA |
+| Administrateur | Gestion des hebdos, types de papier, journalistes (dont réinitialisation 2FA), consultation des logs, paramétrage des clés API, du moteur IA, du module WordPress et du prompt IA ; livraison au nom d'un journaliste ; renvoi d'un papier vers WordPress |
 
 ### Flux simplifié
 
 ```
 Journaliste → sélection hebdo → sélection type papier → saisie contenu
-           → correction IA (Claude) → review → soumission
-           → génération DOCX → upload Dropbox → notification email → enregistrement BDD
+           → correction IA → review → soumission
+           → génération DOCX → upload Dropbox → enregistrement BDD
+           → notification email
+           → (en parallèle, non bloquant) brouillon WordPress [EN ATTENTE DE RELECTURE]
 ```
 
 ---
@@ -62,13 +64,14 @@ Journaliste → sélection hebdo → sélection type papier → saisie contenu
 │  │  /*  (fallback) → Sert le build React (dist/)        │  │
 │  └──────────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────┘
-          │                    │                    │
-          ▼                    ▼                    ▼
-   ┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-   │  Supabase   │    │   Dropbox    │    │  Anthropic   │
-   │ (PostgreSQL │    │   API v2     │    │  Claude API  │
-   │  + Auth)    │    │              │    │              │
-   └─────────────┘    └──────────────┘    └──────────────┘
+          │              │              │               │              │
+          ▼              ▼              ▼               ▼              ▼
+   ┌────────────┐ ┌────────────┐ ┌──────────────┐ ┌────────────┐ ┌──────────────┐
+   │  Supabase  │ │  Dropbox   │ │ IA correction│ │   Resend   │ │  WordPress   │
+   │ (Postgres  │ │  API v2    │ │ Claude /     │ │  (email)   │ │ rollingstone │
+   │  + Auth +  │ │ (originaux)│ │ Gemini /     │ │            │ │ .fr REST +   │
+   │  TOTP)     │ │            │ │ Mistral      │ │            │ │ mu-plugin    │
+   └────────────┘ └────────────┘ └──────────────┘ └────────────┘ └──────────────┘
 ```
 
 ### Choix d'architecture : application monorepo
@@ -91,10 +94,14 @@ En production (Railway), le frontend est compilé en fichiers statiques (`fronte
 | Backend framework | Express | 5.x |
 | Backend langage | TypeScript | 6.x |
 | Base de données | Supabase (PostgreSQL) | — |
-| Auth | Supabase Auth | — |
+| Auth | Supabase Auth (+ MFA TOTP optionnel) | — |
 | Stockage fichiers | Dropbox API | v2 |
 | Génération DOCX | docx (npm) | 9.x |
-| IA correction | Anthropic Claude | claude-sonnet-4-20250514 |
+| IA correction (défaut) | Anthropic Claude (`@anthropic-ai/sdk` 0.80) | `claude-sonnet-4-5-20250929` par défaut, modèle choisi dans l'admin |
+| IA correction (alternatives) | Google Gemini (`@google/generative-ai`), Mistral (`@mistralai/mistralai`), Claude Code CLI (local uniquement) | — |
+| IA mise en forme WordPress | Anthropic Claude (même clé, même modèle) | — |
+| Images WordPress | sharp | 0.34 |
+| Publication | WordPress REST API (`wp/v2`) + mu-plugin `rs-delivery/v1` | — |
 | Email | Resend (API) | — |
 | Upload fichiers | Multer | 2.x |
 | Déploiement | Railway (Nixpacks) | — |
@@ -143,22 +150,21 @@ C'est la première chose à faire car tout le reste en dépend.
    - Insère les **4 clés `app_settings`** vides (Anthropic, Dropbox)
    - Crée le **premier hebdo** (RSH226)
 
-6. **Créer la table `correction_prompt`** (non incluse dans le schéma principal) — exécuter dans le SQL Editor :
+6. **Appliquer les migrations `supabase/migrations/`** (dans l'ordre chronologique des noms de fichiers) — via `supabase db push` ou en collant chaque fichier dans le SQL Editor. Elles complètent le schéma principal :
 
-```sql
-CREATE TABLE correction_prompt (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  prompt_text TEXT NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_by UUID REFERENCES profiles(id)
-);
+| Migration | Rôle |
+|---|---|
+| `20260325000000_initial_schema.sql` | Tables de base (`profiles`, `paper_types`, `hebdo_config`, `deliveries`), RLS, seed types de papier et premier hebdo |
+| `20260326000000_correction_prompt.sql` | Table `correction_prompt` + prompt de correction par défaut |
+| `20260520000000_ai_provider_settings.sql` | Table `app_settings` (si absente) + clés `AI_PROVIDER` (défaut `anthropic`) et `GEMINI_API_KEY` |
+| `20260521000000_mistral_settings.sql` | Clé `MISTRAL_API_KEY` |
+| `20260825000000_wordpress_module.sql` | Clés `WORDPRESS_*` + colonnes `wp_post_id`, `wp_post_url`, `wp_status`, `wp_payload` sur `deliveries` |
+| `20260825120000_rls_logs_prompt.sql` | Table `delivery_logs` (si absente) + RLS admin sur `delivery_logs` et `correction_prompt` |
+| `20260903000000_mfa_toggle.sql` | Clé `REQUIRE_MFA` (défaut `false`) |
 
-ALTER TABLE correction_prompt ENABLE ROW LEVEL SECURITY;
+   > **Attention** : `supabase-schema.sql` et les migrations décrivent deux états qui ont divergé (voir l'audit `docs/security/audit-2026-09-04.md`). En cas de doute, la base de production fait foi ; `fields_config` des types de papier notamment est à lire en direct via `GET /api/deliveries/paper-types` et non dans le seed.
 
-CREATE POLICY "Admins can manage correction prompt"
-  ON correction_prompt FOR ALL
-  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
-```
+6b. **Activer le TOTP côté Supabase** (nécessaire seulement si vous comptez activer la 2FA depuis l'admin) : Dashboard → Authentication → MFA → TOTP. En local, `supabase/config.toml` l'active déjà (`[auth.mfa.totp] enroll_enabled = true`).
 
 7. **Créer le premier compte administrateur** :
    - Dans Supabase → **Authentication** → **Users** → **Add User** (email + mot de passe)
@@ -199,7 +205,7 @@ Remplir chaque `.env` avec les valeurs obtenues des services ci-dessus. Voir la 
 - `SETUP_SECRET_TOKEN` : générer une chaîne aléatoire (ex. `openssl rand -hex 32`). Ce token sécurise l'endpoint de configuration initiale `/api/setup/configure` (voir section 6)
 - `FRONTEND_URL` : `http://localhost:5173` en dev
 
-Les clés Anthropic, Dropbox et Resend peuvent être configurées plus tard via l'interface setup ou l'admin.
+Les clés Anthropic, Dropbox et Resend peuvent être configurées plus tard via l'interface setup ou l'admin. Les réglages WordPress, le moteur IA, le modèle Claude et la 2FA se pilotent uniquement depuis l'admin (table `app_settings`), avec fallback sur les variables d'environnement pour les secrets.
 
 ### Étape 4 : Lancement en développement
 
@@ -240,6 +246,8 @@ railway up
    - Mettre cette URL dans `FRONTEND_URL` sur Railway
    - Mettre cette URL dans les **Redirect URLs** de Supabase (voir étape 1.8)
 
+7. Le fichier `.railwayignore` à la racine exclut de l'envoi tout ce que Nixpacks ne compile pas (`node_modules/`, `dist/`, dossiers de travail `HEBDO*/`, `macos/`, `.env`). Sans lui, `railway up` téléversait ~90 Mo de visuels et expirait avant le début du build.
+
 ### Build et lancement production (hors Railway)
 
 ```bash
@@ -254,53 +262,94 @@ npm start        # lance Express qui sert l'API + le frontend statique
 ```
 rs-hebdo-delivery/
 ├── package.json              # Monorepo root — scripts build/start/dev
-├── supabase-schema.sql       # Schéma complet de la base de données
+├── nixpacks.toml             # Build Railway
+├── .railwayignore            # Exclusions de `railway up` (node_modules, dist, HEBDO*/, macos/, .env)
+├── .gitignore                # Exclut aussi macos/ (app desktop, secrets bakés) et HEBDO*/ (papiers de la semaine)
+├── supabase-schema.sql       # Schéma historique complet (voir §5 : les migrations font foi)
 ├── DOCUMENTATION.md          # Ce fichier
+├── README.md / TUTO-JOURNALISTE.md / FAQ-JOURNALISTE.md
+│
+├── docs/
+│   └── security/
+│       └── audit-2026-09-04.md   # Audit sécurité (statique + live) — référence pour §12
+│
+├── supabase/
+│   ├── config.toml           # Config locale Supabase (TOTP activé)
+│   └── migrations/           # 7 migrations SQL, source de vérité du schéma (liste en §2b étape 6)
+│
+├── scripts/
+│   ├── livrer_hebdo.py       # Livraison en lot d'un hebdo via l'API (correction IA puis POST /api/deliveries)
+│   ├── wpe                   # CLI maison WP Engine : WP-CLI via SSH, webhooks headless, API REST v1
+│   ├── wp/
+│   │   ├── rs-delivery-rest-meta.php   # mu-plugin WordPress (metas Yoast en REST + routes rs-delivery/v1)
+│   │   └── INSTALLATION.md             # Note pour le développeur du site
+│   └── authorship/
+│       ├── sign.mjs          # Signe l'empreinte des sources (Ed25519) → fichiers provenance.ts
+│       └── verify.mjs        # Vérifie un marqueur de paternité (sources, dist ou bundle en prod)
+│
+├── HEBDO<numéro>/            # Dossiers de travail locaux (papiers + visuels d'un numéro) — jamais versionnés
 │
 ├── backend/
 │   ├── package.json
 │   ├── tsconfig.json
+│   ├── .env.example
 │   └── src/
-│       ├── index.ts          # Point d'entrée Express, middlewares globaux
+│       ├── index.ts          # Point d'entrée Express, middlewares globaux, BIND_HOST
+│       ├── meta/
+│       │   └── provenance.ts # Marqueur de paternité signé (généré, ne pas éditer)
 │       ├── middleware/
-│       │   ├── auth.ts       # Vérification JWT Supabase
+│       │   ├── auth.ts       # Vérification JWT Supabase + niveau AAL2 si 2FA requise
 │       │   └── admin.ts      # Vérification rôle admin
 │       ├── routes/
-│       │   ├── auth.ts       # GET /api/auth/profile
-│       │   ├── deliveries.ts # CRUD livraisons journalistes
-│       │   ├── admin.ts      # CRUD admin (types, hebdos, journalistes, logs, prompt, settings)
+│       │   ├── auth.ts       # GET /api/auth/config (public), GET /api/auth/profile
+│       │   ├── deliveries.ts # CRUD livraisons journalistes (déclenche le pipeline WordPress)
+│       │   ├── admin.ts      # CRUD admin (types, hebdos, journalistes + reset 2FA, livraisons, logs, prompt, settings, WordPress, modèles)
 │       │   ├── correction.ts # POST /api/correct
 │       │   └── setup.ts      # GET /api/setup/status, POST /api/setup/configure
 │       ├── services/
-│       │   ├── claude.ts     # Appel à l'API Anthropic (correction texte)
-│       │   ├── docx.ts       # Génération du fichier DOCX
-│       │   ├── dropbox.ts    # Upload Dropbox API v2 (service principal)
-│       │   ├── email.ts      # Notification email via Resend API
-│       │   ├── deliveryLogger.ts # Logs structurés en base Supabase
-│       │   └── hebdoRotation.ts  # Rotation automatique des hebdos (cron interne)
+│       │   ├── correction.ts       # Aiguillage vers le moteur IA actif (AI_PROVIDER)
+│       │   ├── correctionPrompt.ts # Prompt de correction (BDD + fallback), marqueurs de lignes vides
+│       │   ├── claude.ts           # Anthropic : correction (sortie structurée), liste live des modèles
+│       │   ├── gemini.ts           # Google Gemini : correction (cascade de modèles)
+│       │   ├── mistral.ts          # Mistral : correction (cascade de modèles)
+│       │   ├── claudeCode.ts       # Claude Code CLI local (secours hors production)
+│       │   ├── docx.ts             # Génération du fichier DOCX
+│       │   ├── dropbox.ts          # Dropbox API v2 : upload, réattribution, relecture des images
+│       │   ├── email.ts            # Notifications Resend (livraison, échec WordPress)
+│       │   ├── deliveryLogger.ts   # Logs structurés en base Supabase
+│       │   ├── hebdoRotation.ts    # Rotation automatique des hebdos (cron interne)
+│       │   ├── mfaPolicy.ts        # Politique 2FA (REQUIRE_MFA), cache 30 s
+│       │   ├── imageResize.ts      # Dérivés JPEG pour WordPress (image à la une 1280×853, corps ≤ 1600 px)
+│       │   ├── wordpress.ts        # Client REST WordPress (anti-SSRF, médias, tags, brouillons, metas)
+│       │   ├── wordpressPublisher.ts # Pipeline complet de publication en brouillon + editorTodo
+│       │   └── wordpressRules.ts   # Conventions éditoriales, taxonomie, Style Music, prompt IA WordPress
 │       └── utils/
+│           ├── dates.ts      # Fenêtres vendredi → vendredi des hebdos
 │           └── supabase.ts   # Client Supabase (admin + user)
 │
 └── frontend/
     ├── package.json
     ├── vite.config.ts
     ├── tsconfig.json
+    ├── .env.example
     └── src/
-        ├── main.tsx          # Point d'entrée React
+        ├── main.tsx          # Point d'entrée React (référence PROVENANCE)
         ├── App.tsx           # Routeur principal
         ├── types/
         │   └── index.ts      # Tous les types TypeScript partagés
         ├── lib/
-        │   └── supabase.ts   # Client Supabase frontend (auth uniquement)
+        │   ├── supabase.ts   # Client Supabase frontend (auth uniquement)
+        │   └── provenance.ts # Marqueur de paternité signé (généré, ne pas éditer)
         ├── stores/
-        │   └── authStore.ts  # Store Zustand — état d'authentification
+        │   └── authStore.ts  # Store Zustand — état d'authentification + état 2FA
         ├── services/
         │   └── api.ts        # Couche HTTP (Axios) vers le backend
         ├── components/
         │   ├── Layout.tsx    # Shell de l'application (nav, sidebar)
-        │   └── ProtectedRoute.tsx # HOC de protection des routes
+        │   └── ProtectedRoute.tsx # HOC de protection des routes (redirige vers /mfa si besoin)
         └── pages/
             ├── LoginPage.tsx
+            ├── MfaPage.tsx            # Saisie du code TOTP ou enrôlement (QR code)
             ├── ForgotPasswordPage.tsx # Formulaire "Mot de passe oublié"
             ├── ResetPasswordPage.tsx  # Formulaire de réinitialisation (via lien email)
             ├── OnboardingPage.tsx     # Tutoriel interactif 5 étapes (premier login)
@@ -311,12 +360,14 @@ rs-hebdo-delivery/
                 ├── AdminPage.tsx      # Shell de l'admin (onglets)
                 ├── PaperTypesTab.tsx
                 ├── HebdoTab.tsx
-                ├── JournalistsTab.tsx
-                ├── DeliveriesTab.tsx
+                ├── JournalistsTab.tsx # + réinitialisation 2FA d'un compte
+                ├── DeliveriesTab.tsx  # + envoi/renvoi WordPress (globe), pastille "à finir dans l'éditeur"
                 ├── PromptTab.tsx
                 ├── LogsTab.tsx
-                └── SettingsTab.tsx
+                └── SettingsTab.tsx    # Moteur IA, modèle Claude, 2FA, WordPress, clés API
 ```
+
+Le dossier `macos/` (application desktop Electron) existe en local mais est exclu du dépôt et du déploiement : il embarque des secrets et ne joue aucun rôle sur Railway.
 
 ---
 
@@ -349,6 +400,52 @@ rs-hebdo-delivery/
 - **Comment l'obtenir** : https://console.anthropic.com → API Keys
 - **Requis** : Oui pour la correction automatique (l'application reste fonctionnelle sans elle, mais la correction est désactivée)
 - **Note** : Cette clé peut aussi être stockée dans la table `app_settings` de Supabase et mise à jour via l'interface admin. La clé en variable d'environnement est utilisée si la table ne contient pas de valeur.
+- **Usage** : correction de texte (si `AI_PROVIDER = anthropic`) **et** mise en forme des articles WordPress (toujours Claude, quel que soit le moteur de correction choisi).
+
+#### `CLAUDE_MODEL`
+- **Description** : Identifiant du modèle Claude utilisé pour la correction et la mise en forme WordPress
+- **Format** : `claude-sonnet-4-5-20250929`, `claude-opus-4-1-...`
+- **Priorité** : `app_settings.CLAUDE_MODEL` (choisi dans l'admin, liste live via `GET /api/admin/models`) → variable d'environnement → `DEFAULT_CLAUDE_MODEL` codé en dur (`claude-sonnet-4-5-20250929`)
+- **Requis** : Non. Si le modèle configuré n'existe plus, le backend bascule sur le modèle par défaut à la seconde tentative.
+
+#### `GEMINI_API_KEY`
+- **Description** : Clé Google AI Studio, utilisée uniquement si `AI_PROVIDER = gemini`
+- **Format** : `AIza...`
+- **Priorité** : `app_settings` puis variable d'environnement
+- **Requis** : Non (seulement si Gemini est le moteur actif)
+
+#### `MISTRAL_API_KEY`
+- **Description** : Clé Mistral, utilisée uniquement si `AI_PROVIDER = mistral`
+- **Priorité** : `app_settings` puis variable d'environnement
+- **Requis** : Non (seulement si Mistral est le moteur actif)
+
+#### `CLAUDE_CODE_BIN` / `CLAUDE_CODE_MODEL`
+- **Description** : Chemin du binaire `claude` (défaut `claude`) et alias de modèle (défaut `sonnet`) utilisés par le moteur `claude-code`. Ce moteur lance la CLI Claude Code sur la machine hôte (authentification OAuth de l'abonnement, `ANTHROPIC_API_KEY` volontairement retirée de l'environnement du process).
+- **Requis** : Non. **Ne fonctionne pas sur Railway** (le binaire n'est pas installé) : moteur de secours local uniquement, signalé comme tel dans l'admin.
+
+#### `REQUIRE_MFA`
+- **Description** : Verrou serveur de la double authentification TOTP. `true` force la 2FA quel que soit le réglage `app_settings.REQUIRE_MFA` piloté depuis l'admin. Toute autre valeur (ou absence) laisse la main au réglage admin.
+- **Requis** : Non (défaut : 2FA désactivée). Voir §12.
+
+#### `BIND_HOST`
+- **Description** : Interface d'écoute du serveur Express. Non définie (Railway) : toutes les interfaces. Définie (ex. `127.0.0.1` pour l'app desktop) : écoute restreinte, serveur injoignable depuis le réseau.
+- **Requis** : Non
+
+#### `WORDPRESS_ENABLED`, `WORDPRESS_URL`, `WORDPRESS_USERNAME`, `WORDPRESS_APP_PASSWORD`
+- **Description** : Module WordPress. Ces quatre valeurs sont d'abord lues dans `app_settings` (onglet Paramètres → WordPress) puis, si vides, dans les variables d'environnement.
+- **`WORDPRESS_ENABLED`** : `true`/`1` active le module ; tout le reste le désactive (skip silencieux du pipeline)
+- **`WORDPRESS_URL`** : **HTTPS obligatoire** (sauf `http://localhost` en dev) ; l'hôte doit résoudre vers une IP publique, sinon `assertSafeWpUrl` refuse (anti-SSRF)
+- **`WORDPRESS_USERNAME`** : compte WordPress dédié (en production `rs_delivery`, rôle `api_writer`)
+- **`WORDPRESS_APP_PASSWORD`** : mot de passe application (profil WP → Mots de passe d'application). **Recommandé en variable Railway** plutôt qu'en base : c'est le cas en production, la ligne `app_settings` est vide.
+- **Requis** : Non (module optionnel)
+
+#### `WP_META_MAP` (uniquement `app_settings`)
+- **Description** : JSON qui associe les trois champs éditoriaux du thème/des plugins aux clés de métadonnées WordPress réelles : `{"styleMusic":"<clé>","mainArtist":"<clé>","reviewScore":"<clé>"}`. Tant qu'une clé est vide, le champ correspondant n'est pas envoyé (aucun nom de clé n'est jamais deviné) et reste listé dans `editorTodo`.
+- **Comment la remplir** : lire les métas d'un article de référence via `GET /wp-json/rs-delivery/v1/post-meta/{id}` (mu-plugin, auth par mot de passe application), repérer les clés, les saisir dans l'admin. Aucun redéploiement nécessaire.
+- **État au 30/09/2026** : vide. Style Music, Main Music Artist et note Reviewer sont donc encore à finir à la main dans l'éditeur (voir §7 étape 10).
+
+#### `AI_PROVIDER` (uniquement `app_settings`)
+- **Description** : Moteur de correction actif : `anthropic` (défaut), `gemini`, `mistral` ou `claude-code`. Se change dans l'admin (Paramètres → Moteur IA). Une valeur inconnue retombe sur `anthropic`.
 
 #### `DROPBOX_APP_KEY`
 - **Description** : Identifiant de l'application Dropbox
@@ -421,6 +518,7 @@ Les notifications email sont envoyées via **Resend** (https://resend.com).
 
 - Si `RESEND_API_KEY` est absente, les emails sont silencieusement ignorés. La livraison n'échoue pas.
 - Si `NOTIFY_EMAIL_ALMA` et `NOTIFY_EMAIL_DENIS` sont toutes deux vides, les emails ne sont pas envoyés et un avertissement est loggué en console.
+- Les mêmes deux adresses reçoivent l'**alerte d'échec WordPress** (`notifyWordpressError`) : livraison Dropbox OK mais pas de brouillon créé, avec le détail de l'erreur et un lien vers l'app pour relancer l'envoi.
 
 ### Variables frontend (fichier `frontend/.env`)
 
@@ -438,11 +536,13 @@ Les notifications email sont envoyées via **Resend** (https://resend.com).
 - **Par défaut** : Chaîne vide — dans ce cas, les appels API sont relatifs à l'origine courante. C'est le comportement attendu en production puisque le backend sert le frontend.
 - **En développement** : Laisser vide ou mettre `http://localhost:3005`
 
+Le frontend ne lit **que** ces trois variables (`import.meta.env.VITE_*`). La politique 2FA n'est pas une variable de build : le frontend l'interroge au démarrage via `GET /api/auth/config`.
+
 ---
 
 ## 5. Base de données
 
-Le schéma complet se trouve dans `supabase-schema.sql`. Les politiques RLS (Row Level Security) sont activées sur toutes les tables.
+Le schéma historique complet se trouve dans `supabase-schema.sql` ; les évolutions depuis sont dans `supabase/migrations/` (liste en §2b, étape 6), qui constituent la source de vérité. Les politiques RLS (Row Level Security) sont déclarées sur toutes les tables, mais **non fonctionnelles en l'état** (récursion, voir §12) : la protection effective est assurée par le backend.
 
 ### Table `profiles`
 
@@ -563,6 +663,10 @@ Table centrale. Chaque ligne représente un papier soumis par un journaliste.
 | `sign_count` | INTEGER | Longueur en caractères du corps du texte |
 | `created_at` | TIMESTAMPTZ | — |
 | `delivered_at` | TIMESTAMPTZ | Horodatage de livraison définitive |
+| `wp_status` | TEXT (nullable) | Suivi WordPress : `pending` (envoi en cours), `sent` (brouillon créé), `error` (échec, voir Logs), `NULL` (module désactivé ou jamais envoyé) — migration `20260825000000` |
+| `wp_post_id` | INTEGER (nullable) | ID du brouillon WordPress |
+| `wp_post_url` | TEXT (nullable) | URL d'édition du brouillon (`/wp-admin/post.php?post=…&action=edit`) |
+| `wp_payload` | JSONB (nullable) | Payload complet produit par l'IA (titre, slug, chapô, HTML, catégories, tags, Yoast, `mainArtist`, `styleMusic`, `photoCredit`) enrichi par le pipeline : `featuredMediaId`, `bodyMediaIds`, `reviewScore`, `styleMusicValue`, `metaRejected` (clés refusées par WordPress) et **`editorTodo`** (liste lisible de ce qui reste à saisir dans l'éditeur) |
 
 **Politiques RLS** :
 - Un journaliste peut lire et insérer uniquement ses propres livraisons
@@ -604,6 +708,18 @@ Logs structurés de chaque étape du pipeline de livraison. Visibles uniquement 
 | `database` | Enregistrement en base |
 | `email` | Envoi de la notification |
 | `success` | Livraison complètement terminée |
+| `dropbox-prepare` | Pré-création des dossiers d'un hebdo |
+| `admin-reassign` | Réattribution d'une livraison à un autre journaliste |
+| `wp-start` | Début de l'envoi WordPress |
+| `wp-links` | Recherche des liens internes candidats (warn si impossible) |
+| `wp-format` | Mise en forme IA, catégories, shortcode Reviews Box |
+| `wp-tags` | Tag impossible à créer (ignoré) |
+| `wp-media` | Image à la une, dérivés web, réutilisation médiathèque, doublons |
+| `wp-meta` | Métas acceptées ou **refusées** par WordPress (Yoast, Style Music, Main Artist, Reviewer) |
+| `wp-success` | Brouillon créé (ID + URL d'édition) |
+| `wp-error` | Échec global de l'envoi (déclenche l'email d'alerte) |
+
+**RLS** : lecture réservée aux admins (migration `20260825120000_rls_logs_prompt.sql`, qui recrée aussi la table si elle manque sur une base montée uniquement via migrations).
 
 **Rétention** : Le code prévoit une suppression manuelle des logs de plus de 30 jours via `DELETE /api/admin/logs`. Le commentaire dans le schéma SQL mentionne une suppression automatique des logs de plus de 90 jours pouvant être activée via un cron Supabase.
 
@@ -621,13 +737,23 @@ Stockage des clés API et paramètres configurables par les admins depuis l'inte
 | `updated_at` | TIMESTAMPTZ | — |
 | `updated_by` | UUID (FK → profiles, nullable) | Admin ayant effectué la dernière modification |
 
-**Clés prédéfinies** (seed) :
-- `ANTHROPIC_API_KEY`
-- `DROPBOX_APP_KEY`
-- `DROPBOX_APP_SECRET`
-- `DROPBOX_REFRESH_TOKEN`
+**Clés connues** (seed des migrations) :
 
-**Note** : Le service `claude.ts` lit `ANTHROPIC_API_KEY` depuis cette table en priorité, avec fallback sur la variable d'environnement. Idem pour `getWpConfig()` (WordPress). Le service `dropbox.ts` utilise uniquement les variables d'environnement.
+| Clé | Secret ? | Rôle |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | oui | Correction Claude + mise en forme WordPress |
+| `GEMINI_API_KEY`, `MISTRAL_API_KEY` | oui | Moteurs de correction alternatifs |
+| `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN` | oui | Dropbox |
+| `WORDPRESS_APP_PASSWORD` | oui | Mot de passe application WordPress (vide en prod : variable Railway) |
+| `AI_PROVIDER` | non | `anthropic` / `gemini` / `mistral` / `claude-code` |
+| `CLAUDE_MODEL` | non | Modèle Claude choisi dans l'admin |
+| `REQUIRE_MFA` | non | `true`/`false` — 2FA imposée à tous |
+| `WORDPRESS_ENABLED`, `WORDPRESS_URL`, `WORDPRESS_USERNAME` | non | Module WordPress |
+| `WP_META_MAP` | non | Mapping JSON des clés de métas du thème/plugins (voir §4) |
+
+Les clés « non secrètes » (`NON_SECRET_KEYS` dans `routes/admin.ts`) sont renvoyées en clair par `GET /api/admin/settings` ; les autres sont masquées.
+
+**Note** : `claude.ts`, `gemini.ts`, `mistral.ts` et `getWpConfig()` (WordPress) lisent leur clé dans cette table en priorité, avec fallback sur la variable d'environnement. `mfaPolicy.ts` lit `REQUIRE_MFA` ici, sauf si la variable d'environnement `REQUIRE_MFA=true` force l'activation. Le service `dropbox.ts` utilise uniquement les variables d'environnement.
 
 **Secrets recommandés en variables d'environnement Railway** (plutôt qu'en clair dans cette table) : `ANTHROPIC_API_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN`, `GEMINI_API_KEY`, `MISTRAL_API_KEY`, `WORDPRESS_APP_PASSWORD`. Le mot de passe applicatif WordPress **a déjà été déplacé** vers Railway (`WORDPRESS_APP_PASSWORD`), sa ligne `app_settings` est vidée. Le fallback `process.env` rend la bascule transparente pour le code.
 
@@ -644,7 +770,7 @@ Stocke le prompt système envoyé à Claude pour la correction de texte. Il n'ex
 | `updated_at` | TIMESTAMPTZ | — |
 | `updated_by` | UUID (FK → profiles, nullable) | Admin ayant modifié le prompt |
 
-**Note** : La table `correction_prompt` n'est pas présente dans le fichier `supabase-schema.sql` principal. Elle doit exister dans la base Supabase déployée. Si la table est absente ou vide, le service `claude.ts` utilise automatiquement le `FALLBACK_PROMPT` codé en dur dans le code source.
+**Note** : La table `correction_prompt` est créée et alimentée par la migration `20260326000000_correction_prompt.sql` (RLS admin ajoutée par `20260825120000`). Si la table est absente ou vide, `correctionPrompt.ts` utilise automatiquement le `FALLBACK_PROMPT` codé en dur. Le prompt est partagé par tous les moteurs IA (`buildSystemPrompt` y ajoute les consignes de conservation des lignes vides).
 
 ---
 
@@ -672,13 +798,15 @@ auth.users
 
 ### Authentification des requêtes
 
-Tous les endpoints sauf `/api/health` et `/api/setup/*` exigent un header `Authorization` :
+Tous les endpoints sauf `/api/health`, `/api/setup/*` et `/api/auth/config` exigent un header `Authorization` :
 
 ```
 Authorization: Bearer <supabase_access_token>
 ```
 
 Le token est le JWT Supabase de la session active. Le frontend l'injecte automatiquement via un intercepteur Axios.
+
+Si la 2FA est active (voir §12), le JWT doit porter le claim `aal: 'aal2'` ; sinon la réponse est `401 { "error": "Verification 2FA requise", "code": "mfa_required" }`.
 
 Les endpoints sous `/api/admin/*` exigent en plus que le profil de l'utilisateur ait `role = 'admin'`.
 
@@ -739,6 +867,11 @@ Configure les clés API pour la première fois. Bloqué si l'application est dé
 ---
 
 ### Authentification
+
+#### `GET /api/auth/config`
+Public. Retourne la politique d'authentification, lue par le frontend au démarrage et après chaque login pour décider d'afficher `/mfa`.
+
+**Réponse 200** : `{ "mfaRequired": true }` (ou `false`)
 
 #### `GET /api/auth/profile`
 Retourne le profil complet de l'utilisateur identifié par le token Bearer.
@@ -813,8 +946,10 @@ Pré-crée la structure de dossiers Dropbox pour un hebdo donné (dossier racine
 
 **Réponse 200** :
 ```json
-{ "message": "Dossiers prets", "folderUrl": "https://www.dropbox.com/..." }
+{ "message": "Dossiers prets" }
 ```
+
+Le lien partagé du dossier racine de l'hebdo n'est volontairement **pas** renvoyé : il donnerait accès aux papiers de tous les journalistes.
 
 ---
 
@@ -836,12 +971,14 @@ Soumet une livraison complète. Requiert `multipart/form-data`.
 | `hebdo_id` | string | UUID de l'hebdo cible |
 | `title` | string | Titre calculé côté frontend |
 | `metadata` | string (JSON sérialisé) | Tous les champs du formulaire |
-| `images` | File[] | Images (0 à 10, max 25 Mo chacune) |
+| `images` | File[] | Images (0 à 30, max 60 Mo chacune) |
+| `author_id` | string (optionnel) | **Admin uniquement** : UUID du journaliste au nom duquel livrer (compte actif). Un non-admin qui le renseigne reçoit `403` |
 
 **Contraintes** :
-- Images : uniquement des fichiers `image/*`
-- Taille max par fichier : 25 Mo
-- Maximum 10 images par soumission
+- Images : uniquement des fichiers `image/*`, SVG refusé d'emblée, contenu vérifié par magic bytes (JPEG/PNG/GIF/WebP/TIFF/HEIC) — sinon `400`
+- Taille max par fichier : 60 Mo ; maximum 30 images par soumission
+- Timeout de la requête étendu à **15 minutes** (`req.setTimeout(900_000)`)
+- Limite pratique en production : le proxy Railway répond `502` au-delà d'environ 78 Mo de corps multipart (8 photos de presse). Réduire les JPEG > 10 Mo avant envoi (voir §11).
 
 **Réponse 201** :
 ```json
@@ -864,8 +1001,9 @@ Soumet une livraison complète. Requiert `multipart/form-data`.
 5. Création/vérification de la structure Dropbox
 6. Upload DOCX + images dans Dropbox
 7. Enregistrement en base Supabase
-8. Envoi de la notification email
-9. Retour de la réponse
+8. Lancement du pipeline WordPress **en arrière-plan** (`void publishDeliveryToWordpress(...)`) si le module est activé — la réponse n'attend pas son résultat
+9. Envoi de la notification email
+10. Retour de la réponse
 
 ---
 
@@ -896,7 +1034,7 @@ Modifie une livraison existante. Vérifie la propriété. Re-génère le DOCX et
 ### Correction IA
 
 #### `POST /api/correct`
-Envoie un texte à Claude pour correction orthographique et stylistique.
+Envoie un texte au moteur IA actif (`AI_PROVIDER`) pour correction orthographique et stylistique.
 
 **Body** :
 ```json
@@ -904,7 +1042,8 @@ Envoie un texte à Claude pour correction orthographique et stylistique.
 ```
 
 **Contrainte** : Texte de 1 à 100 000 caractères  
-**Rate limit spécifique** : 30 requêtes par heure par utilisateur (en plus du rate limit global)
+**Rate limit spécifique** : 30 requêtes par heure par utilisateur (en plus du rate limit global)  
+**Timeout** : 5 minutes (`req.setTimeout(300_000)`) — un sujet de couv peut prendre 30 à 90 s
 
 **Réponse 200** :
 ```json
@@ -918,11 +1057,14 @@ Envoie un texte à Claude pour correction orthographique et stylistique.
       "explanation": "Correction de l'accord du participe passé"
     }
   ],
-  "signCount": 1234
+  "signCount": 1234,
+  "provider": "anthropic"
 }
 ```
 
 Types de correction possibles : `orthographe`, `grammaire`, `ponctuation`, `style`, `typographie`
+
+**Erreurs** : `503` si le fournisseur IA répond en 5xx ou 429 (surcharge, quota), `500` sinon, avec `detail` et `providerStatus`. Le backend ne renvoie **jamais** un faux « 0 correction » : si la sortie structurée n'aboutit pas après 2 tentatives, c'est une erreur.
 
 ---
 
@@ -992,7 +1134,8 @@ Tous les endpoints ci-dessous requièrent `authMiddleware` ET `adminMiddleware`.
 |---|---|---|
 | `GET` | `/api/admin/journalists` | Liste tous les profils |
 | `POST` | `/api/admin/journalists` | Crée un compte journaliste (auth + profil) |
-| `PUT` | `/api/admin/journalists/:id` | Modifie un profil (nom, rôle, is_active) |
+| `PUT` | `/api/admin/journalists/:id` | Modifie un profil (nom, rôle, is_active). Refuse de désactiver ou rétrograder le dernier admin |
+| `DELETE` | `/api/admin/journalists/:id/mfa` | **Réinitialise la 2FA** : supprime tous les facteurs TOTP enrôlés (`auth.admin.mfa.deleteFactor`). L'utilisateur re-scanne un QR code à sa prochaine connexion. Icône bouclier barré dans l'onglet Journalistes |
 
 **Body POST journaliste** :
 ```json
@@ -1014,10 +1157,11 @@ La création crée simultanément l'utilisateur dans `auth.users` Supabase (avec
 |---|---|---|
 | `GET` | `/api/admin/deliveries` | Liste toutes les livraisons (tous auteurs) avec jointures |
 | `GET` | `/api/admin/deliveries/:id` | Détail d'une livraison sans vérification de propriété |
-| `PUT` | `/api/admin/deliveries/:id` | Modifie les métadonnées d'une livraison sans re-upload Dropbox |
-| `DELETE` | `/api/admin/deliveries/:id` | Supprime définitivement une livraison |
+| `PUT` | `/api/admin/deliveries/:id` | Modifie titre/métadonnées ; avec `author_id`, réattribue la livraison (voir §7) |
+| `DELETE` | `/api/admin/deliveries/:id` | Supprime définitivement la ligne en base (**ni** le dossier Dropbox **ni** le brouillon WordPress ne sont supprimés) |
+| `POST` | `/api/admin/deliveries/:id/wordpress` | (Re)envoie une livraison vers WordPress : les images sont relues depuis Dropbox, un **nouveau** brouillon est créé. Timeout 5 min. Réponse : `{ post: { id, link, editUrl, metaRejected }, wp_payload, message }` — `wp_payload.editorTodo` liste ce qui reste à saisir dans l'éditeur. `400` si module désactivé ou échec (voir Logs) |
 
-**Note sur PUT admin** : Contrairement à `PUT /api/deliveries/:id`, cette route ne re-génère pas le DOCX et ne re-uploade pas dans Dropbox. Elle met à jour uniquement les métadonnées en base. Usage prévu pour des corrections mineures post-livraison.
+**Note sur PUT admin** : Contrairement à `PUT /api/deliveries/:id`, cette route ne re-génère pas le DOCX et ne re-uploade pas dans Dropbox lorsqu'on ne change que les métadonnées. Seule une réattribution (`author_id` différent) régénère le DOCX et le réécrit sur Dropbox.
 
 ---
 
@@ -1043,24 +1187,44 @@ La création crée simultanément l'utilisateur dans `auth.users` Supabase (avec
 
 ---
 
+#### WordPress
+
+| Méthode | URL | Description |
+|---|---|---|
+| `POST` | `/api/admin/wordpress/test` | Teste les identifiants (`GET /wp-json/wp/v2/users/me`). Body optionnel `{ url, username, appPassword }` pour tester des valeurs saisies mais pas encore enregistrées ; un mot de passe vide retombe sur celui stocké. Réponse `{ ok: true, name }` ou `400 { ok: false, error }` |
+
+L'envoi/renvoi d'une livraison est documenté plus haut (`POST /api/admin/deliveries/:id/wordpress`).
+
+---
+
+#### Modèles Claude
+
+| Méthode | URL | Description |
+|---|---|---|
+| `GET` | `/api/admin/models` | Liste en direct (API Anthropic `models.list`) des modèles `claude-*` disponibles sur le compte, du plus récent au plus ancien : `[{ id, display_name, created_at }]` |
+| `GET` | `/api/admin/models/latest` | Le plus récent d'entre eux (`404` si aucun) |
+
+---
+
 #### Paramètres API
 
 | Méthode | URL | Description |
 |---|---|---|
-| `GET` | `/api/admin/settings` | Liste tous les paramètres (valeurs masquées) |
-| `PUT` | `/api/admin/settings` | Met à jour un ou plusieurs paramètres |
+| `GET` | `/api/admin/settings` | Liste tous les paramètres (secrets masqués) |
+| `PUT` | `/api/admin/settings` | Met à jour un ou plusieurs paramètres ; invalide le cache de la politique 2FA si `REQUIRE_MFA` change |
 
 **Body PUT settings** :
 ```json
 {
   "settings": [
     { "key": "ANTHROPIC_API_KEY", "value": "sk-ant-..." },
-    { "key": "DROPBOX_APP_KEY", "value": "abc123" }
+    { "key": "AI_PROVIDER", "value": "gemini" },
+    { "key": "WP_META_MAP", "value": "{\"styleMusic\":\"\",\"mainArtist\":\"\",\"reviewScore\":\"\"}" }
   ]
 }
 ```
 
-**Masquage des valeurs** : La réponse GET (et la réponse PUT) retourne les valeurs masquées : `••••••••xxxx` (8 points + 4 derniers caractères). Cela permet de vérifier visuellement qu'une clé est configurée sans exposer sa valeur.
+**Masquage des valeurs** : Les clés non secrètes (`REQUIRE_MFA`, `AI_PROVIDER`, `CLAUDE_MODEL`, `WORDPRESS_ENABLED`, `WORDPRESS_URL`, `WORDPRESS_USERNAME`, `WP_META_MAP`) sont renvoyées en clair. Toutes les autres sont masquées : `••••••••xxxx` (8 points + 4 derniers caractères). Cela permet de vérifier visuellement qu'une clé est configurée sans exposer sa valeur ; la valeur masquée n'est jamais réutilisable.
 
 ---
 
@@ -1086,7 +1250,7 @@ Journaliste          Frontend              Backend              Services
     │──saisie contenu────►│                    │                     │
     │──demande correction►│                    │                     │
     │                    │──POST /api/correct─►│                     │
-    │                    │                    │──claude.correctText()►│ Claude API
+    │                    │                    │──correction.correctText()►│ Claude / Gemini / Mistral
     │                    │                    │◄──corrections────────│
     │                    │◄──correctedText────│                     │
     │                    │                    │                     │
@@ -1094,12 +1258,19 @@ Journaliste          Frontend              Backend              Services
     │                    │──POST /api/deliveries►│                  │
     │                    │   (multipart)       │──generateDocx()─────►│ docx lib
     │                    │                    │◄──Buffer DOCX────────│
-    │                    │                    │──uploadDelivery()───►│ Dropbox
+    │                    │                    │──uploadDelivery()───►│ Dropbox (originaux)
     │                    │                    │◄──folderUrl──────────│
     │                    │                    │──INSERT deliveries──►│ Supabase
+    │                    │                    │──publishDeliveryToWordpress() (fire & forget)
     │                    │                    │──notifyDelivery()───►│ Resend
     │                    │◄──201 success──────│                     │
     │◄──confirmation UI──│                    │                     │
+    │                    │                    │   … en arrière-plan :│
+    │                    │                    │──formatArticleForWp()►│ Claude API
+    │                    │                    │──upload médias, tags─►│ WordPress REST
+    │                    │                    │──createWpDraftPost()─►│ WordPress REST
+    │                    │                    │──UPDATE wp_* ────────►│ Supabase
+    │                    │                    │──notifyWordpressError() si échec──►│ Resend
 ```
 
 ### Étape 1 : Sélection et confirmation de l'hebdo
@@ -1191,14 +1362,28 @@ Si le module WordPress est activé (admin → Paramètres → WordPress), chaque
 4. Images : toutes les images de la livraison sont envoyées dans la médiathèque (dédupliquées par nom de fichier, crédit photo en légende du média, jamais dans le texte). La **première** devient l'image à la une, normalisée au format rollingstone.fr **1280 × 853** (recadrage centré `cover`, orientation EXIF appliquée, JPEG qualité 90, fichier `<nom>-1280x853.jpg` — `services/imageResize.ts`, lib `sharp`) ; en cas d'échec de conversion l'original est envoyé et un warning `wp-media` est loggé. Les **suivantes** sont converties en version web (`toWebJpeg` : côté long ≤ 1600 px sans agrandissement, JPEG qualité 85, fichier `<nom>-web.jpg` — les originaux presse de 10-30 Mo faisaient expirer l'upload WordPress) puis **réparties dans le corps de l'article** (`insertImagesIntoBody`) : blocs image Gutenberg placés à intervalles réguliers après les paragraphes, jamais avant le chapô H3 ni juste après un H3/H4, reliquat en fin d'article. Les fichiers déposés sur **Dropbox restent les originaux**, sans modification. Lors d'un **renvoi depuis l'admin**, les fichiers ne sont plus en mémoire : ils sont retéléchargés depuis le dossier Dropbox de la livraison (`fetchDeliveryImages`, mêmes noms et même ordre que `deliveries.image_filename`).
    **Aucune photo livrée** (cas typique des chroniques) : le pipeline cherche une image existante dans la médiathèque (`findWpMediaByKeywords` : « artiste album », album, artiste, titre) et la réutilise comme image à la une ; sinon warning `wp-media`. Les types « Chroniques », « Chronique Cinema » et « Disque de la semaine » ont désormais un champ photo **optionnel** (`fields_config`, clé `photos`) pour livrer la pochette ou une photo d'artiste.
    **Chroniques** (`isChroniqueType`) : titre imposé « Chronique : Artiste, Album » (cinéma : « Critique : Titre »), catégories `[3627, 6716]` (+ `6275` métal) / Disque de la semaine `[3627, 23176]` / cinéma `[3619, 3, 6714]`, et le shortcode `[rwp-review-recap id="0"]` (Reviewer plugin) est ajouté automatiquement après le corps, avant le crédit auteur/traduction s'il existe (`appendReviewRecap`). La note du formulaire (`etoiles`, sur 5) est conservée dans `wp_payload.reviewScore` ; la **Reviews Box** elle-même (L'avis de Rolling Stone, template Review Chronique Music, note, image = image à la une) reste à renseigner dans l'éditeur tant que ses clés de métadonnées ne sont pas exposées à l'API REST.
-5. Création du post en **brouillon** avec le titre suffixé `[EN ATTENTE DE RELECTURE]`, avec les métas Yoast (`_yoast_wpseo_focuskw`, `_yoast_wpseo_title`, `_yoast_wpseo_metadesc`).
-6. Suivi sur la livraison : `wp_post_id`, `wp_post_url` (lien d'édition), `wp_status` (`pending`/`sent`/`error`), `wp_payload` (payload IA complet).
+5. Création du post en **brouillon** avec le titre suffixé `[EN ATTENTE DE RELECTURE]`. La requête porte les métas Yoast (`_yoast_wpseo_focuskw`, `_yoast_wpseo_title`, `_yoast_wpseo_metadesc`) et, **uniquement si `WP_META_MAP` les déclare**, les métas Style Music (valeur `1`..`27` du select du thème, table `WP_STYLE_MUSIC`), Main Music Artist et note Reviewer. Aucun nom de clé n'est jamais deviné.
+6. **Vérité sur ce que WordPress a gardé** (`createWpDraftPost`) : si WordPress répond `400`, l'article est recréé **sans** métas et toutes les clés sont marquées refusées ; s'il répond `201` en ignorant silencieusement certaines métas (cas le plus fréquent), le backend relit `data.meta` et liste les clés absentes dans `metaRejected`. Un log `wp-meta` (warn) nomme les clés refusées.
+7. Suivi sur la livraison : `wp_post_id`, `wp_post_url` (lien d'édition), `wp_status` (`pending`/`sent`/`error`), `wp_payload` (payload IA complet + `metaRejected` + **`editorTodo`**). `editorTodo` (`buildEditorTodo`) est calculé à partir des refus réels : une ligne par champ réellement à saisir à la main (Yoast, Style Music avec la valeur à sélectionner, Main Music Artist avec le nom, Reviews Box avec la note). Un champ accepté par l'API n'y apparaît plus. L'admin l'affiche en **pastille ambre** à côté du globe dans l'onglet Livraisons, et en toast après un renvoi manuel.
 
-**Yoast via REST — prérequis côté WordPress.** Yoast stocke ses champs en métas protégées (`_yoast_wpseo_*`) que WordPress n'accepte via l'API REST que si le site les enregistre avec `show_in_rest`. Le mu-plugin fourni dans le dépôt, `scripts/wp/rs-delivery-rest-meta.php`, fait exactement cela (écriture réservée aux comptes pouvant éditer l'article). Installation : copier le fichier dans `wp-content/mu-plugins/` de rollingstone.fr (via `scripts/wpe ssh` ou SFTP WP Engine) — actif immédiatement, désinstallation = suppression du fichier. Sans ce plugin, les champs Yoast restent vides sur le brouillon (WordPress ignore les métas non enregistrées) et le backend réessaie sans métas en cas de 400.
+**Métas via REST — le mu-plugin.** WordPress n'accepte dans `wp/v2/posts.meta` que les métas déclarées avec `show_in_rest` ; par défaut rollingstone.fr n'en exposait que 5 (ExactMetrics + `footnotes`) et ignorait tout le reste en silence. Le mu-plugin du dépôt, `scripts/wp/rs-delivery-rest-meta.php` (v2.0.0), corrige cela :
+- il **enregistre les 3 métas Yoast** avec `show_in_rest` (écriture réservée aux comptes ayant `edit_post` sur l'article, `sanitize_text_field`) ;
+- il expose `GET /wp-json/rs-delivery/v1/post-meta/{id}` (lecture seule : toutes les métas désérialisées + termes de taxonomie d'un article, pour **découvrir** les clés réelles du thème et de Reviewer sur un article de référence) ;
+- il expose `POST /wp-json/rs-delivery/v1/post-meta/{id}` (corps `{"meta": {...}}`, écriture limitée aux préfixes `_yoast_wpseo_`, `rwp_`, `sm_`, `_sm_`, `mat_`, `_mat_`, valeurs scalaires ou tableaux de scalaires uniquement, clés refusées renvoyées dans `refused`). Le backend n'utilise pas encore cette route : il passe par `posts.meta`.
 
-**Champs à finir à la main dans l'éditeur classique** (non exposés via REST) : Style Music (`select[name="liste"]`) et Main Music Artist (`input#new-mat-tag`). Les valeurs suggérées par l'IA sont conservées dans `wp_payload`.
+Installation : copier le fichier dans `wp-content/mu-plugins/` (SFTP WP Engine ou `scripts/wpe ssh`) — actif immédiatement, désinstallation = suppression du fichier. Détails pour le développeur du site dans `scripts/wp/INSTALLATION.md`.
 
-Un échec WordPress ne bloque **jamais** la livraison : il est loggé (onglet Logs, étapes `wp-*`) et l'admin peut relancer l'envoi depuis l'onglet Livraisons (icône globe) ou via `POST /api/admin/deliveries/:id/wordpress`. Test des identifiants : `POST /api/admin/wordpress/test`.
+**État réel au 30 septembre 2026 (vérifié en live)** :
+- le mu-plugin **est installé** : `GET https://www.rollingstone.fr/wp-json/` liste le namespace `rs-delivery/v1` et sa route `post-meta/(?P<id>\d+)` ; le schéma de `wp/v2/posts` accepte désormais `_yoast_wpseo_title`, `_yoast_wpseo_metadesc` et `_yoast_wpseo_focuskw`. Les champs Yoast partent donc correctement.
+- `WP_META_MAP` est **vide** : Style Music, Main Music Artist et la note Reviewer restent dans `editorTodo` tant que leurs clés n'ont pas été lues sur un article de référence (ex. `post-meta/154725`, chronique Brandon Flowers) puis saisies dans l'admin.
+- une sonde `GET .../post-meta/1` répond `404` parce que l'article 1 n'existe pas : ce n'est pas un signe d'absence du plugin.
+- le module a été **réactivé en test** pour le numéro RSH240 (2 octobre 2026) avec l'accord de la rédaction en chef, après avoir été coupé du 10 au 30 septembre.
+
+**Champs à finir à la main dans l'éditeur classique** tant que `WP_META_MAP` est vide : Style Music (metabox `id_sm_metaboxe`, `select[name="liste"]`), Main Music Artist (metabox `id_mat_metaboxe`, `input#new-mat-tag`) et la Reviews Box (plugin Reviewer d'Evographics, template « Review Chronique Music », critère « Avis de la rédaction », note sur 5, image = image à la une). Les valeurs suggérées par l'IA sont conservées dans `wp_payload`.
+
+Un échec WordPress ne bloque **jamais** la livraison : `wp_status` passe à `error`, l'étape `wp-error` est loggée, et un **email d'alerte** part aux admins (`notifyWordpressError`, mêmes destinataires que les notifications de livraison). L'admin corrige puis relance depuis l'onglet Livraisons (icône globe) ou via `POST /api/admin/deliveries/:id/wordpress` — un renvoi crée toujours un **nouveau** brouillon, l'ancien n'est pas supprimé (l'app ne sait pas supprimer un article WordPress). Test des identifiants : `POST /api/admin/wordpress/test`.
+
+**Garde-fous** : l'article est toujours créé en `draft`, jamais publié ; l'URL WordPress est validée contre les adresses internes (anti-SSRF, HTTPS obligatoire, résolution DNS vers une IP publique) ; le header `Authorization` est effacé des objets d'erreur axios avant tout log.
 
 ---
 
@@ -1225,16 +1410,18 @@ Permet de :
 
 Permet de :
 - Créer un compte journaliste (email + mot de passe + nom)
-- Modifier le nom, le rôle (`journalist` ou `admin`) et le statut actif/inactif
+- Modifier le nom, le rôle (`journalist` ou `admin`) et le statut actif/inactif (le dernier admin ne peut être ni désactivé ni rétrogradé)
 - La désactivation d'un compte (`is_active = false`) empêche immédiatement toute connexion
+- **Réinitialiser la 2FA** d'un compte (icône bouclier barré, `DELETE /api/admin/journalists/:id/mfa`) : téléphone perdu, application supprimée — l'utilisateur re-scanne un QR code à sa prochaine connexion
 
 ### Onglet "Livraisons"
 
 Vue globale de toutes les livraisons de tous les journalistes :
-- Filtrage par hebdo, type de papier, journaliste
-- Consultation du détail d'une livraison
+- Recherche, consultation du détail d'une livraison
 - Modification des métadonnées (sans re-génération Dropbox)
-- Suppression définitive
+- **Réattribution** à un autre journaliste via le menu déroulant de la colonne Journaliste (DOCX régénéré et dossier Dropbox déplacé si nécessaire, voir §7)
+- Suppression définitive (base uniquement)
+- **WordPress** : icône globe par ligne. Lien vers le brouillon si `wp_status = sent`, icône rouge si `error`, bouton d'envoi/renvoi sinon (confirmation demandée si un brouillon existe déjà). Une **pastille ambre** au survol liste `editorTodo`, c'est-à-dire les champs que WordPress n'a pas pu enregistrer et qui restent à saisir dans l'éditeur classique.
 
 ### Onglet "Prompt IA"
 
@@ -1245,7 +1432,7 @@ Vue globale de toutes les livraisons de tous les journalistes :
 - Confirmation obligatoire avant sauvegarde
 - Annulation des modifications
 
-**Important** : Une modification incorrecte du prompt peut casser silencieusement la correction (Claude ne produira plus de JSON valide). En cas de doute, Claude utilise son `FALLBACK_PROMPT` codé en dur dans `backend/src/services/claude.ts`.
+**Important** : Une modification incorrecte du prompt peut dégrader la correction. Le prompt est partagé par tous les moteurs (Claude, Gemini, Mistral, Claude Code). Le `FALLBACK_PROMPT` codé en dur dans `backend/src/services/correctionPrompt.ts` n'est utilisé que si la ligne en base est absente ou illisible. Avec Claude, la sortie est **structurée** (outil `submit_correction`) : un prompt cassé ne produit plus de JSON invalide mais une erreur explicite après 2 tentatives.
 
 ### Onglet "Logs"
 
@@ -1256,30 +1443,54 @@ Tableau de bord des logs du pipeline de livraison :
 - Rafraîchissement manuel
 - Bouton de nettoyage (supprime les logs > 30 jours)
 
-### Onglet "Settings"
+### Onglet "Settings" (Paramètres et clés API)
 
-Gestion des clés API depuis l'interface (sans redéploiement) :
-- Section "API Claude" : `ANTHROPIC_API_KEY`
-- Section "Dropbox" : `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN`
+Tout se pilote sans redéploiement (table `app_settings`). Sections, de haut en bas :
 
-Les valeurs existantes sont masquées (`••••••••xxxx`). Pour modifier une clé, cliquer "Modifier" et saisir la nouvelle valeur. La sauvegarde est par section.
+1. **Moteur IA pour la correction** — sélecteur `anthropic` / `gemini` / `mistral` / `claude-code` (`AI_PROVIDER`). Un pictogramme signale une clé manquante pour le moteur choisi ; `claude-code` est marqué « local uniquement » (ne fonctionne pas sur Railway).
+2. **Modèle Claude (correction)** — liste **live** des modèles du compte Anthropic (`GET /api/admin/models`), du plus récent au plus ancien, avec repli sur une liste embarquée si l'API est injoignable. Enregistre `CLAUDE_MODEL`. Utilisé aussi pour la mise en forme WordPress.
+3. **Double authentification (2FA)** — interrupteur `REQUIRE_MFA`. Sans effet si la variable d'environnement `REQUIRE_MFA=true` verrouille déjà l'activation.
+4. **WordPress (rollingstone.fr)** — interrupteur `WORDPRESS_ENABLED`, URL du site, nom d'utilisateur WP, mot de passe application (champ vide = conserver l'existant), bouton **Tester la connexion** (utilise les valeurs saisies, même non enregistrées) et **Enregistrer**. `WP_META_MAP` se saisit via `PUT /api/admin/settings` (pas de champ dédié dans l'interface).
+5. **Clés API** (sections secrètes) : Anthropic, Gemini, Mistral, Dropbox. Valeurs masquées (`••••••••xxxx`) ; cliquer « Modifier », saisir, sauvegarder par section.
 
 ---
 
 ## 9. Services internes
 
+### `services/correction.ts` — aiguillage IA
+
+`correctText(text)` lit `app_settings.AI_PROVIDER` (`anthropic` par défaut, valeur inconnue → `anthropic`) et délègue à `claude.ts`, `gemini.ts`, `mistral.ts` ou `claudeCode.ts`. Le résultat est complété par `provider`.
+
+### `services/correctionPrompt.ts` — prompt et structure
+
+- `getPromptFromDB()` : lit `correction_prompt`, fallback `FALLBACK_PROMPT`.
+- `buildSystemPrompt(base)` : ajoute les consignes de conservation de la mise en page.
+- `numberEmptyLines(text)` / `restoreStructure(original, corrigé, corrections)` : les lignes vides sont remplacées par des marqueurs `[LIGNE_VIDE_X]` avant l'appel IA puis restaurées, pour que les paragraphes ne soient jamais fusionnés.
+
 ### `services/claude.ts`
 
-**Modèle utilisé** : `claude-sonnet-4-20250514`  
+**Modèle** : `getClaudeModel()` → `app_settings.CLAUDE_MODEL`, sinon env `CLAUDE_MODEL`, sinon `DEFAULT_CLAUDE_MODEL = claude-sonnet-4-5-20250929`  
 **Timeout** : 120 secondes  
-**Max tokens réponse** : 8 192
+**Max tokens réponse** : 16 384
 
-La fonction `correctText(text)` :
-1. Charge le prompt depuis la table `correction_prompt` (fallback sur `FALLBACK_PROMPT`)
-2. Envoie le texte à Claude en demandant une réponse JSON structurée
-3. Parse la réponse JSON (gère les blocs markdown ```json ... ```)
-4. Retourne `{ correctedText, corrections, signCount }`
-5. En cas d'erreur de parsing, retourne le texte original inchangé
+`correctText(text)` :
+1. Charge la clé (`getApiKey`, base puis env) et le prompt
+2. Appelle `messages.create` avec l'outil `submit_correction` et `tool_choice` forcé : la réponse est un objet structuré, plus de parsing de texte libre
+3. Jusqu'à **2 tentatives** ; si le modèle configuré est invalide (404, `not_found`…), bascule sur `DEFAULT_CLAUDE_MODEL` pour la seconde
+4. Retourne `{ correctedText, corrections, signCount }` après `restoreStructure`
+5. Sans bloc structuré après 2 tentatives : **lève une erreur** (plus de faux « 0 correction »)
+
+`listClaudeModels()` interroge `anthropic.models.list` (modèles `claude-*`, triés du plus récent au plus ancien) ; `getLatestClaudeModel()` renvoie le premier.
+
+### `services/gemini.ts` et `services/mistral.ts`
+
+Même contrat que `claude.ts` (clé en base puis env, prompt partagé, marqueurs de lignes vides, JSON réparé par `jsonrepair`). Cascade de modèles avec 1 nouvel essai par modèle sur erreur transitoire (5xx, 429, « overloaded ») :
+- Gemini : `gemini-3.5-flash` → `gemini-2.5-flash` → `gemini-2.5-flash-lite`
+- Mistral : `mistral-large-latest` → `mistral-small-latest`
+
+### `services/claudeCode.ts`
+
+Moteur de secours **local** : lance la CLI `claude --print --output-format json` (binaire `CLAUDE_CODE_BIN`, modèle `CLAUDE_CODE_MODEL`, timeout 5 min) en retirant `ANTHROPIC_API_KEY` de l'environnement pour forcer l'authentification OAuth de l'abonnement. Utile quand les crédits API sont épuisés ; **échoue sur Railway** (binaire absent).
 
 ---
 
@@ -1318,16 +1529,58 @@ Service de stockage remplaçant l'ancienne intégration Google Drive. Utilise l'
 
 **Idempotence** : `ensureFolder()` ignore les erreurs 409 "conflict/folder" — un dossier qui existe déjà n'est pas une erreur.
 
-**Logique de nommage des sous-dossiers** :
-- Type `Interview` : renommé `Interview <nom artiste>` si l'artiste est renseigné
-- Type `Livres et expo` : suffixé du nom du journaliste
-- Types `Chroniques Musique` et `Chronique cinema` : création d'un sous-sous-dossier au nom du journaliste
+**Logique de nommage des sous-dossiers** (`resolveDeliveryFolderPaths`, voir §7 étape 8) : un papier reste dans le dossier de son type ; `Interview *` ajoute un sous-dossier par sujet ; `Chroniques Musique`, `Chronique cinema` et `Livres et expo` ajoutent un sous-dossier par journaliste.
+
+**Autres fonctions** :
+- `ensureHebdoFolderStructure(label, types)` : pré-crée le dossier de l'hebdo et un sous-dossier par type actif.
+- `reattributeDelivery(previous, next, docx)` : réécrit le DOCX au nom du nouvel auteur et déplace le dossier si l'arborescence dépend du journaliste. Rien n'est jamais supprimé.
+- `fetchDeliveryImages(params, wantedNames)` : relit les images d'une livraison depuis son dossier Dropbox (`files/list_folder` puis téléchargement), dans l'ordre de `deliveries.image_filename`. Utilisé par le renvoi WordPress, les buffers n'étant pas conservés en base.
+
+---
+
+### `services/wordpress.ts` — client REST WordPress
+
+- `getWpConfig(override?)` : lit `WORDPRESS_URL/USERNAME/APP_PASSWORD` (base puis env), accepte des valeurs de formulaire non enregistrées (test de connexion). Passe l'URL par `assertSafeWpUrl` : HTTPS obligatoire (sauf `localhost` en dev), résolution DNS et refus des IP privées / loopback / lien-local (anti-SSRF).
+- `wpClient()` : axios Basic auth sur `/wp-json/wp/v2`, timeout 30 s, intercepteur qui **efface `Authorization`** de l'erreur avant rethrow.
+- `testWpConnection()` (`/users/me`), `searchWpPosts(query)` (5 candidats de liens internes), `findWpMediaByKeywords(queries)` (réutilisation d'une image de la médiathèque), `findOrCreateWpTag(name)` (recherche exacte insensible à la casse, gère `term_exists`), `uploadWpMedia({buffer, filename, mimetype, caption})` (dédup par nom de fichier, timeout 180 s, légende = crédit photo).
+- `createWpDraftPost(input)` : crée le brouillon, envoie les métas Yoast + `extraMeta`, renvoie `{ id, link, editUrl, metaRejected }` (voir §7 étape 10 pour la détection des refus).
+- `getWpMetaMap()` : parse `app_settings.WP_META_MAP`.
+
+### `services/wordpressPublisher.ts` — pipeline
+
+`publishDeliveryToWordpress(input)` (fire-and-forget, ne lève jamais) : skip si module désactivé → `wp_status = pending` → liens internes → `formatArticleForWp` (Claude, outil `submit_wp_article`, `max_tokens` 16 384, 2 tentatives avec repli de modèle) → `normalizeWpCategories` → tags (15 max) → images (`toFeaturedJpeg` pour la première, `toWebJpeg` pour les autres, `insertImagesIntoBody`) → shortcode `[rwp-review-recap id="0"]` pour les chroniques (`isChroniqueType`, `appendReviewRecap`) → `createWpDraftPost` → log `wp-meta` → `wp_status = sent` + `wp_payload` (avec `editorTodo` via `buildEditorTodo`). En cas d'erreur : `wp_status = error`, log `wp-error`, `notifyWordpressError`.
+
+`republishDeliveryToWordpress(id)` : recharge la livraison, relit les images depuis Dropbox (`fetchDeliveryImages`) et relance le pipeline. Utilisé par `POST /api/admin/deliveries/:id/wordpress`.
+
+### `services/wordpressRules.ts` — conventions éditoriales
+
+Source de vérité pour : la taxonomie complète des catégories rollingstone.fr (IDs parents `Musique 3627`, `Culture 3619`, `Actualites 5870`, `Lifestyle 6718`, sous-catégories → parent, catégories autonomes), `normalizeWpCategories` (ne garde que les IDs connus et ajoute toujours le parent), la table `WP_STYLE_MUSIC` (libellé → valeur `1`..`27` du select du thème) et `buildWpSystemPrompt()` (chapô H3, intertitres H4, `<em>« »</em>`, ≥ 1 lien interne, ≥ 5 tags, Yoast, crédit traduction).
+
+### `services/imageResize.ts` — dérivés pour WordPress (lib `sharp`)
+
+- `toFeaturedJpeg(buffer, name)` : orientation EXIF appliquée, recadrage `cover` **1280 × 853** (format du template Canva éditorial, position `attention`), JPEG qualité 90, fichier `<nom>-1280x853.jpg`.
+- `toWebJpeg(buffer, name)` : côté long ≤ **1600 px** sans agrandissement, JPEG qualité 85, fichier `<nom>-web.jpg`.
+- Lève sur une image indécodable : l'appelant envoie alors l'original et logge un warning `wp-media`. **Dropbox reçoit toujours les originaux intacts.**
+
+### `services/mfaPolicy.ts` — politique 2FA
+
+`isMfaRequired()` : `true` si env `REQUIRE_MFA=true` ; sinon lit `app_settings.REQUIRE_MFA` (`true`/`1`), **cache 30 s**. En cas d'erreur de lecture, considère la 2FA désactivée (fail-open, signalé dans l'audit). `invalidateMfaPolicyCache()` est appelé par `PUT /api/admin/settings`.
+
+### `meta/provenance.ts` (backend) et `lib/provenance.ts` (frontend) — marqueur de paternité
+
+Fichiers **générés** par `scripts/authorship/sign.mjs`, à ne pas éditer à la main. Ils exportent une constante `PROVENANCE = { statement, signature, publicKey }` : `statement` est une déclaration JSON (œuvre, auteur, email, date, empreinte SHA-256 des sources, nombre de fichiers), `signature` sa signature **Ed25519** en base64, `publicKey` la clé publique SPKI. Constantes inertes : aucun appel réseau, aucun effet à l'exécution. Le frontend importe la constante dans `main.tsx` pour qu'elle survive au bundling (le commentaire d'en-tête `/*! … provenance:<id> ed25519:<sig> */` est conservé par Vite).
+
+- **Signer** (détenteur de la clé privée uniquement) : `node scripts/authorship/sign.mjs ["Nom Auteur"] [email]`. La paire de clés est créée une fois dans `~/.rs-hebdo-authorship/` (clé privée `0600`, hors dépôt). Le script hache `backend/src`, `frontend/src`, `frontend/index.html`, `supabase/`, `supabase-schema.sql`, `scripts/livrer_hebdo.py`, les `package.json` et les 4 fichiers Markdown, signe la déclaration, régénère les deux `provenance.ts` et dépose un dossier de preuve horodaté (`manifest.sha256`, `statement.json`, `statement.sig`, clé publique) dans `~/.rs-hebdo-authorship/proofs/`, à conserver pour un dépôt e-Soleau ou un horodatage.
+- **Vérifier** (sans clé privée) : `node scripts/authorship/verify.mjs <fichier|dossier> [cle_publique.pem]` — accepte les sources, `dist/` ou un bundle récupéré en production, retrouve le marqueur `ed25519:` et la déclaration (guillemets échappés ou non selon la minification) et affiche `VALIDE` / `INVALIDE` avec l'auteur, la date et l'empreinte. Code de sortie 0 si au moins un marqueur valide.
+- Toute modification des sources couvertes invalide l'empreinte de la déclaration en cours : re-signer avant une release si l'on veut un marqueur cohérent.
 
 ---
 
 ### `services/email.ts`
 
 Service de notification email via **Resend API** (https://resend.com). Utilise un simple `fetch` POST vers `https://api.resend.com/emails` — aucune dépendance npm supplémentaire. L'email HTML utilise des styles inline (compatible webmail).
+
+Deux emails : `notifyDelivery` (livraison réussie, lien Dropbox) et `notifyWordpressError` (livraison OK mais brouillon WordPress non créé, détail d'erreur tronqué à 600 caractères, lien vers l'app). Destinataires : `NOTIFY_EMAIL_ALMA` et `NOTIFY_EMAIL_DENIS`.
 
 **Protection XSS** : Tous les paramètres utilisateur (nom journaliste, titre, etc.) sont échappés via `escapeHtml()`. L'URL du dossier Dropbox est validée via `sanitizeUrl()` pour autoriser uniquement `http:` et `https:`.
 
@@ -1359,7 +1612,7 @@ Service de **rotation automatique des numéros hebdomadaires**. Démarre au boot
 2. Vérifie si `end_date` est dépassée (comparaison UTC)
 3. Si oui :
    - Passe l'hebdo courant à `is_current = false`
-   - Crée un nouvel hebdo N+1 avec label `RSH{numero+1}`, une fenêtre de 7 jours (`start_date` = ancien `end_date`, `end_date` = +7 jours)
+   - Crée un nouvel hebdo N+1 avec label `RSH{numero+1}` et une fenêtre **vendredi → vendredi** calculée par `utils/dates.ts` (même logique que le pré-remplissage des dates dans l'onglet Hebdo de l'admin)
    - Définit le nouvel hebdo comme courant
 4. Si la création échoue, restaure le flag `is_current` sur l'ancien hebdo (rollback)
 
@@ -1390,6 +1643,7 @@ Deux clients Supabase sont exportés :
 ```
 (setup)        → SetupPage          (affiché automatiquement si l'app n'est pas configurée)
 /login         → LoginPage          (redirige vers / si déjà connecté)
+/mfa           → MfaPage            (code TOTP ou enrôlement ; redirige vers / si la session est déjà AAL2)
 /forgot-password → ForgotPasswordPage (envoi du lien de réinitialisation par email)
 /reset-password  → ResetPasswordPage  (formulaire de nouveau mot de passe, accessible via lien email)
 /onboarding    → OnboardingPage     (ProtectedRoute — tutoriel interactif 5 étapes)
@@ -1438,10 +1692,15 @@ L'authentification est gérée en deux couches :
 **Flux de connexion** :
 ```
 login(email, password)
-  → supabase.auth.signInWithPassword()
+  → supabase.auth.signInWithPassword()          (session AAL1)
+  → GET /api/auth/config                         (mfaRequired ?)
+  → si 2FA requise et session non AAL2 : set({ user: null, mfaRequired: true }) → /mfa
+      → MfaPage : challenge TOTP (ou enrôlement QR) → completeMfa()
   → getProfile() via API backend
-  → set({ user: profile })
+  → set({ user: profile, mfaRequired: false })
 ```
+
+Le store expose `mfaPolicy` (politique serveur) et `mfaRequired` (la session courante doit encore passer la 2FA). `ProtectedRoute` redirige vers `/mfa` plutôt que `/login` quand `mfaRequired` est vrai.
 
 **Interception Axios** : Chaque requête HTTP ajoute automatiquement le token de session Supabase dans le header `Authorization`. Cela garantit que le backend valide toujours un token frais.
 
@@ -1465,7 +1724,9 @@ Le titre de la livraison est dérivé des métadonnées selon le type de papier 
 - `Chroniques` : champ `artiste`
 - Sinon : premier champ de type `text`
 
-**Upload d'images** : Intégration `react-dropzone` avec prévisualisation. Formats acceptés : jpg, jpeg, png, webp, gif, heic, heif, tiff, bmp, avif. Taille max 25 Mo. Maximum 20 fichiers.
+**Upload d'images** : Intégration `react-dropzone` avec prévisualisation. Formats acceptés : jpg, jpeg, png, webp, gif, heic, heif, tiff, bmp, avif. Le serveur accepte jusqu'à 60 Mo par fichier et 30 fichiers ; le champ `photos` de chaque type impose son propre minimum (`fields_config`, à lire en direct via `GET /api/deliveries/paper-types`).
+
+**Livraison par un admin** : une étape « Pour quel journaliste livrez-vous ? » précède le choix du type ; `author_id` part avec le `FormData` (voir §7).
 
 ### Dashboard (`DashboardPage`)
 
@@ -1550,9 +1811,15 @@ RESEND_FROM_EMAIL=RS Hebdo <noreply@rollingstone.fr>
 NOTIFY_EMAIL_ALMA=...
 NOTIFY_EMAIL_DENIS=...
 SETUP_SECRET_TOKEN=<chaîne aléatoire — openssl rand -hex 32>
+WORDPRESS_APP_PASSWORD=<mot de passe application WP — les 3 autres réglages WordPress sont en base>
+# Optionnels
+# CLAUDE_MODEL=claude-sonnet-4-5-20250929
+# GEMINI_API_KEY=... / MISTRAL_API_KEY=...
+# REQUIRE_MFA=true      (verrou serveur 2FA)
+# BIND_HOST=...         (ne pas définir sur Railway)
 ```
 
-**Note** : Railway injecte automatiquement `PORT`. Ne pas définir cette variable manuellement.
+**Note** : Railway injecte automatiquement `PORT`. Ne pas définir cette variable manuellement. Ne pas définir `BIND_HOST` non plus : le service doit écouter sur toutes les interfaces.
 
 ### Variables d'environnement Vite (frontend)
 
@@ -1566,12 +1833,24 @@ VITE_API_URL=
 
 `VITE_API_URL` est laissé vide : les appels API seront relatifs à l'origine (ex. `https://votre-app.railway.app/api/...`).
 
+> **Conséquence pratique** : après avoir changé une variable `VITE_*`, il faut **rebuilder** — `railway up` (nouveau build) et non `railway redeploy` (qui relance le même artefact avec l'ancienne valeur bakée).
+
 ### Déploiement
 
 ```bash
 # Depuis le répertoire racine du projet
 railway up
 ```
+
+`railway up` respecte `.railwayignore` : `node_modules/`, `dist/`, `.vite/`, les dossiers de travail `HEBDO*/`, `Hebdo RS Delivery-design/`, `deck/`, `macos/`, les `.env` et sauvegardes, les logs et `.DS_Store` ne sont pas téléversés. Avant ce fichier, l'envoi des visuels d'archive (~90 Mo) faisait expirer la requête avant même le début du build.
+
+Projet Railway : `hebdo-rs` (service `hebdo-rs`, environnement `production`, URL publique `https://hebdo-rs.up.railway.app`).
+
+### Limites d'exploitation constatées
+
+- Le proxy Railway refuse en **HTTP 502** un `POST /api/deliveries` d'environ 78 Mo de multipart (8 photos de presse originales) ; ~38 Mo passent. Réduire les JPEG > 10 Mo côté client avant livraison (copie, bord long 4 000 px) — le serveur, lui, accepte 60 Mo par fichier.
+- L'upload d'un média WordPress a un timeout dédié de **180 s** (WordPress génère les tailles intermédiaires côté serveur) ; les dérivés `imageResize.ts` évitent d'y arriver.
+- Le pare-feu Cloudflare devant rollingstone.fr est sensible à certains `User-Agent` : les sondes manuelles (`curl`) doivent envoyer un UA de navigateur.
 
 ### Proxy reverse et IP réelle
 
@@ -1596,13 +1875,17 @@ server.keepAliveTimeout = 30_000;
 server.headersTimeout = 35_000;
 ```
 
-Les routes de livraison (`POST /api/deliveries`, `PUT /api/deliveries/:id`) étendent le timeout à **5 minutes** (300s) sur leur requête spécifique, car le pipeline complet (DOCX + upload Dropbox + images) peut être long. Le timeout de la correction IA (`POST /api/correct`) est de **120 secondes**.
+Les routes de livraison (`POST /api/deliveries`, `PUT /api/deliveries/:id`) étendent le timeout à **15 minutes** (900 s) sur leur requête spécifique, car le pipeline complet (DOCX + upload Dropbox + photos de presse) peut être long. `POST /api/correct` et `POST /api/admin/deliveries/:id/wordpress` passent à **5 minutes** (300 s). Le client Anthropic a son propre timeout de 120 s par appel.
+
+### Interface d'écoute
+
+Si `BIND_HOST` est défini, `app.listen(PORT, BIND_HOST)` restreint l'écoute à cette interface (cas de l'app desktop qui embarque le backend sur `127.0.0.1`). Non défini : comportement historique, toutes interfaces — c'est ce qu'attend Railway.
 
 ---
 
 ## 12. Sécurité
 
-> Les points ci-dessous reflètent l'état **réel** vérifié en production, pas seulement l'intention du code. À lire avant toute intervention sur la base ou les secrets.
+> Les points ci-dessous reflètent l'état **réel** vérifié en production, pas seulement l'intention du code. À lire avant toute intervention sur la base ou les secrets. Le rapport complet est dans **`docs/security/audit-2026-09-04.md`** (cartographie statique + tests live non destructifs) ; l'ordre de correction qu'il recommande est repris en fin de section.
 
 ### Double authentification (2FA) — optionnelle
 
@@ -1612,6 +1895,16 @@ La 2FA TOTP (Google Authenticator, 1Password, Authy…) est **désactivée par d
 - **Backend** : `authMiddleware` exige le claim `aal: 'aal2'` dans le JWT sur **toutes** les routes API — une session mot-de-passe-seul (AAL1) reçoit `401 { code: 'mfa_required' }`.
 - **Téléphone perdu** : un admin réinitialise la 2FA d'un utilisateur (Admin → Journalistes → icône bouclier barré, ou `DELETE /api/admin/journalists/:id/mfa`) ; l'utilisateur re-scanne un QR code à sa prochaine connexion.
 - **Prérequis** : TOTP activé côté Supabase — local : `[auth.mfa.totp]` dans `supabase/config.toml` ; production : Dashboard → Authentication → MFA → TOTP.
+- **Limite connue (audit)** : `isMfaRequired()` est fail-open — si la lecture de `app_settings` échoue, la 2FA est considérée désactivée. Un fail-closed serait préférable.
+- **État en production au 30/09/2026** : `mfaRequired: false` (2FA désactivée, confirmé via `/api/auth/config`).
+
+### Module WordPress — surface d'attaque
+
+- **SSRF** : `assertSafeWpUrl` impose HTTPS, résout l'hôte et refuse toute IP privée, loopback ou lien-local (`10/8`, `127/8`, `169.254/16`, `172.16/12`, `192.168/16`, `::1`, `fc00::/7`, `fe80::/10`, formes `::ffff:` mappées). Un admin ne peut donc pas pointer le module vers un service interne ou les métadonnées cloud.
+- **Publication** : toujours `status: draft`. Un journaliste ne peut jamais publier sur rollingstone.fr ; le renvoi est réservé aux admins.
+- **Compte WordPress** : `rs_delivery`, rôle `api_writer`, mot de passe application (API REST uniquement, jamais `wp-admin`). Côté site, le mu-plugin n'écrit que sur une liste fermée de préfixes de métas et exige `edit_post` sur l'article visé.
+- **Point ouvert (audit, HIGH)** : `POST /api/deliveries` déclenche le pipeline (appel Claude à 16 384 tokens, jusqu'à 15 tags, N médias) sans rate limit dédié — seul le limiteur global s'applique. Un limiteur par utilisateur y est recommandé.
+- **Point ouvert (audit, MEDIUM)** : le HTML produit par l'IA est inséré tel quel dans le brouillon ; atténué par le statut brouillon et la relecture humaine. `sanitize-html` en allowlist est recommandé.
 
 ### Authentification — Supabase JWT
 
@@ -1756,6 +2049,26 @@ Un widget de chat Crisp est intégré en production pour le support utilisateur.
 
 > Note : `POST /api/deliveries` déclenche le pipeline WordPress (appel IA + uploads médias) mais n'a **pas** de rate limit dédié — seul le limiteur global (300/15 min/IP) s'applique. Un rate limit par utilisateur y est recommandé.
 
+### Contrôles d'accès vérifiés (audit du 4 septembre 2026)
+
+- **Pas d'IDOR** : `GET /api/deliveries`, `GET /:id`, `PUT /:id` filtrent tous par `author_id = req.userId`. L'attribution à un autre auteur est réservée aux admins.
+- **Pas d'escalade de rôle** : aucun endpoint ne permet à un journaliste d'écrire son propre `role` ; la modification est admin-only et protège le dernier admin.
+- **Bundle navigateur propre** : aucune sourcemap, aucun secret, seules les trois variables `VITE_*` attendues.
+- **En-têtes** : CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `X-Robots-Tag` confirmés en live.
+
+### Marqueur de paternité
+
+Les sources embarquent une déclaration d'auteur signée Ed25519 (`backend/src/meta/provenance.ts`, `frontend/src/lib/provenance.ts`), vérifiable sans la clé privée avec `node scripts/authorship/verify.mjs <fichier|dossier>`. Voir §9. Ce n'est pas un mécanisme de sécurité applicative mais une preuve d'antériorité : la clé privée reste hors dépôt (`~/.rs-hebdo-authorship/`).
+
+### Ordre de correction recommandé (extrait de l'audit)
+
+1. ✅ **Fait** — ne plus logger l'objet d'erreur axios WordPress (fuite du mot de passe application dans les logs Railway) ; rotation du mot de passe.
+2. `REVOKE ALL ON app_settings, profiles, deliveries, delivery_logs, correction_prompt FROM anon, authenticated;` — **avant** toute correction de la récursion RLS.
+3. Corriger la récursion RLS via `is_admin()` `SECURITY DEFINER`, ajouter `TO authenticated`, fermer `hebdo_config USING(true)`. **Jamais** `DISABLE ROW LEVEL SECURITY`.
+4. Sortir les secrets restants de `app_settings` vers Railway et les faire tourner (Dropbox refresh token en priorité). ✅ Déjà fait pour `WORDPRESS_APP_PASSWORD`.
+5. Rate limit dédié sur `POST /api/deliveries`, `fieldSize` multer, plafond `sign_limit` serveur.
+6. Verrouiller le wizard de setup (allow-list, `SETUP_ENABLED`), `sanitize-html` sur le contenu WordPress, `maskValue` → `isSet`, MFA fail-closed, CSP sans `unsafe-inline`.
+
 ---
 
 ## 13. Troubleshooting
@@ -1764,9 +2077,37 @@ Un widget de chat Crisp est intégré en production pour le support utilisateur.
 
 | Symptôme | Cause probable | Solution |
 |---|---|---|
-| "Correction indisponible" dans le formulaire | `ANTHROPIC_API_KEY` absente ou invalide | Vérifier la clé dans `backend/.env` ET dans l'onglet Settings de l'admin (table `app_settings`). La clé dans `app_settings` a priorité sur la variable d'environnement |
-| Correction très lente (> 30s) | Texte très long ou surcharge API Anthropic | Normal pour les textes > 10 000 signes. Vérifier le status Anthropic : https://status.anthropic.com |
-| Erreur 401 sur `/api/correct` | Token Supabase expiré côté frontend | Se déconnecter et se reconnecter |
+| "Correction indisponible" dans le formulaire | Clé du moteur actif absente ou invalide (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY` ou `MISTRAL_API_KEY` selon `AI_PROVIDER`) | Vérifier la clé dans l'onglet Paramètres (section Moteur IA signale la clé manquante) ou dans `backend/.env`. La clé dans `app_settings` a priorité sur la variable d'environnement |
+| `503` avec `providerStatus` 429 ou 5xx | Quota épuisé ou fournisseur surchargé | Attendre, ou basculer temporairement le moteur dans l'admin (Gemini/Mistral). En local, `claude-code` utilise l'abonnement Claude plutôt que les crédits API |
+| « La correction n'a pas abouti » | Sortie structurée incomplète après 2 tentatives (texte très long, troncature) | Réessayer ; découper le texte si > 100 000 signes. Ce message remplace l'ancien faux « 0 correction » |
+| Correction très lente (> 30s) | Texte très long ou surcharge API | Normal pour un sujet de couv (30-90 s ; timeout 5 min). Vérifier le status du fournisseur |
+| Le modèle Claude choisi n'existe plus | `CLAUDE_MODEL` obsolète | Le backend bascule automatiquement sur `claude-sonnet-4-5-20250929` à la 2e tentative ; choisir un modèle dans la liste live de l'admin |
+| Moteur `claude-code` en erreur en production | Binaire `claude` absent sur Railway | Ce moteur est local uniquement ; repasser sur `anthropic` |
+| Erreur 401 sur `/api/correct` | Token Supabase expiré côté frontend, ou 2FA active et session AAL1 (`code: mfa_required`) | Se déconnecter et se reconnecter ; passer la 2FA |
+
+### WordPress
+
+| Symptôme | Cause probable | Solution |
+|---|---|---|
+| Aucun brouillon créé, `wp_status` vide | Module désactivé | Admin → Paramètres → WordPress → interrupteur « Active » |
+| `wp_status = error`, email « Échec de l'envoi WordPress » | Identifiants invalides, URL refusée, IA ou upload en échec | Lire l'étape `wp-error` dans les Logs ; « Tester la connexion » dans l'admin ; relancer via le globe (onglet Livraisons) |
+| « WORDPRESS_URL doit utiliser HTTPS » / « adresse réseau interne » | Anti-SSRF | Saisir `https://www.rollingstone.fr` ; les hôtes internes sont refusés par conception |
+| Pastille ambre « à finir dans l'éditeur », log `wp-meta` « champ(s) refusé(s) » | WordPress a ignoré des métas non déclarées en REST | Yoast : vérifier que le mu-plugin est présent (`GET /wp-json/` doit lister `rs-delivery/v1`). Style Music / Main Artist / Reviewer : renseigner `WP_META_MAP` après lecture des clés sur un article de référence (`GET /wp-json/rs-delivery/v1/post-meta/{id}`) |
+| `GET /wp-json/rs-delivery/v1/post-meta/1` → 404 | L'article 1 n'existe pas | Ce n'est pas un signe d'absence du plugin : tester avec un ID d'article réel |
+| `curl` vers rollingstone.fr renvoie une page Cloudflare / 403 | Pare-feu sensible au `User-Agent` | Envoyer un UA de navigateur (`-A "Mozilla/5.0 ..."`) |
+| Image à la une absente sur une chronique | Aucune photo livrée et rien en médiathèque | Livrer la pochette dans le champ `photos` ; le log `wp-media` indique la recherche tentée |
+| Article envoyé sans catégorie | L'IA a proposé des IDs inconnus | Warning `wp-format` ; corriger dans l'éditeur. La taxonomie de référence est dans `wordpressRules.ts` |
+| Renvoi depuis l'admin sans images | Images introuvables dans le dossier Dropbox | Le dossier a été déplacé/renommé ; warning `wp-media`, l'article part sans image |
+| `502` sur `POST /api/deliveries` avec beaucoup de photos | Corps multipart > ~78 Mo refusé par le proxy Railway | Réduire les JPEG > 10 Mo avant envoi (voir §11) |
+
+### Double authentification
+
+| Symptôme | Cause probable | Solution |
+|---|---|---|
+| Boucle sur `/mfa`, code refusé | Horloge du téléphone décalée, ou application supprimée | Vérifier l'heure automatique ; sinon un admin réinitialise la 2FA (Journalistes → bouclier barré) et l'utilisateur re-scanne un QR code |
+| `401 { code: "mfa_required" }` sur l'API | 2FA activée après connexion ; la session est restée AAL1 | Se déconnecter / reconnecter pour passer le challenge TOTP |
+| Interrupteur 2FA sans effet dans l'admin | `REQUIRE_MFA=true` en variable d'environnement | La variable verrouille l'activation ; la retirer de Railway pour rendre la main à l'admin |
+| Enrôlement impossible (« MFA not enabled ») | TOTP désactivé côté Supabase | Dashboard Supabase → Authentication → MFA → activer TOTP |
 
 ### Les emails ne partent pas
 
@@ -1813,6 +2154,8 @@ Un widget de chat Crisp est intégré en production pour le support utilisateur.
 | Symptôme | Cause probable | Solution |
 |---|---|---|
 | Build frontend échoue | Variables `VITE_*` absentes | Les variables Vite sont injectées au **build**, pas au runtime. Les définir dans Railway **avant** le déploiement |
+| Une variable `VITE_*` modifiée n'est pas prise en compte | `railway redeploy` relance l'ancien artefact | Lancer `railway up` pour rebuilder |
+| `railway up` expire avant le build | Envoi trop volumineux | Vérifier que `.railwayignore` est présent et exclut `HEBDO*/`, `node_modules/`, `dist/` |
 | `MODULE_NOT_FOUND` au démarrage | `npm ci` n'a pas tourné dans backend/ ou frontend/ | Vérifier le script `postinstall` dans le `package.json` racine. En local : `cd backend && npm ci && cd ../frontend && npm ci` |
 
 ---
@@ -1836,3 +2179,14 @@ Un widget de chat Crisp est intégré en production pour le support utilisateur.
 | **Rotation auto** | Service `hebdoRotation.ts` qui crée automatiquement le prochain numéro hebdomadaire lorsque la date de fin de l'hebdo courant est dépassée |
 | **Onboarding** | Tutoriel interactif en 5 étapes affiché au premier login d'un journaliste. Tracké via localStorage |
 | **Crisp** | Widget de chat en direct intégré pour le support utilisateur en production |
+| **AAL1 / AAL2** | Niveau d'assurance d'authentification du JWT Supabase : mot de passe seul (AAL1) ou mot de passe + TOTP vérifié (AAL2). Exigé AAL2 par le backend quand la 2FA est active |
+| **TOTP** | Code à usage unique basé sur le temps (Google Authenticator, 1Password…), utilisé pour la 2FA |
+| **Moteur IA / `AI_PROVIDER`** | Fournisseur utilisé pour la correction : `anthropic`, `gemini`, `mistral` ou `claude-code` (local) |
+| **Mot de passe application** | Identifiant WordPress dédié à l'API REST (Basic auth), distinct du mot de passe de connexion à `wp-admin` |
+| **mu-plugin** | *Must-use plugin* WordPress, actif dès qu'il est déposé dans `wp-content/mu-plugins/`. Ici `rs-delivery-rest-meta.php`, qui expose les métas Yoast en REST et les routes `rs-delivery/v1` |
+| **`WP_META_MAP`** | Réglage JSON reliant Style Music, Main Music Artist et note Reviewer à leurs clés de métas WordPress réelles |
+| **`metaRejected` / `editorTodo`** | Liste des clés de métas refusées par WordPress et, dérivée, liste lisible des champs à finir à la main dans l'éditeur (pastille ambre) |
+| **Reviews Box** | Encadré de notation du plugin Reviewer (Evographics) sur rollingstone.fr, rendu par le shortcode `[rwp-review-recap id="0"]` ajouté automatiquement aux chroniques |
+| **Image à la une** | *Featured image* WordPress, normalisée par l'app au format 1280 × 853 (template Canva éditorial) |
+| **Marqueur de paternité** | Déclaration d'auteur signée Ed25519 embarquée dans les sources et le bundle (`scripts/authorship/`) |
+| **WP Engine / `wpe`** | Hébergeur de rollingstone.fr et CLI maison (`scripts/wpe`) pour WP-CLI via SSH, webhooks de build headless et API REST WP Engine |

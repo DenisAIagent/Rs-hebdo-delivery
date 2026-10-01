@@ -521,6 +521,10 @@ Les notifications email sont envoyées via **Resend** (https://resend.com).
 - Si `NOTIFY_EMAIL_ALMA` et `NOTIFY_EMAIL_DENIS` sont toutes deux vides, les emails ne sont pas envoyés et un avertissement est loggué en console.
 - Les mêmes deux adresses reçoivent l'**alerte d'échec WordPress** (`notifyWordpressError`) : livraison Dropbox OK mais pas de brouillon créé, avec le détail de l'erreur et un lien vers l'app pour relancer l'envoi.
 
+#### Configuration email depuis l'admin (depuis le 01/10/2026)
+
+`RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NOTIFY_EMAIL_ALMA` et `NOTIFY_EMAIL_DENIS` se saisissent désormais dans l'admin (Réglages → Email), stockés dans `app_settings` ; les variables d'environnement ci-dessus ne servent plus que de secours (`getEmailConfig()` dans `services/email.ts`). Seule la clé est masquée. Prérequis Resend : un compte, une clé API, et un domaine d'envoi vérifié (DNS) pour écrire à des adresses autres que celle du compte.
+
 ### Variables frontend (fichier `frontend/.env`)
 
 #### `VITE_SUPABASE_URL`

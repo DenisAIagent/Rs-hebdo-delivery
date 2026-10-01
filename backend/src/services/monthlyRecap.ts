@@ -11,6 +11,7 @@
  */
 import PDFDocument from 'pdfkit';
 import { supabaseAdmin } from '../utils/supabase';
+import { getEmailConfig } from './email';
 
 export interface RecapDelivery {
   id: string;
@@ -311,12 +312,13 @@ export interface SendRecapOptions {
 }
 
 export async function sendMonthlyRecap(year: number, month: number, opts: SendRecapOptions = {}): Promise<{ sent: boolean; recipients: string[]; total: number; reason?: string }> {
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'RS Hebdo <onboarding@resend.dev>';
-  const to = opts.to?.length ? opts.to : [process.env.NOTIFY_EMAIL_ALMA].filter(Boolean) as string[];
-  const cc = opts.cc ?? ([process.env.NOTIFY_EMAIL_DENIS].filter(Boolean) as string[]);
-  if (!RESEND_API_KEY) return { sent: false, recipients: [], total: 0, reason: 'RESEND_API_KEY non configurée' };
-  if (to.length === 0) return { sent: false, recipients: [], total: 0, reason: 'NOTIFY_EMAIL_ALMA non configurée' };
+  const cfg = await getEmailConfig();
+  const RESEND_API_KEY = cfg.apiKey;
+  const FROM_EMAIL = cfg.from;
+  const to = opts.to?.length ? opts.to : [cfg.alma].filter(Boolean);
+  const cc = opts.cc ?? [cfg.denis].filter(Boolean);
+  if (!RESEND_API_KEY) return { sent: false, recipients: [], total: 0, reason: 'Clé Resend non configurée (admin > Réglages > Email)' };
+  if (to.length === 0) return { sent: false, recipients: [], total: 0, reason: 'Adresse de la rédaction en chef non configurée (admin > Réglages > Email)' };
 
   const recap = opts.sample ? sampleRecap(year, month) : await collectMonthlyRecap(year, month);
   const pdf = await buildRecapPdf(recap);

@@ -846,6 +846,10 @@ const NON_SECRET_KEYS = new Set([
   // ici. Ce n'est pas un secret : c'est de la configuration de mapping.
   'WP_META_MAP',
   'RECAP_LAST_SENT',
+  // Email : l'expéditeur et les destinataires ne sont pas des secrets.
+  'RESEND_FROM_EMAIL',
+  'NOTIFY_EMAIL_ALMA',
+  'NOTIFY_EMAIL_DENIS',
 ]);
 
 function maskValue(key: string, value: string): string {

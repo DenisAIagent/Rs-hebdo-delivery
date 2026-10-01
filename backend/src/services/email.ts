@@ -26,6 +26,35 @@ function sanitizeUrl(url: string): string {
   }
 }
 
+export interface EmailConfig {
+  apiKey: string;
+  from: string;
+  alma: string;
+  denis: string;
+}
+
+/**
+ * Configuration email : app_settings (admin > Réglages > Email) en priorité,
+ * variables d'environnement en secours. apiKey vide = envoi désactivé.
+ */
+export async function getEmailConfig(): Promise<EmailConfig> {
+  const keys = ['RESEND_API_KEY', 'RESEND_FROM_EMAIL', 'NOTIFY_EMAIL_ALMA', 'NOTIFY_EMAIL_DENIS'];
+  const fromDb: Record<string, string> = {};
+  try {
+    const { data } = await supabaseAdmin.from('app_settings').select('key, value').in('key', keys);
+    for (const row of data || []) if (row.value?.trim()) fromDb[row.key] = row.value.trim();
+  } catch {
+    // fall through to env
+  }
+  const pick = (k: string) => fromDb[k] || process.env[k]?.trim() || '';
+  return {
+    apiKey: pick('RESEND_API_KEY'),
+    from: pick('RESEND_FROM_EMAIL') || 'RS Hebdo <onboarding@resend.dev>',
+    alma: pick('NOTIFY_EMAIL_ALMA'),
+    denis: pick('NOTIFY_EMAIL_DENIS'),
+  };
+}
+
 export interface NotifyParams {
   journalistName: string;
   paperType: string;
@@ -36,18 +65,16 @@ export interface NotifyParams {
 }
 
 export async function notifyDelivery(params: NotifyParams) {
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'RS Hebdo <onboarding@resend.dev>';
+  const cfg = await getEmailConfig();
+  const RESEND_API_KEY = cfg.apiKey;
+  const FROM_EMAIL = cfg.from;
 
   if (!RESEND_API_KEY) {
     console.warn('RESEND_API_KEY not configured — email notification skipped');
     return;
   }
 
-  const recipients = [
-    process.env.NOTIFY_EMAIL_ALMA,
-    process.env.NOTIFY_EMAIL_DENIS,
-  ].filter(Boolean) as string[];
+  const recipients = [cfg.alma, cfg.denis].filter(Boolean);
 
   if (recipients.length === 0) {
     console.warn('No notification recipients configured');
@@ -147,7 +174,8 @@ async function getAdminEmails(): Promise<string[]> {
   } catch {
     // fall through to env fallback
   }
-  return [process.env.NOTIFY_EMAIL_ALMA, process.env.NOTIFY_EMAIL_DENIS].filter(Boolean) as string[];
+  const cfg = await getEmailConfig();
+  return [cfg.alma, cfg.denis].filter(Boolean);
 }
 
 export interface WpErrorNotifyParams {
@@ -164,8 +192,9 @@ export interface WpErrorNotifyParams {
  * Never throws — l'alerte ne doit pas casser le flux de livraison.
  */
 export async function notifyWordpressError(params: WpErrorNotifyParams) {
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'RS Hebdo <onboarding@resend.dev>';
+  const cfg = await getEmailConfig();
+  const RESEND_API_KEY = cfg.apiKey;
+  const FROM_EMAIL = cfg.from;
 
   if (!RESEND_API_KEY) {
     console.warn('RESEND_API_KEY not configured — WordPress error email skipped');

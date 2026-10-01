@@ -52,6 +52,32 @@ const SECRET_SECTIONS: SettingSection[] = [
     ],
   },
   {
+    title: 'Email (Resend)',
+    icon: <Key size={18} className="text-emerald-600" />,
+    fields: [
+      {
+        key: 'RESEND_API_KEY',
+        label: 'Cle API Resend',
+        description: 'Cle re_... creee sur resend.com (API Keys). Sans elle, aucun email ne part : notifications de livraison, alertes WordPress, recapitulatif mensuel.',
+      },
+      {
+        key: 'RESEND_FROM_EMAIL',
+        label: 'Expediteur',
+        description: 'Ex. "RS Hebdo <hebdo@rollingstone.fr>" — le domaine doit etre verifie dans Resend. Par defaut onboarding@resend.dev (envoi limite au proprietaire du compte Resend).',
+      },
+      {
+        key: 'NOTIFY_EMAIL_ALMA',
+        label: 'Email de la redaction en chef',
+        description: 'Recoit les notifications de livraison et le recapitulatif mensuel (1er du mois).',
+      },
+      {
+        key: 'NOTIFY_EMAIL_DENIS',
+        label: 'Email en copie',
+        description: 'Copie des notifications et du recapitulatif (vide = pas de copie).',
+      },
+    ],
+  },
+  {
     title: 'Dropbox',
     icon: <Key size={18} className="text-blue-600" />,
     fields: [

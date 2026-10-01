@@ -25,14 +25,25 @@ export interface ResizedImage {
 }
 
 /** "Angus_03.heic" -> "Angus_03-1280x853.jpg" (keeps media-library dedup by name meaningful). */
+/**
+ * Nom de fichier sur pour l'en-tete Content-Disposition de WordPress : accents
+ * translitteres, tirets longs et espaces remplaces (sinon « Métro – Rodeorama »
+ * arrive en mojibake dans la mediatheque).
+ */
+export function safeMediaBase(originalname: string): string {
+  const base = originalname.replace(/\.[^.]+$/, '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9._]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return base || 'image';
+}
+
 export function featuredFilename(originalname: string): string {
-  const base = originalname.replace(/\.[^.]+$/, '').trim() || 'image';
+  const base = safeMediaBase(originalname);
   return `${base}-${FEATURED_WIDTH}x${FEATURED_HEIGHT}.jpg`;
 }
 
 /** "photo.heic" -> "photo-web.jpg" */
 export function webFilename(originalname: string): string {
-  const base = originalname.replace(/\.[^.]+$/, '').trim() || 'image';
+  const base = safeMediaBase(originalname);
   return `${base}-web.jpg`;
 }
 

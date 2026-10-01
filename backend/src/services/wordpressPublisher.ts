@@ -23,9 +23,11 @@ import {
   findWpMediaByKeywords,
   setWpMediaMeta,
   getWpCategory,
-  getWpMetaMap,
+  readWpPostMeta,
+  writeWpPostMeta,
   type WpPostCandidate, findWpUserByName } from './wordpress';
 import { buildWpSystemPrompt, normalizeWpCategories, WP_STYLE_MUSIC } from './wordpressRules';
+import { hasReviewBox, hasScalarMeta, missingEditorialMeta, WP_META_MAIN_ARTIST, WP_META_REVIEWS, WP_META_STYLE_MUSIC, type ReviewBoxInput } from './wordpressReviewBox';
 import { fetchDeliveryImages, type ImageFile } from './dropbox';
 import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SIDE } from './imageResize';
 
@@ -171,37 +173,82 @@ export function buildEditorTodo(p: {
   styleMusicValue: string | null;
   mainArtist?: string;
   metaRejected: string[];
-  metaMap: Partial<Record<'styleMusic' | 'mainArtist' | 'reviewScore', string>>;
+  /** Metas editoriales presentes sur l'article apres l'envoi (ecrites par l'app ou a la main). */
+  editorialPresent: { reviewBox: boolean; mainArtist: boolean; styleMusic: boolean };
 }): string[] {
   const todo: string[] = [];
-  const refuse = (key?: string) => !key || p.metaRejected.includes(key);
 
   if (p.metaRejected.some((k) => k.startsWith('_yoast_wpseo_'))) {
     todo.push('Yoast SEO : requete cible, titre SEO et meta description (voyant vert).');
   }
-  if (refuse(p.metaMap.styleMusic)) {
+  if (!p.editorialPresent.styleMusic) {
     todo.push(
       p.styleMusicValue
         ? `Style Music : selectionner la valeur ${p.styleMusicValue} dans le menu deroulant.`
         : 'Style Music : a choisir dans le menu deroulant.',
     );
   }
-  if (refuse(p.metaMap.mainArtist)) {
+  if (!p.editorialPresent.mainArtist) {
     todo.push(
       p.mainArtist
         ? `Main Music Artist : saisir "${p.mainArtist}".`
         : 'Main Music Artist : a saisir.',
     );
   }
-  if (p.chronique && refuse(p.metaMap.reviewScore)) {
+  if (p.chronique && !p.editorialPresent.reviewBox) {
     todo.push(
-      `Reviews Box : template Review Chronique ${p.chronique ? 'Music' : ''}, critere "Avis de la redaction", note ${p.reviewScore ?? 'a reporter'}/5, image = image a la une.`.replace(
-        /\s+/g,
-        ' ',
-      ),
+      `Reviews Box : template Review Chronique, critere "L'avis de la redaction", note ${p.reviewScore ?? 'a reporter'}/5, image = image a la une.`,
     );
   }
   return todo;
+}
+
+/**
+ * Ecrit Reviews Box, Main Artist et Style Music sur l'article, uniquement pour
+ * les metas encore vides (jamais d'ecrasement d'une saisie de la redaction).
+ * Renvoie ce qui est present sur l'article a l'issue de l'operation.
+ */
+export async function ensureEditorialMeta(p: {
+  postId: number;
+  reviewBox: ReviewBoxInput | null;
+  mainArtist: string | null;
+  styleMusicValue: string | null;
+  ctx: LogContext;
+}): Promise<{ reviewBox: boolean; mainArtist: boolean; styleMusic: boolean }> {
+  const absent = { reviewBox: false, mainArtist: false, styleMusic: false };
+  let existing: Record<string, unknown> = {};
+  try {
+    const data = (await readWpPostMeta(p.postId)) as { meta?: Record<string, unknown> };
+    existing = data?.meta || {};
+  } catch (err: any) {
+    await logWarn('wp-meta', `Lecture des metabox impossible (${err?.response?.status || err?.message || err}) — Reviews Box, Main Artist et Style Music a verifier a la main`, p.ctx);
+    return absent;
+  }
+  const toWrite = missingEditorialMeta({ existing, reviewBox: p.reviewBox, mainArtist: p.mainArtist, styleMusicValue: p.styleMusicValue });
+  let written: string[] = [];
+  if (Object.keys(toWrite).length > 0) {
+    try {
+      written = await writeWpPostMeta(p.postId, toWrite);
+    } catch (err: any) {
+      await logWarn('wp-meta', `Ecriture des metabox refusee (${err?.message || err})`, p.ctx);
+    }
+    const refused = Object.keys(toWrite).filter((k) => !written.includes(k));
+    if (written.length > 0) await logInfo('wp-meta', `Metabox ecrites : ${written.join(', ')}`, p.ctx);
+    if (refused.length > 0) await logWarn('wp-meta', `Metabox refusees par le mu-plugin (prefixe non autorise ?) : ${refused.join(', ')} — a saisir a la main`, p.ctx);
+  }
+  const isPresent = (key: string, has: (v: unknown) => boolean) => written.includes(key) || (!(key in toWrite) && has(existing[key]));
+  const result = {
+    reviewBox: isPresent(WP_META_REVIEWS, hasReviewBox),
+    mainArtist: isPresent(WP_META_MAIN_ARTIST, hasScalarMeta),
+    styleMusic: isPresent(WP_META_STYLE_MUSIC, hasScalarMeta),
+  };
+  const kept = [
+    result.reviewBox && !written.includes(WP_META_REVIEWS) ? 'Reviews Box' : '',
+    result.mainArtist && !written.includes(WP_META_MAIN_ARTIST) ? 'Main Artist' : '',
+    result.styleMusic && !written.includes(WP_META_STYLE_MUSIC) ? 'Style Music' : '',
+  ].filter(Boolean);
+  if (kept.length > 0) await logInfo('wp-meta', `Deja renseigne sur l'article, conserve : ${kept.join(', ')}`, p.ctx);
+  return result;
 }
 
 /** Rating from the delivery form ("etoiles", on 5), or null. */
@@ -499,6 +546,7 @@ export async function publishDeliveryToWordpress(
     //    inserees en fin d'article (blocs image Gutenberg). Dedup par nom de
     //    fichier ; le credit photo va en legende du media, jamais dans le texte.
     let featuredMediaId: number | undefined;
+    let featuredMediaUrl: string | undefined;
     const bodyMedia: Array<{ id: number; url: string }> = [];
     const images = input.images || [];
     // Texte alternatif des images (Yoast) : « Artiste – Album », sinon le titre.
@@ -513,6 +561,7 @@ export async function publishDeliveryToWordpress(
         const hit = await findWpMediaByKeywords(queries);
         if (hit) {
           featuredMediaId = hit.id;
+          featuredMediaUrl = hit.url;
           if (!hit.altText) await setWpMediaMeta(hit.id, { altText: imageAlt }).catch(() => undefined);
           await logInfo('wp-media', `Aucune photo livree — image a la une reprise de la mediatheque (media #${hit.id}, ${hit.url.split('/').pop()})`, ctx);
         } else {
@@ -543,6 +592,7 @@ export async function publishDeliveryToWordpress(
         });
         if (index === 0) {
           featuredMediaId = media.id;
+          featuredMediaUrl = media.url;
           await logInfo('wp-media', `Image a la une prete (media #${media.id}, ${upload.filename})`, ctx);
         } else if (media.id === featuredMediaId || bodyMedia.some((m) => m.id === media.id)) {
           // Meme fichier livre plusieurs fois (ex. doublon pour atteindre le
@@ -596,15 +646,11 @@ export async function publishDeliveryToWordpress(
     // 5. Create the draft post — the title carries the review mention so the
     // editorial team spots unreviewed articles at a glance (slug/SEO stay clean)
     //
-    // Style Music, Main Music Artist et la note Reviewer sont des metas du theme
-    // et d'un plugin : leurs cles ne sont pas devinables et ne sont envoyees que
-    // si elles ont ete renseignees dans le reglage WP_META_MAP.
+    // Style Music, Main Music Artist et la Reviews Box sont ecrits apres la
+    // creation du brouillon, via le mu-plugin, et seulement s'ils sont vides
+    // (ensureEditorialMeta) : les cles reelles sont dans wordpressReviewBox.ts.
     const styleMusicValue = WP_STYLE_MUSIC[payload.styleMusic] || null;
-    const metaMap = await getWpMetaMap();
-    const extraMeta: Record<string, string | number> = {};
-    if (metaMap.styleMusic && styleMusicValue) extraMeta[metaMap.styleMusic] = styleMusicValue;
-    if (metaMap.mainArtist && payload.mainArtist) extraMeta[metaMap.mainArtist] = payload.mainArtist;
-    if (metaMap.reviewScore && reviewScore !== null) extraMeta[metaMap.reviewScore] = reviewScore;
+    const extraMeta: Record<string, unknown> = {};
 
     const authorId = await findWpUserByName(input.journalistName);
     if (authorId) await logInfo('wp-format', `Auteur WordPress trouve pour ${input.journalistName} (#${authorId})`, ctx);
@@ -638,10 +684,24 @@ export async function publishDeliveryToWordpress(
         'wp-meta',
         `${post.metaRejected.length} champ(s) refuse(s) par WordPress — a saisir a la main`,
         ctx,
-        `${post.metaRejected.join(', ')} — refusees par l'API standard ET par le mu-plugin scripts/wp/rs-delivery-rest-meta.php (absent, ou cles hors de ses prefixes autorises : _yoast_wpseo_, rwp_, sm_, _sm_, mat_, _mat_).`,
+        `${post.metaRejected.join(', ')} — refusees par l'API standard ET par le mu-plugin scripts/wp/rs-delivery-rest-meta.php (absent, ou cles hors de ses prefixes autorises).`,
       );
-    } else if (Object.keys(extraMeta).length > 0 || payload.focusKeyword) {
-      await logInfo('wp-meta', 'Yoast et metaboxes enregistres par WordPress', ctx);
+    } else if (payload.focusKeyword && !input.contentOnly) {
+      await logInfo('wp-meta', 'Yoast enregistre par WordPress', ctx);
+    }
+
+    // Reviews Box (note), Main Artist et Style Music : ecrits s'ils sont vides,
+    // y compris sur un renvoi ; une saisie de la redaction est toujours conservee.
+    const reviewBox: ReviewBoxInput | null = chronique && reviewScore !== null
+      ? { score: reviewScore, kind: kind === 'cinema' ? 'cinema' : 'musique', imageUrl: featuredMediaUrl }
+      : null;
+    const editorialPresent = await ensureEditorialMeta({
+      postId: post.id, reviewBox, ctx,
+      mainArtist: kind === 'musique' ? (artisteIn || payload.mainArtist || null) : null,
+      styleMusicValue: kind === 'musique' ? styleMusicValue : null,
+    });
+    if (reviewBox && editorialPresent.reviewBox) {
+      await logInfo('wp-meta', `Reviews Box : note ${reviewScore}/5 en place`, ctx);
     }
 
     // 6. Track on the delivery — wp_payload keeps the editor-only fields
@@ -663,7 +723,7 @@ export async function publishDeliveryToWordpress(
           styleMusicValue,
           mainArtist: payload.mainArtist,
           metaRejected: post.metaRejected,
-          metaMap,
+          editorialPresent,
         }),
       },
     });

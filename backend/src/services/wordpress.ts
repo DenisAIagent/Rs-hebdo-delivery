@@ -309,7 +309,7 @@ export interface WpCreatePostInput {
    * puis se declarent dans le reglage WP_META_MAP (voir getWpExtraMeta).
    * Tant que le reglage est vide, cet objet l'est aussi et rien n'est envoye.
    */
-  extraMeta?: Record<string, string | number>;
+  extraMeta?: Record<string, unknown>;
   /** Brouillon existant a mettre a jour (renvoi depuis l'admin) au lieu d'en creer un nouveau. */
   existingPostId?: number;
   /** Utilisateur WordPress a mettre en auteur (si trouve). */
@@ -384,7 +384,7 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
   // les accepte via REST que si le site les enregistre avec show_in_rest (voir
   // scripts/wp/rs-delivery-rest-meta.php) ; sinon il les ignore ou les rejette.
   // On les envoie quand meme, et on REMONTE le refus au lieu de le masquer.
-  const meta: Record<string, string | number> = {};
+  const meta: Record<string, unknown> = {};
   if (input.yoast && !input.contentOnly) {
     meta._yoast_wpseo_focuskw = input.yoast.focusKeyword;
     meta._yoast_wpseo_title = input.yoast.seoTitle;
@@ -446,7 +446,7 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
   // Yoast, Reviewer (rwp_), Style Music (sm_/_sm_) et Main Artist (mat_/_mat_).
   // Sans mu-plugin (404) ou si la cle n'est pas dans ses prefixes, le refus reste.
   if (metaRejected.length > 0) {
-    const retry: Record<string, string | number> = {};
+    const retry: Record<string, unknown> = {};
     for (const k of metaRejected) retry[k] = meta[k];
     const written = await writeWpMetaViaMuPlugin(client, config, data.id, retry);
     metaRejected = metaRejected.filter((k) => !written.includes(k));
@@ -477,7 +477,7 @@ export async function readWpPostMeta(postId: number): Promise<unknown> {
  * Ecrit des metas arbitraires (prefixes autorises par le mu-plugin) sur un
  * article existant. Renvoie les cles effectivement ecrites.
  */
-export async function writeWpPostMeta(postId: number, meta: Record<string, string | number>): Promise<string[]> {
+export async function writeWpPostMeta(postId: number, meta: Record<string, unknown>): Promise<string[]> {
   const config = await getWpConfig();
   return writeWpMetaViaMuPlugin(wpClient(config), config, postId, meta);
 }
@@ -492,7 +492,7 @@ async function writeWpMetaViaMuPlugin(
   client: AxiosInstance,
   config: WpConfig,
   postId: number,
-  meta: Record<string, string | number>,
+  meta: Record<string, unknown>,
 ): Promise<string[]> {
   if (Object.keys(meta).length === 0) return [];
   try {

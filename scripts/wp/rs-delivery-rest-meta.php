@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RS Delivery — champs REST (Yoast, Reviews Box, Style Music, Main Artist)
  * Description: Permet a RS Hebdo Delivery de renseigner, via l'API REST, les champs que WordPress n'expose pas par defaut sur les brouillons : Yoast SEO, le Style Music et le Main Music Artist du theme, et la note de la Reviews Box (plugin Reviewer). Ecriture strictement reservee aux comptes pouvant editer l'article vise, et limitee a une liste de prefixes de cles fixee ci-dessous.
- * Version: 2.0.0
+ * Version: 2.1.0
  * Author: RS Hebdo Delivery
  *
  * INSTALLATION
@@ -43,6 +43,7 @@ const RS_DELIVERY_ALLOWED_META_PREFIXES = [
     '_sm_',
     'mat_',
     '_mat_',
+    '_tsm_',   // Style Music du theme (cle reelle : _tsm_value, decouverte le 01/10/2026)
 ];
 
 /** Une cle est-elle autorisee en ecriture ? */

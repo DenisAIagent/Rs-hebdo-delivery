@@ -1,5 +1,7 @@
 # Note pour le développeur de rollingstone.fr
 
+> **État au 1er octobre 2026 : le fichier 2.0 est installé et actif ; la version 2.1.0 (préfixe `_tsm_` pour Style Music) est à réinstaller.** Clés réelles découvertes : `rwp_reviews` (Reviews Box), `_mat_value` (Main Artist), `_tsm_value` (Style Music) — voir `backend/src/services/wordpressReviewBox.ts`.
+>
 > **État au 30 septembre 2026 : le fichier est installé et actif.** `GET https://www.rollingstone.fr/wp-json/` liste le namespace `rs-delivery/v1` et sa route `post-meta/(?P<id>\d+)` ; le schéma de `wp/v2/posts` accepte les trois métas Yoast. Il reste à lire les métas d'un article de référence (étape « Vérification » ci-dessous) pour renseigner le réglage `WP_META_MAP` de l'application (Style Music, Main Music Artist, note Reviewer).
 
 ## Ce qu'on demande

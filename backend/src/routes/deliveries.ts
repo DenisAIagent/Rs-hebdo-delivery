@@ -9,6 +9,7 @@ import { uploadDelivery, ensureHebdoFolderStructure } from '../services/dropbox'
 import { notifyDelivery } from '../services/email';
 import { publishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { logInfo, logError, logWarn, type LogContext } from '../services/deliveryLogger';
+import { validateMetadata } from '../services/fieldValidation';
 
 /** Strip HTML tags safely (removes all tags, decodes entities) */
 function stripHtml(str: string): string {
@@ -356,6 +357,16 @@ router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, uplo
       }
     }
 
+    // Validation serveur de tous les champs du type (chapo, clip YouTube,
+    // site officiel... selon fields_config) : le formulaire ne fait pas foi.
+    const problems = validateMetadata({
+      fields: paperType.fields_config || [], metadata: parsedMetadata, imageCount: imageFiles?.length || 0,
+    });
+    if (problems.length > 0) {
+      await logWarn('validation', 'Champs invalides ou manquants', ctx, problems.join(' ; '));
+      return res.status(400).json({ error: `Livraison refusée : ${problems.join(' ; ')}` });
+    }
+
     // Get body text from metadata (usually 'corps' field)
     const bodyField = paperType.fields_config?.find((f: any) => f.key === 'corps');
     const bodyText = bodyField ? parsedMetadata[bodyField.key] || '' : '';
@@ -564,6 +575,14 @@ router.put('/:id', (req, _res, next) => { req.setTimeout(900_000); next(); }, up
     const updatedTitle = title || existing.title;
 
     // Get body text
+    const problems = validateMetadata({
+      fields: paperType.fields_config || [], metadata: parsedMetadata,
+      imageCount: imageFiles?.length || 0, hasExistingImages: !!existing.image_filename,
+    });
+    if (problems.length > 0) {
+      return res.status(400).json({ error: `Modification refusée : ${problems.join(' ; ')}` });
+    }
+
     const bodyField = paperType.fields_config?.find((f: any) => f.key === 'corps');
     const bodyText = bodyField ? parsedMetadata[bodyField.key] || '' : '';
     const signCount = bodyText.length;

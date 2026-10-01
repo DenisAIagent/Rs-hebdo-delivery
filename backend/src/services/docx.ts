@@ -5,6 +5,7 @@ interface FieldConfig {
   label: string;
   type: 'text' | 'textarea' | 'url' | 'images' | 'stars';
   required: boolean;
+  validation?: 'youtube' | 'website';
   min?: number;
   max?: number;
 }
@@ -76,6 +77,9 @@ export async function generateDocx(params: {
     for (const field of params.fieldsConfig) {
       // Skip image fields in DOCX
       if (field.type === 'images') continue;
+      // Le chapo ne sert qu'au site (WordPress) : il ne part JAMAIS sur Dropbox
+      // (consigne redaction du 01/10/2026).
+      if (field.key === 'chapo') continue;
 
       // Star rating — render as "★★★★½ (4.5/5)"
       if (field.type === 'stars') {

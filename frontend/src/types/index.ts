@@ -15,6 +15,8 @@ export interface FieldConfig {
   min?: number; // For images, minimum required
   max?: number; // For stars, max rating (default 5)
   alternateKey?: string; // If set, this field OR the alternate field must be filled (not both required)
+  validation?: 'youtube' | 'website'; // URL rule: YouTube clip, or a website (never YouTube)
+  hint?: string; // Short help shown under the label
 }
 
 export interface PaperType {

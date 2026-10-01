@@ -578,7 +578,7 @@ Référentiel des types de papier configuré par les admins. Chaque type défini
 | `name` | TEXT | Nom affiché (ex. "Disque de la semaine") |
 | `sign_limit` | INTEGER | Limite en signes du corps du texte. Affiché en temps réel dans le formulaire |
 | `drive_folder_name` | TEXT | Nom exact du sous-dossier créé dans Dropbox pour ce type |
-| `fields_config` | JSONB | Tableau de `FieldConfig` — définit les champs du formulaire |
+| `fields_config` | JSONB | Tableau de `FieldConfig` — définit les champs du formulaire. Un `FieldConfig` porte `key`, `label`, `type` (`text`, `textarea`, `url`, `images`, `stars`), `required`, `min`/`max`, `alternateKey` (l'un ou l'autre suffit), `validation` (`youtube` : lien YouTube exigé ; `website` : site exigé, jamais YouTube) et `hint` (aide sous le libellé). **Règles rédaction du 01/10/2026** : `chapo` obligatoire sur tous les types ; sur les chroniques musique, `lien` = clip YouTube obligatoire et `lien_achat` = Bandcamp ou site officiel obligatoire (`scripts/update-fields-config.py`, idempotent). Le serveur revalide tout (`services/fieldValidation.ts`, testé) sur `POST /api/deliveries` et `PUT /api/deliveries/:id` : une livraison incomplète est refusée avec la liste des problèmes. |
 | `is_active` | BOOLEAN | Si `false`, le type n'apparaît pas dans le formulaire journaliste |
 | `sort_order` | INTEGER | Ordre d'affichage dans les listes |
 | `created_at` | TIMESTAMPTZ | — |
@@ -1329,7 +1329,7 @@ Le service `docx.ts` génère un fichier Word formaté avec :
 - Champs dans l'ordre de `fields_config` avec un rendu adapté par type :
   - `accroche` : italique Georgia 13pt
   - `credits` : italique petite taille grisé
-  - `chapo` : gras Georgia 13pt
+  - `chapo` : **jamais dans le DOCX** (le chapô ne sert qu'à WordPress, consigne du 01/10/2026)
   - `corps` / `textarea` : paragraphes Georgia 12pt, double interligne
   - `url` : bleu souligné
   - `stars` : `★★★☆☆ (3/5)`
@@ -1528,7 +1528,7 @@ Génère un Buffer DOCX à partir des métadonnées et de la configuration de ch
 | Auteur + type | Italique grisé 11pt |
 | `accroche` | Italique Georgia 13pt |
 | `credits` | Italique grisé 10pt avec préfixe "Crédits :" |
-| `chapo` | Gras Georgia 13pt, interligne 1.5 |
+| `chapo` | Exclu du document : ne part jamais sur Dropbox |
 | `corps` / textarea | Georgia 12pt, interligne 1.5, séparation double |
 | `url` | Bleu souligné 11pt avec label en gras |
 | `stars` | `★★★☆☆ (3/5)` |

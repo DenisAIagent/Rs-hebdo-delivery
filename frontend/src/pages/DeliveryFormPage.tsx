@@ -304,6 +304,16 @@ export function DeliveryFormPage() {
     }
   };
 
+  const YOUTUBE_RE = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i;
+  const urlProblem = (field: FieldConfig): string | null => {
+    const v = (metadata[field.key] || '').trim();
+    if (!v || field.type !== 'url') return null;
+    if (!/^https?:\/\/[^\s]+\.[^\s]+$/i.test(v)) return 'Adresse complète attendue (https://…)';
+    if (field.validation === 'youtube' && !YOUTUBE_RE.test(v)) return 'Lien YouTube attendu (youtube.com ou youtu.be)';
+    if (field.validation === 'website' && YOUTUBE_RE.test(v)) return 'Un site est attendu ici (Bandcamp, site officiel), pas un lien YouTube';
+    return null;
+  };
+
   const getMissingFields = (): string[] => {
     if (!selectedType?.fields_config) return [];
     const missing: string[] = [];
@@ -337,12 +347,18 @@ export function DeliveryFormPage() {
         if (!metadata[field.key]?.trim()) missing.push(field.label);
       }
     }
+    for (const field of selectedType.fields_config) {
+      const problem = urlProblem(field);
+      if (problem) missing.push(`${field.label} (${problem.toLowerCase()})`);
+    }
 
     return missing;
   };
 
   const isFieldMissing = (field: FieldConfig) => {
-    if (!field.required || !showValidation) return false;
+    if (!showValidation) return false;
+    if (field.type === 'url' && urlProblem(field)) return true;
+    if (!field.required) return false;
 
     if (field.alternateKey && selectedType) {
       const altField = selectedType.fields_config.find((f) => f.key === field.alternateKey);
@@ -1152,17 +1168,17 @@ function StepContentView(props: StepContentViewProps) {
                   <FieldLabel
                     label={field.label}
                     required={field.required && !isOptionalViaAlternate}
-                    hint={isOptionalViaAlternate ? '(ou ajoutez des photos)' : undefined}
+                    hint={isOptionalViaAlternate ? '(ou ajoutez des photos)' : field.hint}
                   />
                   <input
                     type="url"
                     value={metadata[field.key] || ''}
                     onChange={(e) => updateMetadata(field.key, e.target.value)}
-                    placeholder="https://…"
+                    placeholder={field.validation === 'youtube' ? 'https://www.youtube.com/watch?v=…' : field.validation === 'website' ? 'https://… (Bandcamp ou site officiel)' : 'https://…'}
                     className={`rs-input${missing ? ' error' : ''}`}
                   />
                   {missing && (
-                    <FieldError message="Renseignez un lien ou ajoutez des photos ci-dessous" />
+                    <FieldError message={urlProblem(field) || (isOptionalViaAlternate ? 'Renseignez un lien ou ajoutez des photos ci-dessous' : 'Ce champ est obligatoire')} />
                   )}
                 </div>
               );
@@ -1251,7 +1267,7 @@ function StepContentView(props: StepContentViewProps) {
               return (
                 <div key={field.key}>
                   <div className="flex items-center justify-between mb-1">
-                    <FieldLabel label={field.label} required={field.required} inline />
+                    <FieldLabel label={field.label} required={field.required} inline hint={field.hint} />
                     {isBodyField && (
                       <span
                         className="mono"

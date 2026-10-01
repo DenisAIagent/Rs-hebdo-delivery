@@ -103,7 +103,7 @@ CONTENU DE L'ARTICLE :
 - Ton seul texte redactionnel est le champ excerpt : un chapo LEGER, 1 a 2 phrases maximum, en texte brut, qui resume le papier avec ses propres informations. Aucun fait, nom, date ou jugement absent du papier. Si le formulaire fournit deja une accroche ou un chapo, reprends-le tel quel.
 - La signature du journaliste est ajoutee automatiquement en fin d'article.
 
-LIEN INTERNE (champ internalLinkUrl) : choisis dans la liste <liens_internes_candidats> l'article le plus proche du papier (meme artiste, meme film, meme sujet) et renvoie son URL exacte ; l'application l'affiche en bloc « A lire aussi » sous l'article. Si aucun candidat n'est pertinent, renvoie une chaine vide. N'invente jamais d'URL.
+LIEN INTERNE (champ internalLinkUrl) : choisis dans la liste <liens_internes_candidats> un article qui parle VRAIMENT du meme artiste, du meme film ou du meme sujet, et renvoie son URL exacte ; l'application l'affiche en bloc « A lire aussi » sous l'article. Une playlist, un replay ou un article sans rapport direct ne sont PAS pertinents : dans ce cas renvoie une chaine vide (c'est le cas le plus frequent). N'invente jamais d'URL.
 
 CREDIT PHOTO :
 - Le credit photo (format « © Photographe/Agence ») va uniquement dans le champ photoCredit du payload (legende du media WordPress), jamais ailleurs.

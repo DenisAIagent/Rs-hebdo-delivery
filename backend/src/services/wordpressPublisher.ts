@@ -503,7 +503,9 @@ export async function publishDeliveryToWordpress(
     const links = splitLinks(String(meta.lien || ''), String(meta.lien_achat || ''));
     const cinema = /cinema/i.test(input.paperTypeName);
     const livres = /livre/i.test(input.paperTypeName);
-    const chosen = candidates.find((c) => c.link && c.link === (fresh.internalLinkUrl || '').trim()) || candidates[0];
+    // Uniquement le choix explicite de l'IA parmi les candidats : jamais le premier
+    // resultat de recherche par defaut (il est souvent hors sujet).
+    const chosen = candidates.find((c) => c.link && c.link === (fresh.internalLinkUrl || '').trim());
     const readAlso = chosen ? { url: chosen.link, title: chosen.title } : undefined;
     payload.contentHtml = buildArticleHtml({
       chapo, bodyText: input.bodyText, journalistName: input.journalistName,

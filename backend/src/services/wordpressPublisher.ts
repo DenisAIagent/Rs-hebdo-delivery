@@ -89,12 +89,17 @@ export function buildArticleHtml(p: ArticleHtmlInput): string {
   const chapo = (p.chapo || '').replace(/\s+/g, ' ').trim();
   if (chapo) blocks.push(`<h3>${escapeHtmlText(chapo)}</h3>`);
   const paragraphs = p.bodyText.replace(/\r\n?/g, '\n').split(/\n\s*\n|\n/).map((x) => x.trim()).filter(Boolean);
-  for (const para of paragraphs) {
+  const video = p.videoUrl ? `<p>${escapeHtmlText(p.videoUrl)}</p>` : null;
+  // La video se place au milieu de la chronique (apres la premiere moitie des
+  // paragraphes) quand il y en a au moins deux, sinon juste avant la signature.
+  const videoAfter = video && paragraphs.length >= 2 ? Math.ceil(paragraphs.length / 2) - 1 : -1;
+  paragraphs.forEach((para, i) => {
     const html = escapeHtmlText(para).replace(/«\s?([^»]+?)\s?»/g, (_m, q: string) => `<em>« ${q.trim()} »</em>`);
     blocks.push(`<p>${html}</p>`);
-  }
-  if (p.videoUrl) blocks.push(`<p>${escapeHtmlText(p.videoUrl)}</p>`);
+    if (video && i === videoAfter) blocks.push(video);
+  });
   if (p.shopUrl) blocks.push(`<p><a href="${escapeHtmlAttr(p.shopUrl)}" target="_blank" rel="noopener">${escapeHtmlText(p.shopLabel || "Acheter l'album")}</a></p>`);
+  if (video && videoAfter < 0) blocks.push(video);
   const name = p.journalistName.trim();
   if (name) blocks.push(`<p><em>Par ${escapeHtmlText(name)}</em></p>`);
   return blocks.join('\n\n');

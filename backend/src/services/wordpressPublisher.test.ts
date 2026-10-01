@@ -30,13 +30,20 @@ test('splitLinks : YouTube = vidéo, autre URL = lien d’achat, texte non URL i
   assert.deepEqual(splitLinks('pas une url'), {});
 });
 
-test('buildArticleHtml : ordre chapô > chronique > vidéo > lien d’achat > auteur', () => {
+test('buildArticleHtml : un seul paragraphe, la vidéo va juste avant la signature', () => {
   const html = buildArticleHtml({ chapo: 'Chapô.', bodyText: 'Texte.', journalistName: 'Silvère Vincent', videoUrl: 'https://youtu.be/x', shopUrl: 'https://shop.example/a', shopLabel: "Acheter l'album" });
   assert.deepEqual(html.split('\n\n'), [
     '<h3>Chapô.</h3>',
     '<p>Texte.</p>',
+    '<p><a href="https://shop.example/a" target="_blank" rel="noopener">Acheter l\'album</a></p>',
     '<p>https://youtu.be/x</p>',
-    '<p><a href="https://shop.example/a" target="_blank" rel="noopener">Acheter l&#39;album</a></p>'.replace('&#39;', "'"),
     '<p><em>Par Silvère Vincent</em></p>',
   ]);
+});
+
+test('buildArticleHtml : plusieurs paragraphes, la vidéo se place au milieu de la chronique', () => {
+  const html = buildArticleHtml({ bodyText: 'Un.\n\nDeux.\n\nTrois.', journalistName: 'Xavier Bonnet', videoUrl: 'https://youtu.be/x' });
+  assert.deepEqual(html.split('\n\n'), ['<p>Un.</p>', '<p>Deux.</p>', '<p>https://youtu.be/x</p>', '<p>Trois.</p>', '<p><em>Par Xavier Bonnet</em></p>']);
+  const two = buildArticleHtml({ bodyText: 'Un.\n\nDeux.', journalistName: '', videoUrl: 'https://youtu.be/x' });
+  assert.deepEqual(two.split('\n\n'), ['<p>Un.</p>', '<p>https://youtu.be/x</p>', '<p>Deux.</p>']);
 });

@@ -111,6 +111,15 @@ export function splitLinks(lien?: string, lienAchat?: string): { videoUrl?: stri
   return out;
 }
 
+/** Premiere phrase d'un texte (ponctuation forte, guillemets fermants inclus). */
+export function firstSentence(text: string): string {
+  const t = text.replace(/\s+/g, ' ').trim();
+  // Fin de phrase = ponctuation forte (ou points de suspension) suivie d'une
+  // majuscule, d'un guillemet ouvrant ou d'un chiffre ; « final… du moins » continue.
+  const m = t.match(/^.*?(?:[.!?]|…)(?:\s?[»"”)])?(?=\s+[A-ZÀ-ÝŒ«"“\d]|$)/);
+  return (m ? m[0] : t).trim();
+}
+
 export function buildArticleHtml(p: ArticleHtmlInput): string {
   const blocks: string[] = [];
   const chapo = (p.chapo || '').replace(/\s+/g, ' ').trim();
@@ -613,7 +622,9 @@ export async function publishDeliveryToWordpress(
     // Le corps est le texte livre, mot pour mot ; le chapo vient du formulaire
     // (accroche / chapo) ou, a defaut, de l'excerpt propose par l'IA (1-2 phrases).
     const meta = input.metadata as Record<string, unknown>;
-    const chapo = String(meta.chapo || meta.accroche || payload.excerpt || '').trim();
+    // Chapo = celui du journaliste (champ chapo / accroche), sinon la premiere
+    // phrase du texte livre. Jamais un resume genere : consigne du 01/10/2026.
+    const chapo = String(meta.chapo || meta.accroche || '').trim() || firstSentence(input.bodyText);
     payload.excerpt = chapo;
     const links = splitLinks(String(meta.lien || ''), String(meta.lien_achat || ''));
     const kind: PaperKind = /cinema/i.test(input.paperTypeName) ? 'cinema' : /livre/i.test(input.paperTypeName) ? 'livres' : 'musique';

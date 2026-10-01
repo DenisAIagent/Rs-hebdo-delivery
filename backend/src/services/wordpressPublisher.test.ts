@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink } from './wordpressPublisher';
+import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink, firstSentence } from './wordpressPublisher';
 
 const body = `Alors, comme ça, le rock serait mort ! Passé par pertes et profits.
 
@@ -83,4 +83,12 @@ test('pickInternalLink : choix IA > titre citant l’artiste > rubrique, jamais 
   assert.deepEqual(await pickInternalLink({ candidates, aiChoice: '', artiste: 'Mastodon', categories: [5], loadCategory: cat }),
     { url: 'https://www.rollingstone.fr/chroniques/', title: 'Tous nos articles Chroniques' });
   assert.equal(await pickInternalLink({ candidates, artiste: 'Mastodon', categories: [], loadCategory: cat }), undefined);
+});
+
+test('firstSentence : premiere phrase du texte livre, guillemets et points de suspension compris', () => {
+  assert.equal(firstSentence('Alors, comme ça, le rock serait mort ! Passé par pertes et profits.'), 'Alors, comme ça, le rock serait mort !');
+  assert.equal(firstSentence('« Forer, forer, forer », vociférait Donald Trump lors de sa campagne. Digger ne l’a pas attendu.'), '« Forer, forer, forer », vociférait Donald Trump lors de sa campagne.');
+  assert.equal(firstSentence('Un point final… du moins pour le moment. Suite.'), 'Un point final… du moins pour le moment.');
+  assert.equal(firstSentence('Sans ponctuation finale'), 'Sans ponctuation finale');
+  assert.equal(firstSentence('Il a dit « ça suffit. » Puis il est parti.'), 'Il a dit « ça suffit. »');
 });

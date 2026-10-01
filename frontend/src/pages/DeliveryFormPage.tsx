@@ -304,15 +304,7 @@ export function DeliveryFormPage() {
     }
   };
 
-  const YOUTUBE_RE = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i;
-  const urlProblem = (field: FieldConfig): string | null => {
-    const v = (metadata[field.key] || '').trim();
-    if (!v || field.type !== 'url') return null;
-    if (!/^https?:\/\/[^\s]+\.[^\s]+$/i.test(v)) return 'Adresse complète attendue (https://…)';
-    if (field.validation === 'youtube' && !YOUTUBE_RE.test(v)) return 'Lien YouTube attendu (youtube.com ou youtu.be)';
-    if (field.validation === 'website' && YOUTUBE_RE.test(v)) return 'Un site est attendu ici (Bandcamp, site officiel), pas un lien YouTube';
-    return null;
-  };
+  const urlProblem = (field: FieldConfig) => urlFieldProblem(field, metadata[field.key]);
 
   const getMissingFields = (): string[] => {
     if (!selectedType?.fields_config) return [];
@@ -696,6 +688,18 @@ interface StepTypeViewProps {
   journalists: Profile[];
   authorId: string;
   onSelectAuthor: (id: string) => void;
+}
+
+const YOUTUBE_URL_RE = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i;
+
+/** Même règle que le serveur (services/fieldValidation.ts) : clip YouTube, ou site hors YouTube. */
+function urlFieldProblem(field: FieldConfig, value: string | undefined): string | null {
+  const v = (value || '').trim();
+  if (!v || field.type !== 'url') return null;
+  if (!/^https?:\/\/[^\s]+\.[^\s]+$/i.test(v)) return 'Adresse complète attendue (https://…)';
+  if (field.validation === 'youtube' && !YOUTUBE_URL_RE.test(v)) return 'Lien YouTube attendu (youtube.com ou youtu.be)';
+  if (field.validation === 'website' && YOUTUBE_URL_RE.test(v)) return 'Un site est attendu ici (Bandcamp, site officiel), pas un lien YouTube';
+  return null;
 }
 
 function StepTypeView({
@@ -1178,7 +1182,7 @@ function StepContentView(props: StepContentViewProps) {
                     className={`rs-input${missing ? ' error' : ''}`}
                   />
                   {missing && (
-                    <FieldError message={urlProblem(field) || (isOptionalViaAlternate ? 'Renseignez un lien ou ajoutez des photos ci-dessous' : 'Ce champ est obligatoire')} />
+                    <FieldError message={urlFieldProblem(field, metadata[field.key]) || (isOptionalViaAlternate ? 'Renseignez un lien ou ajoutez des photos ci-dessous' : 'Ce champ est obligatoire')} />
                   )}
                 </div>
               );

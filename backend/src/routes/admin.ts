@@ -9,7 +9,7 @@ import { todayString, nextFridayString } from '../utils/dates';
 import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
 import { testWpConnection } from '../services/wordpress';
 import { republishDeliveryToWordpress } from '../services/wordpressPublisher';
-import { collectMonthlyRecap, buildRecapPdf, sendMonthlyRecap, parseMonthKey, recapFilename } from '../services/monthlyRecap';
+import { collectMonthlyRecap, buildRecapPdf, sendMonthlyRecap, parseMonthKey, recapFilename, sampleRecap } from '../services/monthlyRecap';
 
 const router = Router();
 
@@ -803,7 +803,7 @@ router.get('/models/latest', async (_req: AuthRequest, res: Response) => {
 router.get('/recap/:ym/pdf', async (req: AuthRequest, res: Response) => {
   try {
     const { year, month } = parseMonthKey(String(req.params.ym));
-    const recap = await collectMonthlyRecap(year, month);
+    const recap = req.query.sample === '1' ? sampleRecap(year, month) : await collectMonthlyRecap(year, month);
     const pdf = await buildRecapPdf(recap);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${recapFilename(year, month)}"`);
@@ -818,7 +818,10 @@ router.get('/recap/:ym/pdf', async (req: AuthRequest, res: Response) => {
 router.post('/recap/:ym/send', async (req: AuthRequest, res: Response) => {
   try {
     const { year, month } = parseMonthKey(String(req.params.ym));
-    const result = await sendMonthlyRecap(year, month);
+    // Corps optionnel : { to?: string[], cc?: string[], sample?: boolean } (envoi de test)
+    const body = req.body || {};
+    const emails = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)) : undefined);
+    const result = await sendMonthlyRecap(year, month, { to: emails(body.to), cc: emails(body.cc), sample: body.sample === true });
     if (!result.sent) return res.status(400).json({ error: result.reason || 'Envoi impossible' });
     return res.json(result);
   } catch (error: any) {

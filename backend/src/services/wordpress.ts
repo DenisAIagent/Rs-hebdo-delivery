@@ -286,6 +286,10 @@ export interface WpCreatePostInput {
    * Tant que le reglage est vide, cet objet l'est aussi et rien n'est envoye.
    */
   extraMeta?: Record<string, string | number>;
+  /** Brouillon existant a mettre a jour (renvoi depuis l'admin) au lieu d'en creer un nouveau. */
+  existingPostId?: number;
+  /** Utilisateur WordPress a mettre en auteur (si trouve). */
+  authorId?: number;
 }
 
 export interface WpCreatePostResult {
@@ -300,7 +304,30 @@ export interface WpCreatePostResult {
   metaRejected: string[];
 }
 
-/** Create a DRAFT post. Returns the post ID and its edit URL. */
+/**
+ * Cherche l'utilisateur WordPress correspondant a un journaliste (par nom).
+ * Renvoie null si introuvable ou si le compte API n'a pas le droit de lister
+ * les utilisateurs : l'article reste alors attribue au compte rs_delivery et
+ * la signature en fin d'article fait foi.
+ */
+export async function findWpUserByName(fullName: string): Promise<number | null> {
+  const name = fullName.trim();
+  if (!name) return null;
+  try {
+    const config = await getWpConfig();
+    const client = wpClient(config);
+    const { data } = await client.get('/users', { params: { search: name, per_page: 5, context: 'view' } });
+    const norm = (v: string) => v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+    const hit = (data as Array<{ id: number; name: string; slug: string }>).find(
+      (u) => norm(u.name) === norm(name) || norm(u.slug) === norm(name).replace(/ /g, '-'),
+    );
+    return hit?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Create (or update) a DRAFT post. Returns the post ID and its edit URL. */
 export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCreatePostResult> {
   const config = await getWpConfig();
   const client = wpClient(config);
@@ -315,6 +342,9 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
     tags: input.tagIds,
   };
   if (input.featuredMediaId) body.featured_media = input.featuredMediaId;
+  if (input.authorId) body.author = input.authorId;
+  // POST /posts/{id} met a jour un article existant (meme contrat que la creation).
+  const endpoint = input.existingPostId ? `/posts/${input.existingPostId}` : '/posts';
 
   // Yoast et les metaboxes du theme stockent des metas protegees. WordPress ne
   // les accepte via REST que si le site les enregistre avec show_in_rest (voir
@@ -336,13 +366,13 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
   let data: any;
   let metaRejected: string[] = [];
   try {
-    ({ data } = await client.post('/posts', withMeta));
+    ({ data } = await client.post(endpoint, withMeta));
   } catch (error: any) {
     // 400 = au moins une cle de meta n'est pas enregistree cote WordPress.
     // L'article doit tout de meme partir, mais l'appelant doit le savoir.
     if (metaKeys.length > 0 && error?.response?.status === 400) {
       metaRejected = metaKeys;
-      ({ data } = await client.post('/posts', body));
+      ({ data } = await client.post(endpoint, body));
     } else {
       throw error;
     }

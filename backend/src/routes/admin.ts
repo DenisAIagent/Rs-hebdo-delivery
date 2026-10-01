@@ -764,7 +764,7 @@ router.post('/deliveries/:id/wordpress', (req, _res, next) => { req.setTimeout(3
     return res.json({
       post,
       wp_payload: saved?.wp_payload ?? null,
-      message: `Brouillon WordPress cree (#${post.id})`,
+      message: `Brouillon WordPress ${saved?.wp_payload ? 'mis a jour' : 'cree'} (#${post.id})`,
     });
   } catch (error: any) {
     console.error('Admin send to WordPress error:', error?.response?.data || error?.message || String(error));

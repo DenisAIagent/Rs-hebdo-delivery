@@ -1371,6 +1371,9 @@ La livraison est enregistrée en base Supabase avec tous les champs. Un email HT
 
 ### Étape 10 : Envoi WordPress (parallèle, non bloquant)
 
+> **Règle éditoriale (01/10/2026)** : le corps de l'article WordPress est le texte livré **mot pour mot** (`buildArticleHtml` dans `wordpressPublisher.ts`, testé) : un `<p>` par paragraphe, citations « » en `<em>`, un H3 de chapô léger (champ `chapo` ou `accroche` du formulaire, sinon l'excerpt de 1-2 phrases proposé par l'IA, sans fait nouveau), et la signature `Par Prénom Nom` en fin d'article. L'IA ne produit plus le HTML, elle ne fournit que titre, slug, excerpt, catégories, tags, Yoast, Style Music, Main Artist et crédit photo. Les liens internes automatiques ont été retirés. L'auteur WordPress est positionné sur l'utilisateur du même nom quand le compte API peut le lister (`findWpUserByName`), sinon l'article reste au compte `rs_delivery`. Un renvoi depuis l'admin **met à jour** le brouillon existant (`POST /posts/{id}`) au lieu d'en créer un second.
+
+
 Si le module WordPress est activé (admin → Paramètres → WordPress), chaque livraison est aussi envoyée sur rollingstone.fr via l'API REST WP (`/wp-json/wp/v2/`), authentifiée par **mot de passe application** (Basic auth, timeout 30 s, porté à 180 s pour les uploads médias car WordPress génère les tailles intermédiaires côté serveur). Le pipeline (`services/wordpressPublisher.ts`) :
 
 1. Recherche jusqu'à 5 articles existants sur le site (candidats de lien interne).

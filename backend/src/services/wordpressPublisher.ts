@@ -22,8 +22,7 @@ import {
   createWpDraftPost,
   findWpMediaByKeywords,
   getWpMetaMap,
-  type WpPostCandidate,
-} from './wordpress';
+  type WpPostCandidate, findWpUserByName } from './wordpress';
 import { buildWpSystemPrompt, normalizeWpCategories, WP_STYLE_MUSIC } from './wordpressRules';
 import { fetchDeliveryImages, type ImageFile } from './dropbox';
 import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SIDE } from './imageResize';
@@ -39,6 +38,34 @@ export interface WpPublishInput {
   /** All delivered images, in order: the first one becomes the featured image,
    *  the others are inserted at the end of the article body. */
   images?: ImageFile[];
+  /** Renvoi : brouillon WordPress existant a mettre a jour (pas de doublon). */
+  existingPostId?: number;
+}
+
+/** Echappement minimal pour injecter du texte brut dans le HTML de l'article. */
+function escapeHtmlText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Assemble le HTML de l'article a partir du texte livre, MOT POUR MOT :
+ * - H3 = chapo leger (accroche/chapo du formulaire, sinon excerpt propose), optionnel ;
+ * - un <p> par paragraphe du texte, citations « » en <em> (mise en forme seulement) ;
+ * - signature « Par Prenom Nom » en fin d'article.
+ * Aucune phrase n'est ajoutee ni reformulee : c'est la garantie demandee par la redaction.
+ */
+export function buildArticleHtml(p: { chapo?: string; bodyText: string; journalistName: string }): string {
+  const blocks: string[] = [];
+  const chapo = (p.chapo || '').replace(/\s+/g, ' ').trim();
+  if (chapo) blocks.push(`<h3>${escapeHtmlText(chapo)}</h3>`);
+  const paragraphs = p.bodyText.replace(/\r\n?/g, '\n').split(/\n\s*\n|\n/).map((x) => x.trim()).filter(Boolean);
+  for (const para of paragraphs) {
+    const html = escapeHtmlText(para).replace(/«\s?([^»]+?)\s?»/g, (_m, q: string) => `<em>« ${q.trim()} »</em>`);
+    blocks.push(`<p>${html}</p>`);
+  }
+  const name = p.journalistName.trim();
+  if (name) blocks.push(`<p><em>Par ${escapeHtmlText(name)}</em></p>`);
+  return blocks.join('\n\n');
 }
 
 function escapeHtmlAttr(s: string): string {
@@ -199,7 +226,8 @@ interface WpArticlePayload {
   title: string;
   slug: string;
   excerpt: string;
-  contentHtml: string;
+  /** Assemble par l'application (buildArticleHtml), jamais par l'IA. */
+  contentHtml?: string;
   categories: number[];
   tags: string[];
   focusKeyword: string;
@@ -218,8 +246,7 @@ const WP_ARTICLE_TOOL = {
     properties: {
       title: { type: 'string', description: "Titre de l'article." },
       slug: { type: 'string', description: 'Slug court, mots-cles, tirets, sans accents.' },
-      excerpt: { type: 'string', description: 'Le chapo en texte brut.' },
-      contentHtml: { type: 'string', description: 'HTML complet : H3 chapo, H4 intertitres, <p>, <em>« »</em>.' },
+      excerpt: { type: 'string', description: 'Chapo leger en texte brut, 1 a 2 phrases, fidele au papier (reprendre accroche/chapo du formulaire si presents).' },
       categories: { type: 'array', items: { type: 'integer' }, description: 'IDs categorie : parent + sous-categorie.' },
       tags: { type: 'array', items: { type: 'string' }, description: 'Minimum 5 tags.' },
       focusKeyword: { type: 'string', description: 'Requete cible Yoast (1-2 mots).' },
@@ -230,7 +257,7 @@ const WP_ARTICLE_TOOL = {
       photoCredit: { type: 'string', description: 'Credit photo "© Photographe/Agence" si present dans les donnees, sinon vide.' },
     },
     required: [
-      'title', 'slug', 'excerpt', 'contentHtml', 'categories', 'tags',
+      'title', 'slug', 'excerpt', 'categories', 'tags',
       'focusKeyword', 'seoTitle', 'metaDescription', 'mainArtist', 'styleMusic', 'photoCredit',
     ],
   },
@@ -411,6 +438,13 @@ export async function publishDeliveryToWordpress(
     if (bodyMedia.length > 0) {
       await logInfo('wp-media', `${bodyMedia.length} image(s) inseree(s) dans le corps de l'article`, ctx);
     }
+    // Le corps est le texte livre, mot pour mot ; le chapo vient du formulaire
+    // (accroche / chapo) ou, a defaut, de l'excerpt propose par l'IA (1-2 phrases).
+    const meta = input.metadata as Record<string, unknown>;
+    const chapo = String(meta.chapo || meta.accroche || payload.excerpt || '').trim();
+    payload.excerpt = chapo;
+    payload.contentHtml = buildArticleHtml({ chapo, bodyText: input.bodyText, journalistName: input.journalistName });
+    await logInfo('wp-format', `Corps = texte livre mot pour mot (${input.bodyText.length} signes), chapo ${chapo ? 'present' : 'absent'}, signature « Par ${input.journalistName} »`, ctx);
     let contentHtml = insertImagesIntoBody(payload.contentHtml, bodyMedia, payload.title || input.title);
     const chronique = isChroniqueType(input.paperTypeName);
     const reviewScore = chronique ? reviewScoreFromMetadata(input.metadata) : null;
@@ -432,7 +466,12 @@ export async function publishDeliveryToWordpress(
     if (metaMap.mainArtist && payload.mainArtist) extraMeta[metaMap.mainArtist] = payload.mainArtist;
     if (metaMap.reviewScore && reviewScore !== null) extraMeta[metaMap.reviewScore] = reviewScore;
 
+    const authorId = await findWpUserByName(input.journalistName);
+    if (authorId) await logInfo('wp-format', `Auteur WordPress trouve pour ${input.journalistName} (#${authorId})`, ctx);
+
     const post = await createWpDraftPost({
+      existingPostId: input.existingPostId,
+      authorId: authorId ?? undefined,
       title: `${payload.title || input.title} [EN ATTENTE DE RELECTURE]`,
       contentHtml,
       slug: payload.slug,
@@ -485,7 +524,7 @@ export async function publishDeliveryToWordpress(
       },
     });
 
-    await logInfo('wp-success', `Brouillon WordPress cree (#${post.id}) — ${post.editUrl}`, ctx);
+    await logInfo('wp-success', `Brouillon WordPress ${input.existingPostId ? 'mis a jour' : 'cree'} (#${post.id}) — ${post.editUrl}`, ctx);
     return post;
   } catch (error: any) {
     const detail = error?.response?.data?.message || error?.message || String(error);
@@ -560,5 +599,6 @@ export async function republishDeliveryToWordpress(deliveryId: string) {
     metadata: delivery.metadata || {},
     bodyText: delivery.body_corrected || delivery.body_original || '',
     images,
+    existingPostId: delivery.wp_post_id || undefined,
   });
 }

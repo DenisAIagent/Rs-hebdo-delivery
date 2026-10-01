@@ -7,7 +7,7 @@ import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
 import { todayString, nextFridayString } from '../utils/dates';
 import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
-import { testWpConnection } from '../services/wordpress';
+import { testWpConnection, readWpPostMeta, writeWpPostMeta } from '../services/wordpress';
 import { republishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { collectMonthlyRecap, buildRecapPdf, sendMonthlyRecap, parseMonthKey, recapFilename, sampleRecap } from '../services/monthlyRecap';
 
@@ -740,6 +740,32 @@ router.post('/wordpress/test', async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     const detail = error?.response?.data?.message || error?.message || String(error);
     return res.status(400).json({ ok: false, error: detail });
+  }
+});
+
+// GET /api/admin/wordpress/post-meta/:id - Read all metas of a WP post (mu-plugin, read-only diagnostic)
+router.get('/wordpress/post-meta/:id', async (req: AuthRequest, res: Response) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'id invalide' });
+  try {
+    return res.json(await readWpPostMeta(id));
+  } catch (error: any) {
+    const detail = error?.response?.data?.message || error?.message || String(error);
+    return res.status(error?.response?.status === 404 ? 404 : 400).json({ error: detail });
+  }
+});
+
+// POST /api/admin/wordpress/post-meta/:id - Write metas on a WP post (mu-plugin prefixes only)
+router.post('/wordpress/post-meta/:id', async (req: AuthRequest, res: Response) => {
+  const id = parseInt(String(req.params.id), 10);
+  const meta = (req.body ?? {}).meta;
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'id invalide' });
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return res.status(400).json({ error: 'meta (objet) requis' });
+  try {
+    const written = await writeWpPostMeta(id, meta as Record<string, string | number>);
+    return res.json({ written, rejected: Object.keys(meta).filter((k) => !written.includes(k)) });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || String(error) });
   }
 });
 

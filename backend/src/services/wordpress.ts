@@ -462,6 +462,27 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
 }
 
 /**
+ * Lit toutes les metas et termes d'un article via le mu-plugin (diagnostic,
+ * lecture seule) : sert a decouvrir les cles reelles de Reviewer, Style Music
+ * et Main Music Artist sur un article de reference renseigne a la main.
+ */
+export async function readWpPostMeta(postId: number): Promise<unknown> {
+  const config = await getWpConfig();
+  const client = wpClient(config);
+  const { data } = await client.get(`${config.baseUrl}/wp-json/rs-delivery/v1/post-meta/${postId}`);
+  return data;
+}
+
+/**
+ * Ecrit des metas arbitraires (prefixes autorises par le mu-plugin) sur un
+ * article existant. Renvoie les cles effectivement ecrites.
+ */
+export async function writeWpPostMeta(postId: number, meta: Record<string, string | number>): Promise<string[]> {
+  const config = await getWpConfig();
+  return writeWpMetaViaMuPlugin(wpClient(config), config, postId, meta);
+}
+
+/**
  * Ecrit des metas via le mu-plugin scripts/wp/rs-delivery-rest-meta.php.
  * Renvoie la liste des cles effectivement ecrites ; [] si le plugin est absent
  * (404), refuse la cle, ou repond en erreur. Ne jette jamais : l'article est deja

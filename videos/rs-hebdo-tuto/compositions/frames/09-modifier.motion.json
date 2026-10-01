@@ -1,7 +1,0 @@
-{
-  "scene": "09-modifier",
-  "duration_s": 25.5,
-  "rules": ["cursor-click-ripple", "coordinate-target-zoom", "dynamic-content-sequencing", "press-release-spring"],
-  "exit": { "vector": "rest 0 px/s (success screen held; only ambient halo breath)", "still_moving": false },
-  "entry": { "vector": "up ~65 px/s (browser frame rises 24 px over 0.7 s, power2.out)", "from_rest": false }
-}

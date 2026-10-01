@@ -1,7 +1,0 @@
-{
-  "scene": "s3-redaction",
-  "duration_s": 5.42,
-  "rules": ["cursor-click-ripple", "discrete-text-sequence", "cursor-drag", "counting-dynamic-scale"],
-  "exit": { "vector": "held layout; attention frame breathing ±1.5 % scale on the counter, halo breathing, ghost word drifting -x at ~2.2 px/s; no directional travel", "still_moving": true },
-  "entry": { "vector": "from rest; format grid fully in place at frame 0, cursor starts its glide toward Chroniques at 0.2 s (≈ 520 px/s peak)", "from_rest": true }
-}

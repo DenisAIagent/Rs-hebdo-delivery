@@ -52,7 +52,7 @@ Mis à jour le 30 septembre 2026 (interface « édition rédaction », double au
 <li><a href="#1-premiers-pas">Premiers pas</a></li>
 <li><a href="#2-le-tableau-de-bord">Le tableau de bord</a></li>
 <li><a href="#3-livrer-un-papier">Livrer un papier</a></li>
-<li><a href="#4-la-correction-ia">La correction IA</a></li>
+<li><a href="#4-la-relecture">La relecture</a></li>
 <li><a href="#5-modifier-une-livraison">Modifier une livraison</a></li>
 <li><a href="#6-faq--dépannage">FAQ &amp; dépannage</a></li>
 </ol>
@@ -102,7 +102,7 @@ Mis à jour le 30 septembre 2026 (interface « édition rédaction », double au
 </blockquote>
 <p><strong>Comment faire :</strong></p>
 <ol>
-<li>Lors de votre première connexion, une présentation s'affiche automatiquement. Elle rappelle les <strong>quatre étapes</strong> de la livraison : choisir le type de papier, rédiger et joindre les visuels, laisser l'IA proposer ses corrections, vérifier et envoyer.</li>
+<li>Lors de votre première connexion, une présentation s'affiche automatiquement. Elle rappelle les <strong>quatre étapes</strong> de la livraison : choisir le type de papier, rédiger et joindre les visuels, laisser la relecture proposer ses corrections, vérifier et envoyer.</li>
 <li>Elle rappelle aussi que les champs marqués d'un <strong>point rouge •</strong> sont obligatoires, que chaque type de papier a une limite de signes, et qu'un papier livré reste modifiable.</li>
 <li>Une fois terminée, elle ne s'affiche plus sur ce navigateur.</li>
 <li>Pour la revoir : bouton <strong>Revoir la présentation</strong> dans la barre du haut, ou la carte du même nom en bas du tableau de bord.</li>
@@ -147,7 +147,7 @@ Mis à jour le 30 septembre 2026 (interface « édition rédaction », double au
 <p><strong>Comment faire :</strong></p>
 <ol>
 <li>Cliquez sur <strong>Livrer un papier</strong> (en haut du tableau de bord, ou l'entrée <strong>Livrer</strong> de la barre de navigation).</li>
-<li>Vous arrivez sur le formulaire en 4 étapes : <strong>Type de papier → Rédaction → Correction IA → Vérification &amp; envoi</strong>. Un fil d'étapes en haut de page indique où vous en êtes.</li>
+<li>Vous arrivez sur le formulaire en 4 étapes : <strong>Type de papier → Rédaction → Relecture → Vérification &amp; envoi</strong>. Un fil d'étapes en haut de page indique où vous en êtes.</li>
 <li>Un panneau d'aide à droite rappelle le numéro, le compteur de signes et une astuce pour chaque étape.</li>
 </ol>
 <hr />
@@ -275,7 +275,7 @@ Mis à jour le 30 septembre 2026 (interface « édition rédaction », double au
 <p>Conseil : des JPG de quelques Mo suffisent. Les originaux très lourds ralentissent l'envoi.</p>
 </blockquote>
 <hr />
-<h4 id="us-09-corriger-mon-texte-avec-lia">US-09 — Corriger mon texte avec l'IA</h4>
+<h4 id="us-09-relire-et-corriger-mon-texte">US-09 — Relire et corriger mon texte</h4>
 <blockquote>
 <p><strong>En tant que</strong> journaliste,
 <strong>je veux</strong> soumettre mon texte à une relecture automatique,
@@ -283,15 +283,15 @@ Mis à jour le 30 septembre 2026 (interface « édition rédaction », double au
 </blockquote>
 <p><strong>Comment faire :</strong></p>
 <ol>
-<li>En bas de l'étape Rédaction, cliquez sur <strong>Corriger le texte avec l'IA</strong>.</li>
+<li>En bas de l'étape Rédaction, cliquez sur <strong>Relire et corriger le texte</strong>.</li>
 <li>La plateforme vérifie d'abord les champs obligatoires. S'il en manque, un message <strong>« Champs manquants : … »</strong> liste ce qu'il reste à remplir et les champs concernés passent en rouge.</li>
 <li>Le bouton affiche <strong>Correction en cours…</strong> (comptez de quelques secondes à une minute et demie pour un Sujet de couv).</li>
-<li><strong>Étape 3 — Texte corrigé par l'IA</strong> : la liste des corrections appliquées s'affiche (<code>original → corrigé (type)</code>), puis le <strong>Texte final (modifiable)</strong> dans une zone de saisie libre, avec son compteur de signes.</li>
-<li>Relisez et <strong>modifiez librement</strong> ce texte : c'est cette version qui sera livrée. L'IA ne touche pas à votre style.</li>
+<li><strong>Étape 3 — Texte relu et corrigé</strong> : la liste des corrections appliquées s'affiche (<code>original → corrigé (type)</code>), puis le <strong>Texte final (modifiable)</strong> dans une zone de saisie libre, avec son compteur de signes.</li>
+<li>Relisez et <strong>modifiez librement</strong> ce texte : c'est cette version qui sera livrée. La relecture ne touche pas à votre style.</li>
 <li>Cliquez sur <strong>Tout valider et vérifier</strong> pour passer à l'étape 4, ou <strong>Modifier le texte</strong> pour revenir en arrière.</li>
 </ol>
 <blockquote>
-<p>Si le service IA est indisponible, un message « Correction automatique indisponible — texte original conservé » s'affiche et vous passez quand même à l'étape 3 avec votre texte d'origine.</p>
+<p>Si le service de relecture est indisponible, un message « Correction automatique indisponible — texte original conservé » s'affiche et vous passez quand même à l'étape 3 avec votre texte d'origine.</p>
 </blockquote>
 <hr />
 <h4 id="us-10-verifier-et-livrer">US-10 — Vérifier et livrer</h4>
@@ -327,11 +327,11 @@ Mis à jour le 30 septembre 2026 (interface « édition rédaction », double au
 <li>La rédaction reçoit un email dont l'objet est <code>[RSHxxx] Type de papier — Titre (Votre nom)</code>, avec le nombre de signes et le lien Dropbox.</li>
 </ol>
 <hr />
-<h3 id="4-la-correction-ia">4. La correction IA</h3>
+<h3 id="4-la-relecture">4. La relecture</h3>
 <h4 id="us-12-comprendre-les-corrections-proposees">US-12 — Comprendre les corrections proposées</h4>
 <blockquote>
 <p><strong>En tant que</strong> journaliste,
-<strong>je veux</strong> comprendre ce que l'IA corrige,
+<strong>je veux</strong> comprendre ce que la relecture corrige,
 <strong>afin de</strong> relire efficacement le texte final.</p>
 </blockquote>
 <p>Chaque correction listée à l'étape 3 indique son <strong>type</strong> :</p>
@@ -399,7 +399,7 @@ Mis à jour le 30 septembre 2026 (interface « édition rédaction », double au
 <li>Sur le tableau de bord, cliquez sur l'icône <strong>crayon</strong> de la livraison.</li>
 <li>Le formulaire s'ouvre en mode <strong>Modifier un papier</strong>, directement à l'étape Rédaction, avec vos champs <strong>pré-remplis</strong>.</li>
 <li>Les photos déjà livrées sont rappelées par leur nom (« Images existantes : … »). Si vous <strong>n'ajoutez aucune photo</strong>, elles sont conservées. Si vous en ajoutez, <strong>elles remplacent</strong> la liste précédente.</li>
-<li>Modifiez, puis cliquez sur <strong>Corriger le texte avec l'IA</strong> (la correction est relancée sur le texte modifié), <strong>Tout valider et vérifier</strong>, puis <strong>Enregistrer les modifications</strong>.</li>
+<li>Modifiez, puis cliquez sur <strong>Relire et corriger le texte</strong> (la correction est relancée sur le texte modifié), <strong>Tout valider et vérifier</strong>, puis <strong>Enregistrer les modifications</strong>.</li>
 <li>Le fichier Word est <strong>régénéré</strong> et <strong>réenvoyé</strong> sur Dropbox, dans le même dossier. L'écran « Modifications enregistrées ! » confirme.</li>
 </ol>
 <blockquote>
@@ -481,7 +481,7 @@ Mis à jour le 30 septembre 2026 (interface « édition rédaction », double au
 <td>Livres et Expo : gardez une seule image.</td>
 </tr>
 <tr>
-<td><strong>Correction IA lente ou indisponible</strong></td>
+<td><strong>Relecture lente ou indisponible</strong></td>
 <td>Patientez (jusqu'à 1 min 30 pour un long texte). En cas d'échec, votre texte d'origine est conservé et vous pouvez livrer sans correction.</td>
 </tr>
 <tr>
@@ -520,7 +520,7 @@ Livrer un papier                     │
 Étape 2 — Rédaction + photos         │
     │                                │
     ▼                                │
-Étape 3 — Correction IA              │
+Étape 3 — Relecture              │
           (texte final modifiable)   │
     │                                │
     ▼                                │

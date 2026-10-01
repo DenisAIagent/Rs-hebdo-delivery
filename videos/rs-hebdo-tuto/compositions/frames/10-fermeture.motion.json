@@ -1,7 +1,0 @@
-{
-  "scene": "10-fermeture",
-  "duration_s": 20,
-  "rules": ["asr-keyword-glow", "spring-pop-entrance", "svg-path-draw"],
-  "exit": { "vector": "rest 0 px/s (everything faded to bare paper over 18.5–20 s; final frame is the empty paper ground)", "still_moving": false },
-  "entry": { "vector": "up ~65 px/s (browser frame rises 24 px over 0.7 s, power2.out)", "from_rest": false }
-}

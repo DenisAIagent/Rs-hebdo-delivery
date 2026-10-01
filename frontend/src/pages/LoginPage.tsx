@@ -83,7 +83,7 @@ export function LoginPage() {
               lineHeight: 1.55,
             }}
           >
-            Choisissez le type, rédigez, laissez l'IA corriger, envoyez. Tout est
+            Choisissez le type, rédigez, relisez, envoyez. Tout est
             sauvegardé automatiquement et déposé dans Dropbox.
           </p>
         </div>

@@ -11,7 +11,7 @@
 2. [Dashboard](#2-dashboard)
 3. [Formulaire de livraison](#3-formulaire-de-livraison)
 4. [Upload d'images](#4-upload-dimages)
-5. [Correction IA](#5-correction-ia)
+5. [Relecture](#5-relecture)
 6. [Soumission & Dropbox](#6-soumission--dropbox)
 7. [Modification d'une livraison](#7-modification-dune-livraison)
 8. [Problèmes réseau & performance](#8-problèmes-réseau--performance)
@@ -192,7 +192,7 @@ En cas de doute, demandez à votre rédacteur en chef.
 
 **Message affiché** : *"Champs manquants : Artiste, Corps du texte, Photos (1 minimum)…"* et *"Ce champ est obligatoire"* sous chaque champ en rouge
 
-**Cause :** Un ou plusieurs champs obligatoires (marqués d'un **point rouge •**) ne sont pas remplis. La vérification se fait au clic sur **Corriger le texte avec l'IA**.
+**Cause :** Un ou plusieurs champs obligatoires (marqués d'un **point rouge •**) ne sont pas remplis. La vérification se fait au clic sur **Relire et corriger le texte**.
 
 **Solution :** Remplissez les champs listés dans le message. Ils peuvent être :
 - Texte court (artiste, album, accroche...)
@@ -240,7 +240,7 @@ En cas de doute, demandez à votre rédacteur en chef.
 
 ### Q : Mes guillemets et apostrophes ont changé dans le DOCX
 
-**Cause :** Le système de correction IA et de nettoyage convertit certains caractères typographiques :
+**Cause :** Le système de relecture et de nettoyage convertit certains caractères typographiques :
 - Les guillemets droits `"..."` peuvent devenir des guillemets français `« ... »`
 - Les apostrophes typographiques sont normalisées
 
@@ -347,28 +347,28 @@ Le serveur vérifie le **contenu réel** du fichier, pas seulement son extension
 
 ---
 
-## 5. Correction IA
+## 5. Relecture
 
 ### Q : La correction ne fonctionne pas / prend trop de temps
 
 **Message affiché** : *"Correction automatique indisponible — texte original conservé"*
 
 **Causes possibles :**
-- Le service IA met plus de **5 minutes** à répondre (délai maximum côté serveur ; un Sujet de couv prend normalement 30 à 90 secondes)
-- Le service IA configuré par l'administrateur est indisponible ou saturé
+- Le service de relecture met plus de **5 minutes** à répondre (délai maximum côté serveur ; un Sujet de couv prend normalement 30 à 90 secondes)
+- Le service de relecture configuré par l'administrateur est indisponible ou saturé
 - Le texte dépasse **100 000 signes**
 - Problème réseau temporaire
 
-**Ce qui se passe :** vous passez quand même à l'étape 3 avec votre **texte d'origine** dans la zone « Texte final (modifiable) ». Vous pouvez le relire vous-même et livrer sans correction IA.
+**Ce qui se passe :** vous passez quand même à l'étape 3 avec votre **texte d'origine** dans la zone « Texte final (modifiable) ». Vous pouvez le relire vous-même et livrer sans relecture.
 
 **Solution :**
 - Relisez et livrez, ou revenez en arrière (**Modifier le texte**) et relancez la correction après quelques minutes
 
 ---
 
-### Q : L'IA a fusionné ou modifié mes paragraphes
+### Q : La relecture a fusionné ou modifié mes paragraphes
 
-**Cause :** Le système préserve la structure de vos paragraphes via des marqueurs internes. Dans de rares cas, l'IA peut mal interpréter la structure.
+**Cause :** Le système préserve la structure de vos paragraphes via des marqueurs internes. Dans de rares cas, la relecture peut mal interpréter la structure.
 
 **Protection automatique :** Si plus de 50% des sauts de ligne sont perdus, le système revient automatiquement à votre structure originale.
 
@@ -386,11 +386,11 @@ Le serveur vérifie le **contenu réel** du fichier, pas seulement son extension
 
 **Cause :** Vous avez lancé plus de **30 corrections en une heure**.
 
-**Solution :** Patientez quelques minutes. Vous pouvez livrer sans correction IA entre-temps.
+**Solution :** Patientez quelques minutes. Vous pouvez livrer sans relecture entre-temps.
 
 ---
 
-### Q : Quels types de corrections l'IA fait-elle ?
+### Q : Quels types de corrections la relecture fait-elle ?
 
 | Type | Ce qui est corrigé |
 |------|-------------------|
@@ -404,7 +404,7 @@ Le serveur vérifie le **contenu réel** du fichier, pas seulement son extension
 
 ### Q : Le texte corrigé est identique à l'original
 
-**Cause :** Votre texte ne contenait aucune erreur détectable par l'IA. La liste des corrections sera vide.
+**Cause :** Votre texte ne contenait aucune erreur détectable par la relecture. La liste des corrections sera vide.
 
 ---
 
@@ -553,7 +553,7 @@ Lors d'une modification (icône **crayon**, puis **Enregistrer les modifications
 - Le fichier Word (.docx) est **régénéré** avec le nouveau contenu
 - Les fichiers sont **renvoyés** sur Dropbox (même dossier)
 - La base de données est **mise à jour**
-- La correction IA est relancée sur le texte modifié
+- La relecture est relancée sur le texte modifié
 
 **Ce qui ne se passe pas :** aucun nouvel email n'est envoyé à la rédaction, et aucun nouveau brouillon n'est créé sur le site. Prévenez la rédaction si la modification est importante.
 
@@ -688,7 +688,7 @@ Lors d'une modification (icône **crayon**, puis **Enregistrer les modifications
 | *Veuillez sélectionner une note* | Note étoiles requise non remplie | Cliquer sur les étoiles |
 | *Texte requis* | Texte vide envoyé à la correction | Remplir le champ texte |
 | *Texte trop long (max 100 000 signes)* | Texte dépasse 100k caractères | Raccourcir le texte |
-| *Correction automatique indisponible* | Timeout ou erreur IA | Relire le texte d'origine ou réessayer |
+| *Correction automatique indisponible* | Délai dépassé ou erreur de relecture | Relire le texte d'origine ou réessayer |
 | *Trop de corrections demandées* | Plus de 30 corrections en 1 h | Attendre |
 | *Erreur préparation des dossiers Dropbox* | Dropbox inaccessible | Réessayer dans quelques secondes |
 | *Erreur lors de la livraison* | Erreur serveur à la livraison | Réessayer, puis contacter l'admin |

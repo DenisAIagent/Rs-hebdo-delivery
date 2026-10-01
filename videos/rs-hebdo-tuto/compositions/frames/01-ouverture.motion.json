@@ -1,7 +1,0 @@
-{
-  "scene": "01-ouverture",
-  "duration_s": 22,
-  "rules": ["spring-pop-entrance", "waterfall-entry", "svg-path-draw"],
-  "exit": { "vector": "static hold, halo breathing ±3% scale only, 0 px/s", "still_moving": false },
-  "entry": { "vector": "halo opacity fade-in from 0, rule draw starts at 0.2s, 0 px/s translation", "from_rest": true }
-}

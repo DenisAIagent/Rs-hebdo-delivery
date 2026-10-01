@@ -1,7 +1,0 @@
-{
-  "scene": "s5-envoi",
-  "duration_s": 7.55,
-  "rules": ["press-release-spring", "spring-pop-entrance", "svg-path-draw", "waterfall-entry"],
-  "exit": { "vector": "static hold from 6.8 s; halo breathing ±5 % scale, ghost word drifting +x at ~1.9 px/s; no directional travel", "still_moving": true },
-  "entry": { "vector": "from rest; browser + checked recap static at frame 0, cursor starts moving at 0.25 s (≈ 0 px/s at t=0)", "from_rest": true }
-}

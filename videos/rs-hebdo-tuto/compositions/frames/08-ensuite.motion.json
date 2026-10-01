@@ -1,7 +1,0 @@
-{
-  "scene": "08-ensuite",
-  "duration_s": 22.5,
-  "rules": ["spring-pop-entrance", "svg-path-draw", "waterfall-entry"],
-  "exit": { "vector": "slow push-in on the whole scene (scale 1 → 1.025 over 18.5 s, power1.inOut, decelerating to ~0 px/s at the last frame), hub halo breathing (scale ±6 %), ghost word drifting -x at ~1.6 px/s; wire pulse finished at t=20.5 s", "still_moving": true },
-  "entry": { "vector": "scene title sliding +x at ~103 px/s (24 px over 0.7 s, power2.out) with opacity 0→1 from t=0; hub node spring-pop scale 0→1 from t=0.2 s", "from_rest": false }
-}

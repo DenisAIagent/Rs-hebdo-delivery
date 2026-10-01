@@ -1,7 +1,0 @@
-{
-  "scene": "04-etape-1",
-  "duration_s": 38.5,
-  "rules": ["cursor-click-ripple", "press-release-spring", "waterfall-entry", "asr-keyword-glow"],
-  "exit": { "vector": "held layout; ghost word drifting -x at ~1.6 px/s, halo breathing only", "still_moving": true },
-  "entry": { "vector": "from rest; dashboard static, cursor idle until 1.4 s", "from_rest": true }
-}

@@ -10,7 +10,7 @@
 1. [Premiers pas](#1-premiers-pas)
 2. [Le tableau de bord](#2-le-tableau-de-bord)
 3. [Livrer un papier](#3-livrer-un-papier)
-4. [La correction IA](#4-la-correction-ia)
+4. [La relecture](#4-la-relecture)
 5. [Modifier une livraison](#5-modifier-une-livraison)
 6. [FAQ & dépannage](#6-faq--dépannage)
 
@@ -65,7 +65,7 @@ La double authentification (TOTP) est **activée ou non par l'administrateur** p
 
 **Comment faire :**
 
-1. Lors de votre première connexion, une présentation s'affiche automatiquement. Elle rappelle les **quatre étapes** de la livraison : choisir le type de papier, rédiger et joindre les visuels, laisser l'IA proposer ses corrections, vérifier et envoyer.
+1. Lors de votre première connexion, une présentation s'affiche automatiquement. Elle rappelle les **quatre étapes** de la livraison : choisir le type de papier, rédiger et joindre les visuels, laisser la relecture proposer ses corrections, vérifier et envoyer.
 2. Elle rappelle aussi que les champs marqués d'un **point rouge •** sont obligatoires, que chaque type de papier a une limite de signes, et qu'un papier livré reste modifiable.
 3. Une fois terminée, elle ne s'affiche plus sur ce navigateur.
 4. Pour la revoir : bouton **Revoir la présentation** dans la barre du haut, ou la carte du même nom en bas du tableau de bord.
@@ -114,7 +114,7 @@ La double authentification (TOTP) est **activée ou non par l'administrateur** p
 **Comment faire :**
 
 1. Cliquez sur **Livrer un papier** (en haut du tableau de bord, ou l'entrée **Livrer** de la barre de navigation).
-2. Vous arrivez sur le formulaire en 4 étapes : **Type de papier → Rédaction → Correction IA → Vérification & envoi**. Un fil d'étapes en haut de page indique où vous en êtes.
+2. Vous arrivez sur le formulaire en 4 étapes : **Type de papier → Rédaction → Relecture → Vérification & envoi**. Un fil d'étapes en haut de page indique où vous en êtes.
 3. Un panneau d'aide à droite rappelle le numéro, le compteur de signes et une astuce pour chaque étape.
 
 ---
@@ -205,7 +205,7 @@ La double authentification (TOTP) est **activée ou non par l'administrateur** p
 
 ---
 
-#### US-09 — Corriger mon texte avec l'IA
+#### US-09 — Relire et corriger mon texte
 
 > **En tant que** journaliste,
 > **je veux** soumettre mon texte à une relecture automatique,
@@ -213,14 +213,14 @@ La double authentification (TOTP) est **activée ou non par l'administrateur** p
 
 **Comment faire :**
 
-1. En bas de l'étape Rédaction, cliquez sur **Corriger le texte avec l'IA**.
+1. En bas de l'étape Rédaction, cliquez sur **Relire et corriger le texte**.
 2. La plateforme vérifie d'abord les champs obligatoires. S'il en manque, un message **« Champs manquants : … »** liste ce qu'il reste à remplir et les champs concernés passent en rouge.
 3. Le bouton affiche **Correction en cours…** (comptez de quelques secondes à une minute et demie pour un Sujet de couv).
-4. **Étape 3 — Texte corrigé par l'IA** : la liste des corrections appliquées s'affiche (`original → corrigé (type)`), puis le **Texte final (modifiable)** dans une zone de saisie libre, avec son compteur de signes.
-5. Relisez et **modifiez librement** ce texte : c'est cette version qui sera livrée. L'IA ne touche pas à votre style.
+4. **Étape 3 — Texte relu et corrigé** : la liste des corrections appliquées s'affiche (`original → corrigé (type)`), puis le **Texte final (modifiable)** dans une zone de saisie libre, avec son compteur de signes.
+5. Relisez et **modifiez librement** ce texte : c'est cette version qui sera livrée. La relecture ne touche pas à votre style.
 6. Cliquez sur **Tout valider et vérifier** pour passer à l'étape 4, ou **Modifier le texte** pour revenir en arrière.
 
-> Si le service IA est indisponible, un message « Correction automatique indisponible — texte original conservé » s'affiche et vous passez quand même à l'étape 3 avec votre texte d'origine.
+> Si le service de relecture est indisponible, un message « Correction automatique indisponible — texte original conservé » s'affiche et vous passez quand même à l'étape 3 avec votre texte d'origine.
 
 ---
 
@@ -259,12 +259,12 @@ La double authentification (TOTP) est **activée ou non par l'administrateur** p
 
 ---
 
-### 4. La correction IA
+### 4. La relecture
 
 #### US-12 — Comprendre les corrections proposées
 
 > **En tant que** journaliste,
-> **je veux** comprendre ce que l'IA corrige,
+> **je veux** comprendre ce que la relecture corrige,
 > **afin de** relire efficacement le texte final.
 
 Chaque correction listée à l'étape 3 indique son **type** :
@@ -309,7 +309,7 @@ La correction préserve la structure de vos paragraphes.
 1. Sur le tableau de bord, cliquez sur l'icône **crayon** de la livraison.
 2. Le formulaire s'ouvre en mode **Modifier un papier**, directement à l'étape Rédaction, avec vos champs **pré-remplis**.
 3. Les photos déjà livrées sont rappelées par leur nom (« Images existantes : … »). Si vous **n'ajoutez aucune photo**, elles sont conservées. Si vous en ajoutez, **elles remplacent** la liste précédente.
-4. Modifiez, puis cliquez sur **Corriger le texte avec l'IA** (la correction est relancée sur le texte modifié), **Tout valider et vérifier**, puis **Enregistrer les modifications**.
+4. Modifiez, puis cliquez sur **Relire et corriger le texte** (la correction est relancée sur le texte modifié), **Tout valider et vérifier**, puis **Enregistrer les modifications**.
 5. Le fichier Word est **régénéré** et **réenvoyé** sur Dropbox, dans le même dossier. L'écran « Modifications enregistrées ! » confirme.
 
 > La modification ne renvoie pas d'email à la rédaction et ne recrée pas de brouillon sur le site : prévenez la rédaction si le changement est important.
@@ -370,7 +370,7 @@ Il n'existe pas de brouillon côté plateforme : tant que vous n'avez pas cliqu�
 | **« Champs manquants : … »** | Remplissez les champs listés (ils passent en rouge). |
 | **Photo refusée** | Vérifiez le format (JPG/PNG/WebP…, pas de SVG ni PDF) et le poids (25 Mo max). |
 | **« Ce format accepte une seule photo »** | Livres et Expo : gardez une seule image. |
-| **Correction IA lente ou indisponible** | Patientez (jusqu'à 1 min 30 pour un long texte). En cas d'échec, votre texte d'origine est conservé et vous pouvez livrer sans correction. |
+| **Relecture lente ou indisponible** | Patientez (jusqu'à 1 min 30 pour un long texte). En cas d'échec, votre texte d'origine est conservé et vous pouvez livrer sans correction. |
 | **« Trop de corrections demandées »** | Limite de 30 corrections par heure atteinte. Réessayez plus tard. |
 | **Dépassement de signes** | Non bloquant, mais réduisez votre texte pour respecter la limite. |
 | **« Erreur préparation des dossiers Dropbox »** | Recliquez sur **Confirmer ce numéro** après quelques secondes. |
@@ -397,7 +397,7 @@ Livrer un papier                     │
 Étape 2 — Rédaction + photos         │
     │                                │
     ▼                                │
-Étape 3 — Correction IA              │
+Étape 3 — Relecture              │
           (texte final modifiable)   │
     │                                │
     ▼                                │

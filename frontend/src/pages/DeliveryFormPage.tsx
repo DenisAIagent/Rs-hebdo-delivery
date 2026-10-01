@@ -43,7 +43,7 @@ type Step = 'type' | 'content' | 'correction' | 'review';
 const STEPS: { key: Step; label: string }[] = [
   { key: 'type', label: 'Type de papier' },
   { key: 'content', label: 'Rédaction' },
-  { key: 'correction', label: 'Correction IA' },
+  { key: 'correction', label: 'Relecture' },
   { key: 'review', label: 'Vérification & envoi' },
 ];
 
@@ -598,7 +598,7 @@ export function DeliveryFormPage() {
                 ) : (
                   <>
                     <Sparkles size={16} />
-                    Corriger le texte avec l'IA
+                    Relire et corriger le texte
                   </>
                 )}
               </button>
@@ -1332,10 +1332,10 @@ function StepCorrectionView({
           Étape 3
         </div>
         <h2 className="serif" style={{ fontSize: 22, lineHeight: 1.1, marginBottom: 4 }}>
-          Texte corrigé par l'IA
+          Texte relu et corrigé
         </h2>
         <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 18 }}>
-          Modifiez librement le texte ci-dessous. L'IA n'a pas changé votre style.
+          Modifiez librement le texte ci-dessous. La relecture ne change pas votre style.
         </p>
 
         {correction && correction.corrections.length > 0 && (
@@ -1759,7 +1759,7 @@ function HelperPanel({
             >
               <Sparkles size={14} />
               <span className="eyebrow" style={{ color: 'var(--rs-red)' }}>
-                Correction IA
+                Relecture
               </span>
             </div>
             <div className="serif" style={{ fontSize: 26, lineHeight: 1.1, marginBottom: 4 }}>
@@ -1767,11 +1767,11 @@ function HelperPanel({
               {(correction?.corrections.length || 0) > 1 ? 's' : ''}
             </div>
             <p style={{ fontSize: 12, color: 'var(--muted)' }}>
-              L'IA a relu votre texte. Vous restez maître du résultat final.
+              Votre texte a été relu. Vous restez maître du résultat final.
             </p>
           </div>
           <Tip label="Vous restez maître">
-            L'IA ne touche jamais à votre style. Modifiez librement le texte
+            La relecture ne touche jamais à votre style. Modifiez librement le texte
             avant de continuer.
           </Tip>
         </>

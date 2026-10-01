@@ -707,8 +707,8 @@ function ReplayCard() {
             lineHeight: 1.5,
           }}
         >
-          Une présentation visuelle des 4 étapes — type, rédaction, correction
-          IA, envoi.
+          Une présentation visuelle des 4 étapes — type, rédaction, relecture,
+          envoi.
         </p>
         <button onClick={handleReplay} className="rs-btn primary sm">
           <Sparkles size={13} />

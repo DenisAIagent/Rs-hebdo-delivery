@@ -1,7 +1,0 @@
-{
-  "scene": "06-etape-3",
-  "duration_s": 36.5,
-  "rules": ["press-release-spring", "asr-keyword-glow", "dynamic-content-sequencing", "discrete-text-sequence", "svg-path-draw"],
-  "exit": { "vector": "held: attention frame breathing (scaleY ±0.8 %), red halo breathing (scale ±5 %), ghost word drifting -x at ~1.4 px/s; no directional travel", "still_moving": true },
-  "entry": { "vector": "browser frame rising -y at ~103 px/s (24 px over 0.7 s, power3.out) with opacity 0→1; scene title sliding +x at ~103 px/s from t=0.2 s", "from_rest": false }
-}

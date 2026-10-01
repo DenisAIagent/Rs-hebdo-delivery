@@ -1,7 +1,0 @@
-{
-  "scene": "05-etape-2",
-  "duration_s": 62,
-  "rules": ["waterfall-entry", "discrete-text-sequence", "cursor-click-ripple", "cursor-drag", "asr-keyword-glow", "press-release-spring"],
-  "exit": { "vector": "held layout; attention frame breathing on Continuer, ghost word drifting -x at ~1.5 px/s", "still_moving": true },
-  "entry": { "vector": "from rest; stepper + form cascade begins at 0.1 s from +y (whip up)", "from_rest": true }
-}

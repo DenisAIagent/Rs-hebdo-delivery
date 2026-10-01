@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.ts';
 import {
@@ -16,23 +16,12 @@ import {
   ArrowRight,
   Check,
   X,
-  Play,
 } from 'lucide-react';
 
-const TOTAL_STEPS = 6;
-
-/** Vidéo de présentation (générée dans videos/rs-hebdo-tuto, copiée dans public/). */
-const TUTO_VIDEO_SRC = '/tuto-rs-hebdo.mp4';
-const TUTO_VIDEO_POSTER = '/tuto-rs-hebdo.jpg';
-
-/**
- * Clé versionnée : incrémenter ONBOARDING_VERSION force tous les journalistes
- * à revoir la présentation une fois à leur prochaine connexion (v2 = vidéo).
- */
-const ONBOARDING_VERSION = 2;
+const TOTAL_STEPS = 5;
 
 function getOnboardingKey(userId: string) {
-  return `rs-onboarding-done-v${ONBOARDING_VERSION}-${userId}`;
+  return `rs-onboarding-done-${userId}`;
 }
 
 export function resetOnboarding(userId: string) {
@@ -50,84 +39,6 @@ function markOnboardingDone(userId: string) {
 /* ------------------------------------------------------------------ */
 /*  Step components                                                    */
 /* ------------------------------------------------------------------ */
-
-function StepVideo() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [blocked, setBlocked] = useState(false);
-
-  // Lecture automatique au premier affichage ; si le navigateur la refuse
-  // (pas d'interaction préalable), on affiche un grand bouton Lire.
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    const attempt = el.play();
-    if (attempt && typeof attempt.catch === 'function') {
-      attempt.catch(() => setBlocked(true));
-    }
-    return () => {
-      el.pause();
-    };
-  }, []);
-
-  const playManually = () => {
-    const el = videoRef.current;
-    if (!el) return;
-    el.play()
-      .then(() => setBlocked(false))
-      .catch(() => setBlocked(true));
-  };
-
-  return (
-    <div className="text-center px-4">
-      <div className="eyebrow" style={{ marginBottom: 8 }}>Présentation vidéo · 45 s</div>
-      <h2
-        className="serif italic"
-        style={{ fontSize: 40, lineHeight: 1.05, marginBottom: 18 }}
-      >
-        Comment livrer un papier
-      </h2>
-      <div
-        className="rs-card thick relative mx-auto overflow-hidden"
-        style={{ maxWidth: 960, background: 'var(--ink)' }}
-      >
-        <video
-          ref={videoRef}
-          src={TUTO_VIDEO_SRC}
-          poster={TUTO_VIDEO_POSTER}
-          controls
-          playsInline
-          preload="auto"
-          className="block w-full"
-          style={{ aspectRatio: '16 / 9' }}
-          aria-label="Vidéo de présentation de RS Hebdo Delivery"
-        />
-        {blocked && (
-          <button
-            type="button"
-            onClick={playManually}
-            className="absolute inset-0 flex items-center justify-center"
-            style={{ background: 'rgba(22, 20, 15, 0.45)' }}
-            aria-label="Lire la vidéo"
-          >
-            <span
-              className="inline-flex items-center gap-2 rs-btn primary lg"
-              style={{ fontSize: 18 }}
-            >
-              <Play size={20} /> Lire la présentation
-            </span>
-          </button>
-        )}
-      </div>
-      <p
-        className="mx-auto mt-6"
-        style={{ color: 'var(--muted)', maxWidth: 560, fontSize: 14 }}
-      >
-        Quarante-cinq secondes pour voir tout le parcours. Vous pourrez la
-        revoir à tout moment depuis votre tableau de bord.
-      </p>
-    </div>
-  );
-}
 
 function StepWelcome() {
   return (
@@ -259,7 +170,7 @@ function StepDeliver() {
   const steps = [
     { icon: <FileText size={18} />, label: 'Choisissez le type de papier' },
     { icon: <Pencil size={18} />, label: 'Rédigez le contenu et joignez les visuels' },
-    { icon: <Sparkles size={18} />, label: 'Laissez l\'IA proposer ses corrections' },
+    { icon: <Sparkles size={18} />, label: 'Lancez la relecture et validez les corrections' },
     { icon: <Send size={18} />, label: 'Vérifiez et envoyez à la rédaction' },
   ];
   return (
@@ -412,7 +323,7 @@ function StepEdit() {
         </p>
         <p className="flex items-start gap-2">
           <Sparkles size={14} className="mt-0.5 shrink-0" />
-          Vous pourrez relancer la correction IA sur le texte modifié.
+          Vous pourrez relancer la relecture sur le texte modifié.
         </p>
       </div>
     </div>
@@ -566,7 +477,6 @@ export function OnboardingPage() {
   const isLast = step === TOTAL_STEPS - 1;
 
   const steps = [
-    <StepVideo key="video" />,
     <StepWelcome key="welcome" />,
     <StepDashboard key="dashboard" />,
     <StepDeliver key="deliver" />,
@@ -598,7 +508,7 @@ export function OnboardingPage() {
       {/* Content area */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8">
         <div
-          className={`w-full ${step === 0 ? 'max-w-5xl' : 'max-w-2xl'} transition-all duration-200 ease-in-out ${
+          className={`w-full max-w-2xl transition-all duration-200 ease-in-out ${
             animating
               ? direction === 'next'
                 ? 'opacity-0 translate-x-6'

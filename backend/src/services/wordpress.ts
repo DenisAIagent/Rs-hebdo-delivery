@@ -473,6 +473,39 @@ export async function readWpPostMeta(postId: number): Promise<unknown> {
   return data;
 }
 
+export interface WpRevision {
+  id: number;
+  date: string;
+  author: number;
+  title: string;
+  excerpt: string;
+  content: string;
+}
+
+/** Revisions d'un article (contenu brut), de la plus recente a la plus ancienne. */
+export async function listWpRevisions(postId: number): Promise<WpRevision[]> {
+  const config = await getWpConfig();
+  const client = wpClient(config);
+  const { data } = await client.get(`/posts/${postId}/revisions`, {
+    params: { context: 'edit', per_page: 50, _fields: 'id,date,author,title,excerpt,content' },
+  });
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    date: r.date,
+    author: r.author,
+    title: r.title?.raw ?? r.title?.rendered ?? '',
+    excerpt: r.excerpt?.raw ?? r.excerpt?.rendered ?? '',
+    content: r.content?.raw ?? r.content?.rendered ?? '',
+  }));
+}
+
+/** Utilisateurs WordPress visibles par le compte API (id -> nom). */
+export async function listWpUsers(): Promise<Array<{ id: number; name: string }>> {
+  const config = await getWpConfig();
+  const { data } = await wpClient(config).get('/users', { params: { per_page: 100, _fields: 'id,name' } });
+  return (data || []).map((u: any) => ({ id: u.id, name: u.name }));
+}
+
 /**
  * Ecrit des metas arbitraires (prefixes autorises par le mu-plugin) sur un
  * article existant. Renvoie les cles effectivement ecrites.

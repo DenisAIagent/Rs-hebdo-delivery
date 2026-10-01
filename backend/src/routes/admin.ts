@@ -7,7 +7,7 @@ import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
 import { todayString, nextFridayString } from '../utils/dates';
 import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
-import { testWpConnection, readWpPostMeta, writeWpPostMeta } from '../services/wordpress';
+import { testWpConnection, readWpPostMeta, writeWpPostMeta, listWpRevisions, listWpUsers } from '../services/wordpress';
 import { republishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { collectMonthlyRecap, buildRecapPdf, sendMonthlyRecap, parseMonthKey, recapFilename, sampleRecap } from '../services/monthlyRecap';
 
@@ -766,6 +766,19 @@ router.post('/wordpress/post-meta/:id', async (req: AuthRequest, res: Response) 
     return res.json({ written, rejected: Object.keys(meta).filter((k) => !written.includes(k)) });
   } catch (error: any) {
     return res.status(400).json({ error: error?.message || String(error) });
+  }
+});
+
+// GET /api/admin/wordpress/revisions/:id - Revisions of a WP post (who saved what, when)
+router.get('/wordpress/revisions/:id', async (req: AuthRequest, res: Response) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'id invalide' });
+  try {
+    const [revisions, users] = await Promise.all([listWpRevisions(id), listWpUsers().catch(() => [])]);
+    return res.json({ revisions, users });
+  } catch (error: any) {
+    const detail = error?.response?.data?.message || error?.message || String(error);
+    return res.status(error?.response?.status === 404 ? 404 : 400).json({ error: detail });
   }
 });
 

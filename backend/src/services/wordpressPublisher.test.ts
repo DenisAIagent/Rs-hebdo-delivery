@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArticleHtml } from './wordpressPublisher';
+import { buildArticleHtml, splitLinks } from './wordpressPublisher';
 
 const body = `Alors, comme ça, le rock serait mort ! Passé par pertes et profits.
 
@@ -22,4 +22,21 @@ test('buildArticleHtml garde le texte mot pour mot, un <p> par paragraphe, signa
 test('buildArticleHtml sans chapo ni signature, et échappe le HTML', () => {
   const html = buildArticleHtml({ bodyText: 'a < b & c', journalistName: '' });
   assert.equal(html, '<p>a &lt; b &amp; c</p>');
+});
+
+test('splitLinks : YouTube = vidéo, autre URL = lien d’achat, texte non URL ignoré', () => {
+  assert.deepEqual(splitLinks('https://youtu.be/abc?si=1', 'https://icidailleurs.fr/product/x'), { videoUrl: 'https://youtu.be/abc?si=1', shopUrl: 'https://icidailleurs.fr/product/x' });
+  assert.deepEqual(splitLinks('https://www.netflix.com/fr/title/82068293'), { shopUrl: 'https://www.netflix.com/fr/title/82068293' });
+  assert.deepEqual(splitLinks('pas une url'), {});
+});
+
+test('buildArticleHtml : ordre chapô > chronique > vidéo > lien d’achat > auteur', () => {
+  const html = buildArticleHtml({ chapo: 'Chapô.', bodyText: 'Texte.', journalistName: 'Silvère Vincent', videoUrl: 'https://youtu.be/x', shopUrl: 'https://shop.example/a', shopLabel: "Acheter l'album" });
+  assert.deepEqual(html.split('\n\n'), [
+    '<h3>Chapô.</h3>',
+    '<p>Texte.</p>',
+    '<p>https://youtu.be/x</p>',
+    '<p><a href="https://shop.example/a" target="_blank" rel="noopener">Acheter l&#39;album</a></p>'.replace('&#39;', "'"),
+    '<p><em>Par Silvère Vincent</em></p>',
+  ]);
 });

@@ -290,6 +290,12 @@ export interface WpCreatePostInput {
   existingPostId?: number;
   /** Utilisateur WordPress a mettre en auteur (si trouve). */
   authorId?: number;
+  /**
+   * Renvoi « contenu seul » : ne met a jour que le corps, l'extrait et l'auteur.
+   * Titre, slug, categories, tags, Yoast et metaboxes du brouillon existant sont
+   * laisses intacts (consigne redaction du 01/10/2026).
+   */
+  contentOnly?: boolean;
 }
 
 export interface WpCreatePostResult {
@@ -332,16 +338,18 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
   const config = await getWpConfig();
   const client = wpClient(config);
 
-  const body: Record<string, unknown> = {
-    status: 'draft',
-    title: input.title,
-    content: input.contentHtml,
-    slug: input.slug,
-    excerpt: input.excerpt,
-    categories: input.categories,
-    tags: input.tagIds,
-  };
-  if (input.featuredMediaId) body.featured_media = input.featuredMediaId;
+  const body: Record<string, unknown> = input.contentOnly
+    ? { content: input.contentHtml, excerpt: input.excerpt }
+    : {
+        status: 'draft',
+        title: input.title,
+        content: input.contentHtml,
+        slug: input.slug,
+        excerpt: input.excerpt,
+        categories: input.categories,
+        tags: input.tagIds,
+      };
+  if (input.featuredMediaId && !input.contentOnly) body.featured_media = input.featuredMediaId;
   if (input.authorId) body.author = input.authorId;
   // POST /posts/{id} met a jour un article existant (meme contrat que la creation).
   const endpoint = input.existingPostId ? `/posts/${input.existingPostId}` : '/posts';
@@ -351,12 +359,12 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
   // scripts/wp/rs-delivery-rest-meta.php) ; sinon il les ignore ou les rejette.
   // On les envoie quand meme, et on REMONTE le refus au lieu de le masquer.
   const meta: Record<string, string | number> = {};
-  if (input.yoast) {
+  if (input.yoast && !input.contentOnly) {
     meta._yoast_wpseo_focuskw = input.yoast.focusKeyword;
     meta._yoast_wpseo_title = input.yoast.seoTitle;
     meta._yoast_wpseo_metadesc = input.yoast.metaDescription;
   }
-  for (const [key, value] of Object.entries(input.extraMeta || {})) {
+  for (const [key, value] of Object.entries(input.contentOnly ? {} : input.extraMeta || {})) {
     if (value !== '' && value !== null && value !== undefined) meta[key] = value;
   }
 

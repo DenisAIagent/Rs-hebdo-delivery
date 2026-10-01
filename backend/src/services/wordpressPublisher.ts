@@ -40,6 +40,10 @@ export interface WpPublishInput {
   images?: ImageFile[];
   /** Renvoi : brouillon WordPress existant a mettre a jour (pas de doublon). */
   existingPostId?: number;
+  /** Renvoi : payload deja calcule (titre, excerpt, SEO...) — evite un nouvel appel IA. */
+  previousPayload?: Partial<WpArticlePayload>;
+  /** Renvoi : ne toucher qu'au corps/extrait/auteur du brouillon existant. */
+  contentOnly?: boolean;
 }
 
 /** Echappement minimal pour injecter du texte brut dans le HTML de l'article. */
@@ -54,7 +58,33 @@ function escapeHtmlText(s: string): string {
  * - signature « Par Prenom Nom » en fin d'article.
  * Aucune phrase n'est ajoutee ni reformulee : c'est la garantie demandee par la redaction.
  */
-export function buildArticleHtml(p: { chapo?: string; bodyText: string; journalistName: string }): string {
+export interface ArticleHtmlInput {
+  chapo?: string;
+  bodyText: string;
+  journalistName: string;
+  /** URL YouTube : inseree seule dans un paragraphe, WordPress l'integre en video. */
+  videoUrl?: string;
+  /** Lien d'ecoute / d'achat (site marchand, plateforme). */
+  shopUrl?: string;
+  shopLabel?: string;
+}
+
+const YOUTUBE_RE = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i;
+
+/** Repartit le lien du formulaire : YouTube = video, le reste = lien d'achat/ecoute. */
+export function splitLinks(lien?: string, lienAchat?: string): { videoUrl?: string; shopUrl?: string } {
+  const a = (lien || '').trim();
+  const b = (lienAchat || '').trim();
+  const out: { videoUrl?: string; shopUrl?: string } = {};
+  for (const url of [a, b]) {
+    if (!url || !/^https?:\/\//i.test(url)) continue;
+    if (YOUTUBE_RE.test(url) && !out.videoUrl) out.videoUrl = url;
+    else if (!out.shopUrl) out.shopUrl = url;
+  }
+  return out;
+}
+
+export function buildArticleHtml(p: ArticleHtmlInput): string {
   const blocks: string[] = [];
   const chapo = (p.chapo || '').replace(/\s+/g, ' ').trim();
   if (chapo) blocks.push(`<h3>${escapeHtmlText(chapo)}</h3>`);
@@ -63,6 +93,8 @@ export function buildArticleHtml(p: { chapo?: string; bodyText: string; journali
     const html = escapeHtmlText(para).replace(/«\s?([^»]+?)\s?»/g, (_m, q: string) => `<em>« ${q.trim()} »</em>`);
     blocks.push(`<p>${html}</p>`);
   }
+  if (p.videoUrl) blocks.push(`<p>${escapeHtmlText(p.videoUrl)}</p>`);
+  if (p.shopUrl) blocks.push(`<p><a href="${escapeHtmlAttr(p.shopUrl)}" target="_blank" rel="noopener">${escapeHtmlText(p.shopLabel || "Acheter l'album")}</a></p>`);
   const name = p.journalistName.trim();
   if (name) blocks.push(`<p><em>Par ${escapeHtmlText(name)}</em></p>`);
   return blocks.join('\n\n');
@@ -360,7 +392,17 @@ export async function publishDeliveryToWordpress(
     }
 
     // 2. AI formatting per editorial conventions
-    const payload = await formatArticleForWp(input, candidates);
+    // L'IA ne sert plus qu'aux metadonnees et a un chapo court. Sur un renvoi,
+    // on ne garde de sa reponse que l'excerpt : titre, slug, SEO, categories,
+    // tags, Style Music et Main Artist restent ceux du brouillon existant.
+    const fresh = await formatArticleForWp(input, candidates);
+    const prev = input.previousPayload;
+    const payload: WpArticlePayload = prev && prev.title
+      ? { ...(prev as WpArticlePayload), categories: prev.categories || [], tags: prev.tags || [], excerpt: fresh.excerpt }
+      : fresh;
+    if (prev && prev.title) {
+      await logInfo('wp-format', 'Renvoi : titre, SEO, categories, tags et metaboxes du brouillon existant conserves', ctx);
+    }
     const categories = normalizeWpCategories(payload.categories);
     if (categories.length === 0) {
       await logWarn('wp-format', 'Aucune categorie valide proposee par l\'IA — article envoye sans categorie', ctx);
@@ -443,7 +485,14 @@ export async function publishDeliveryToWordpress(
     const meta = input.metadata as Record<string, unknown>;
     const chapo = String(meta.chapo || meta.accroche || payload.excerpt || '').trim();
     payload.excerpt = chapo;
-    payload.contentHtml = buildArticleHtml({ chapo, bodyText: input.bodyText, journalistName: input.journalistName });
+    const links = splitLinks(String(meta.lien || ''), String(meta.lien_achat || ''));
+    const cinema = /cinema/i.test(input.paperTypeName);
+    const livres = /livre/i.test(input.paperTypeName);
+    payload.contentHtml = buildArticleHtml({
+      chapo, bodyText: input.bodyText, journalistName: input.journalistName,
+      videoUrl: links.videoUrl, shopUrl: links.shopUrl,
+      shopLabel: cinema ? 'Voir' : livres ? 'En savoir plus' : "Acheter l'album",
+    });
     await logInfo('wp-format', `Corps = texte livre mot pour mot (${input.bodyText.length} signes), chapo ${chapo ? 'present' : 'absent'}, signature « Par ${input.journalistName} »`, ctx);
     let contentHtml = insertImagesIntoBody(payload.contentHtml, bodyMedia, payload.title || input.title);
     const chronique = isChroniqueType(input.paperTypeName);
@@ -471,6 +520,7 @@ export async function publishDeliveryToWordpress(
 
     const post = await createWpDraftPost({
       existingPostId: input.existingPostId,
+      contentOnly: input.contentOnly && !!input.existingPostId,
       authorId: authorId ?? undefined,
       title: `${payload.title || input.title} [EN ATTENTE DE RELECTURE]`,
       contentHtml,
@@ -600,5 +650,7 @@ export async function republishDeliveryToWordpress(deliveryId: string) {
     bodyText: delivery.body_corrected || delivery.body_original || '',
     images,
     existingPostId: delivery.wp_post_id || undefined,
+    previousPayload: (delivery.wp_payload as Partial<WpArticlePayload>) || undefined,
+    contentOnly: !!delivery.wp_post_id,
   });
 }

@@ -21,6 +21,8 @@ import {
   uploadWpMedia,
   createWpDraftPost,
   findWpMediaByKeywords,
+  setWpMediaMeta,
+  getWpCategory,
   getWpMetaMap,
   type WpPostCandidate, findWpUserByName } from './wordpress';
 import { buildWpSystemPrompt, normalizeWpCategories, WP_STYLE_MUSIC } from './wordpressRules';
@@ -64,7 +66,7 @@ export interface ArticleHtmlInput {
   journalistName: string;
   /** URL YouTube : inseree seule dans un paragraphe, WordPress l'integre en video. */
   videoUrl?: string;
-  /** Lien d'ecoute / d'achat (site marchand, plateforme). */
+  /** Lien sortant : site officiel, Bandcamp, label, editeur, plateforme. */
   shopUrl?: string;
   shopLabel?: string;
   /** Lien interne « A lire aussi » vers un article rollingstone.fr existant. */
@@ -72,6 +74,27 @@ export interface ArticleHtmlInput {
 }
 
 const YOUTUBE_RE = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i;
+
+export type PaperKind = 'musique' | 'cinema' | 'livres';
+
+/**
+ * Libelle du lien sortant selon le domaine : un lien « Voir le clip » sous la
+ * video n'a pas de sens, on nomme ce vers quoi on envoie (Bandcamp, site
+ * officiel, editeur, plateforme).
+ */
+export function outboundLinkLabel(url: string, kind: PaperKind = 'musique'): string {
+  let host = '';
+  try { host = new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { host = ''; }
+  if (host.endsWith('bandcamp.com')) return 'Écouter et acheter sur Bandcamp';
+  if (/(^|\.)(lnk\.to|ffm\.to|linktr\.ee|orcd\.co|fanlink\.to|lnkfi\.re|found\.ee)$/.test(host)) return "Écouter l'album";
+  if (/(^|\.)(netflix|primevideo|amazon|disneyplus|canalplus|ocs|peacocktv|max|appletv|paramountplus)\./.test(host)) return 'Voir sur la plateforme';
+  if (host.endsWith('allocine.fr')) return 'Fiche AlloCiné';
+  if (/(^|\.)(dargaud|dupuis|gallimard|seuil|grasset|flammarion|actes-sud|albin-michel|casterman|glenat|delcourt|lerobert|fayard)\./.test(host)) return "Fiche de l'éditeur";
+  if (/(philharmoniedeparis|centrepompidou|louvre|museedarts|grandpalais|mep-fr|jeudepaume)/.test(host)) return 'Infos et billetterie';
+  if (kind === 'cinema') return 'Voir';
+  if (kind === 'livres') return 'En savoir plus';
+  return 'Site officiel';
+}
 
 /** Repartit le lien du formulaire : YouTube = video, le reste = lien d'achat/ecoute. */
 export function splitLinks(lien?: string, lienAchat?: string): { videoUrl?: string; shopUrl?: string } {
@@ -100,11 +123,9 @@ export function buildArticleHtml(p: ArticleHtmlInput): string {
     blocks.push(`<p>${html}</p>`);
     if (video && i === videoAfter) blocks.push(video);
   });
-  if (p.shopUrl) blocks.push(`<p><a href="${escapeHtmlAttr(p.shopUrl)}" target="_blank" rel="noopener">${escapeHtmlText(p.shopLabel || "Acheter l'album")}</a></p>`);
-  else if (p.videoUrl) {
-    // Lien sortant explicite (Yoast ne compte pas une video integree comme un lien).
-    blocks.push(`<p><a href="${escapeHtmlAttr(p.videoUrl)}" target="_blank" rel="noopener">Voir le clip</a></p>`);
-  }
+  // Lien sortant nomme (Bandcamp, site officiel, editeur...). Jamais de lien
+  // « Voir le clip » vers la video deja integree : ca ne veut rien dire.
+  if (p.shopUrl) blocks.push(`<p><a href="${escapeHtmlAttr(p.shopUrl)}" target="_blank" rel="noopener">${escapeHtmlText(p.shopLabel || outboundLinkLabel(p.shopUrl))}</a></p>`);
   if (video && videoAfter < 0) blocks.push(video);
   if (p.readAlso) blocks.push(`<p><em>À lire aussi :</em> <a href="${escapeHtmlAttr(p.readAlso.url)}">${escapeHtmlText(p.readAlso.title)}</a></p>`);
   const name = p.journalistName.trim();
@@ -361,6 +382,37 @@ ${candidatesBlock}
   throw new Error(`Mise en forme IA WordPress echouee: ${String((lastErr as any)?.message || lastErr)}`);
 }
 
+/**
+ * Choisit le lien interne « A lire aussi » :
+ * 1. l'URL retenue par l'IA parmi les candidats ;
+ * 2. a defaut, un candidat dont le titre cite l'artiste ;
+ * 3. a defaut, la page de la premiere categorie de l'article.
+ */
+export async function pickInternalLink(p: {
+  candidates: WpPostCandidate[];
+  aiChoice?: string;
+  artiste: string;
+  categories: number[];
+  loadCategory?: (id: number) => Promise<{ name: string; link: string } | null>;
+}): Promise<{ url: string; title: string } | undefined> {
+  const wanted = (p.aiChoice || '').trim();
+  const chosen = wanted ? p.candidates.find((c) => c.link && c.link === wanted) : undefined;
+  if (chosen) return { url: chosen.link, title: chosen.title };
+  const artiste = p.artiste.trim().toLowerCase();
+  if (artiste.length >= 3) {
+    const byArtist = p.candidates.find((c) => c.link && c.title.toLowerCase().includes(artiste));
+    if (byArtist) return { url: byArtist.link, title: byArtist.title };
+  }
+  const load = p.loadCategory || getWpCategory;
+  for (const id of p.categories) {
+    try {
+      const cat = await load(id);
+      if (cat?.link) return { url: cat.link, title: `Tous nos articles ${cat.name}` };
+    } catch { /* on tente la suivante */ }
+  }
+  return undefined;
+}
+
 /** Persist WP tracking info on the delivery row (best effort). */
 async function saveWpState(
   deliveryId: string,
@@ -395,13 +447,22 @@ export async function publishDeliveryToWordpress(
     await logInfo('wp-start', `Envoi WordPress de "${input.title}"`, ctx);
     await saveWpState(input.deliveryId, { wp_status: 'pending' });
 
-    // 1. Internal-link candidates from the existing site (subject first, then title)
-    const searchQuery = String(
-      (input.metadata as any)?.artiste || (input.metadata as any)?.album || input.title,
-    );
+    // 1. Internal-link candidates from the existing site: artist, album, title,
+    //    then the Style Music of the previous payload (a related genre article).
+    const metaIn = input.metadata as Record<string, unknown>;
+    const artisteIn = String(metaIn.artiste || '').trim();
+    const albumIn = String(metaIn.album || '').trim();
+    const queries = [...new Set([artisteIn, albumIn, input.title, String(input.previousPayload?.styleMusic || '').trim()].filter((q) => q.length >= 3))];
     let candidates: WpPostCandidate[] = [];
     try {
-      candidates = await searchWpPosts(searchQuery);
+      for (const q of queries) {
+        const found = await searchWpPosts(q, 6);
+        for (const c of found) {
+          if (c.id === input.existingPostId) continue; // never link an article to itself
+          if (!candidates.some((x) => x.id === c.id)) candidates = [...candidates, c];
+        }
+        if (candidates.length >= 12) break;
+      }
     } catch {
       await logWarn('wp-links', 'Recherche de liens internes impossible (on continue sans)', ctx);
     }
@@ -440,6 +501,8 @@ export async function publishDeliveryToWordpress(
     let featuredMediaId: number | undefined;
     const bodyMedia: Array<{ id: number; url: string }> = [];
     const images = input.images || [];
+    // Texte alternatif des images (Yoast) : « Artiste – Album », sinon le titre.
+    const imageAlt = artisteIn && albumIn ? `${artisteIn} – ${albumIn}` : artisteIn || payload.title || input.title;
     if (images.length === 0) {
       // No photo delivered (typical for chroniques): reuse an image already in
       // the media library — cover or artist picture — searched by artist/album.
@@ -450,6 +513,7 @@ export async function publishDeliveryToWordpress(
         const hit = await findWpMediaByKeywords(queries);
         if (hit) {
           featuredMediaId = hit.id;
+          if (!hit.altText) await setWpMediaMeta(hit.id, { altText: imageAlt }).catch(() => undefined);
           await logInfo('wp-media', `Aucune photo livree — image a la une reprise de la mediatheque (media #${hit.id}, ${hit.url.split('/').pop()})`, ctx);
         } else {
           await logWarn('wp-media', `Aucune photo livree et rien en mediatheque pour « ${queries[0]} » — article envoye sans image a la une`, ctx);
@@ -475,6 +539,7 @@ export async function publishDeliveryToWordpress(
         const media = await uploadWpMedia({
           ...upload,
           caption: payload.photoCredit || undefined,
+          altText: imageAlt,
         });
         if (index === 0) {
           featuredMediaId = media.id;
@@ -501,22 +566,26 @@ export async function publishDeliveryToWordpress(
     const chapo = String(meta.chapo || meta.accroche || payload.excerpt || '').trim();
     payload.excerpt = chapo;
     const links = splitLinks(String(meta.lien || ''), String(meta.lien_achat || ''));
-    const cinema = /cinema/i.test(input.paperTypeName);
-    const livres = /livre/i.test(input.paperTypeName);
-    // Uniquement le choix explicite de l'IA parmi les candidats : jamais le premier
-    // resultat de recherche par defaut (il est souvent hors sujet).
-    const chosen = candidates.find((c) => c.link && c.link === (fresh.internalLinkUrl || '').trim());
-    const readAlso = chosen ? { url: chosen.link, title: chosen.title } : undefined;
+    const kind: PaperKind = /cinema/i.test(input.paperTypeName) ? 'cinema' : /livre/i.test(input.paperTypeName) ? 'livres' : 'musique';
+    // Lien interne : le choix explicite de l'IA parmi les candidats, sinon un
+    // candidat dont le titre cite l'artiste, sinon la rubrique de l'article
+    // (Yoast exige au moins un lien interne). Jamais le premier resultat de
+    // recherche par defaut (il est souvent hors sujet).
+    const readAlso = await pickInternalLink({
+      candidates, aiChoice: fresh.internalLinkUrl, artiste: artisteIn, categories,
+    });
     payload.contentHtml = buildArticleHtml({
       chapo, bodyText: input.bodyText, journalistName: input.journalistName,
       videoUrl: links.videoUrl, shopUrl: links.shopUrl,
-      shopLabel: cinema ? 'Voir' : livres ? 'En savoir plus' : "Acheter l'album",
+      shopLabel: links.shopUrl ? outboundLinkLabel(links.shopUrl, kind) : undefined,
       readAlso,
     });
+    if (links.shopUrl) await logInfo('wp-format', `Lien sortant : « ${outboundLinkLabel(links.shopUrl, kind)} » → ${links.shopUrl}`, ctx);
+    else await logWarn('wp-format', "Aucun lien sortant (site officiel / Bandcamp / editeur) : renseigner « Lien d'achat » sur la livraison pour Yoast", ctx);
     if (readAlso) await logInfo('wp-format', `Lien interne « A lire aussi » : ${readAlso.title}`, ctx);
-    else await logInfo('wp-format', 'Aucun article rollingstone.fr candidat pour le lien interne', ctx);
+    else await logWarn('wp-format', 'Aucun lien interne possible (ni article lie, ni rubrique)', ctx);
     await logInfo('wp-format', `Corps = texte livre mot pour mot (${input.bodyText.length} signes), chapo ${chapo ? 'present' : 'absent'}, signature « Par ${input.journalistName} »`, ctx);
-    let contentHtml = insertImagesIntoBody(payload.contentHtml, bodyMedia, payload.title || input.title);
+    let contentHtml = insertImagesIntoBody(payload.contentHtml, bodyMedia, imageAlt);
     const chronique = isChroniqueType(input.paperTypeName);
     const reviewScore = chronique ? reviewScoreFromMetadata(input.metadata) : null;
     if (chronique) {

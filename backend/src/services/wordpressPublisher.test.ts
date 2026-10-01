@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArticleHtml, splitLinks } from './wordpressPublisher';
+import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink } from './wordpressPublisher';
 
 const body = `Alors, comme ça, le rock serait mort ! Passé par pertes et profits.
 
@@ -41,21 +41,46 @@ test('buildArticleHtml : un seul paragraphe, la vidéo va juste avant la signatu
   ]);
 });
 
-test('buildArticleHtml : plusieurs paragraphes, la vidéo se place au milieu de la chronique', () => {
+test('buildArticleHtml : plusieurs paragraphes, la vidéo se place au milieu, jamais de lien « Voir le clip »', () => {
   const html = buildArticleHtml({ bodyText: 'Un.\n\nDeux.\n\nTrois.', journalistName: 'Xavier Bonnet', videoUrl: 'https://youtu.be/x' });
-  const clip = '<p><a href="https://youtu.be/x" target="_blank" rel="noopener">Voir le clip</a></p>';
-  assert.deepEqual(html.split('\n\n'), ['<p>Un.</p>', '<p>Deux.</p>', '<p>https://youtu.be/x</p>', '<p>Trois.</p>', clip, '<p><em>Par Xavier Bonnet</em></p>']);
+  assert.deepEqual(html.split('\n\n'), ['<p>Un.</p>', '<p>Deux.</p>', '<p>https://youtu.be/x</p>', '<p>Trois.</p>', '<p><em>Par Xavier Bonnet</em></p>']);
   const two = buildArticleHtml({ bodyText: 'Un.\n\nDeux.', journalistName: '', videoUrl: 'https://youtu.be/x' });
-  assert.deepEqual(two.split('\n\n'), ['<p>Un.</p>', '<p>https://youtu.be/x</p>', '<p>Deux.</p>', clip]);
+  assert.deepEqual(two.split('\n\n'), ['<p>Un.</p>', '<p>https://youtu.be/x</p>', '<p>Deux.</p>']);
+  assert.ok(!html.includes('Voir le clip'));
 });
 
-test('buildArticleHtml : lien « Voir le clip » quand il n’y a pas de lien d’achat, puis « À lire aussi »', () => {
-  const html = buildArticleHtml({ bodyText: 'Texte.', journalistName: 'X', videoUrl: 'https://youtu.be/x', readAlso: { url: 'https://www.rollingstone.fr/a', title: 'Un article' } });
+test('buildArticleHtml : lien sortant nommé selon le domaine, puis « À lire aussi »', () => {
+  const html = buildArticleHtml({ bodyText: 'Texte.', journalistName: 'X', videoUrl: 'https://youtu.be/x', shopUrl: 'https://theflynts.bandcamp.com', readAlso: { url: 'https://www.rollingstone.fr/a', title: 'Un article' } });
   assert.deepEqual(html.split('\n\n'), [
     '<p>Texte.</p>',
-    '<p><a href="https://youtu.be/x" target="_blank" rel="noopener">Voir le clip</a></p>',
+    '<p><a href="https://theflynts.bandcamp.com" target="_blank" rel="noopener">Écouter et acheter sur Bandcamp</a></p>',
     '<p>https://youtu.be/x</p>',
     '<p><em>À lire aussi :</em> <a href="https://www.rollingstone.fr/a">Un article</a></p>',
     '<p><em>Par X</em></p>',
   ]);
+});
+
+test('outboundLinkLabel : Bandcamp, smartlink, plateforme, éditeur, site officiel', () => {
+  assert.equal(outboundLinkLabel('https://valleyofthesun.bandcamp.com/'), 'Écouter et acheter sur Bandcamp');
+  assert.equal(outboundLinkLabel('https://transgressive.lnk.to/allsetthebone'), "Écouter l'album");
+  assert.equal(outboundLinkLabel('https://www.netflix.com/fr/title/1', 'cinema'), 'Voir sur la plateforme');
+  assert.equal(outboundLinkLabel('https://www.allocine.fr/film/fichefilm_gen_cfilm=327174.html', 'cinema'), 'Fiche AlloCiné');
+  assert.equal(outboundLinkLabel('https://www.dargaud.com/bd/le-clan-de-walden', 'livres'), "Fiche de l'éditeur");
+  assert.equal(outboundLinkLabel('https://www.theflynts.be/'), 'Site officiel');
+  assert.equal(outboundLinkLabel('pas une url', 'livres'), 'En savoir plus');
+});
+
+test('pickInternalLink : choix IA > titre citant l’artiste > rubrique, jamais le premier résultat', async () => {
+  const candidates = [
+    { id: 1, link: 'https://www.rollingstone.fr/hors-sujet', title: 'Tom Cruise confirme la suite' },
+    { id: 2, link: 'https://www.rollingstone.fr/flynts-live', title: 'The Flynts en concert à Bruxelles' },
+  ];
+  const cat = async () => ({ name: 'Chroniques', link: 'https://www.rollingstone.fr/chroniques/' });
+  assert.deepEqual(await pickInternalLink({ candidates, aiChoice: 'https://www.rollingstone.fr/hors-sujet', artiste: 'The Flynts', categories: [5], loadCategory: cat }),
+    { url: 'https://www.rollingstone.fr/hors-sujet', title: 'Tom Cruise confirme la suite' });
+  assert.deepEqual(await pickInternalLink({ candidates, aiChoice: '', artiste: 'the flynts', categories: [5], loadCategory: cat }),
+    { url: 'https://www.rollingstone.fr/flynts-live', title: 'The Flynts en concert à Bruxelles' });
+  assert.deepEqual(await pickInternalLink({ candidates, aiChoice: '', artiste: 'Mastodon', categories: [5], loadCategory: cat }),
+    { url: 'https://www.rollingstone.fr/chroniques/', title: 'Tous nos articles Chroniques' });
+  assert.equal(await pickInternalLink({ candidates, artiste: 'Mastodon', categories: [], loadCategory: cat }), undefined);
 });

@@ -175,7 +175,7 @@ export async function searchWpPosts(query: string, perPage = 5): Promise<WpPostC
   }));
 }
 
-export interface WpMediaHit { id: number; url: string; title: string }
+export interface WpMediaHit { id: number; url: string; title: string; altText: string }
 
 /**
  * Look for an existing image in the media library (chroniques rarely come
@@ -189,10 +189,10 @@ export async function findWpMediaByKeywords(queries: string[]): Promise<WpMediaH
     const q = raw.replace(/\s+/g, ' ').trim();
     if (q.length < 3) continue;
     const { data } = await client.get('/media', {
-      params: { search: q, media_type: 'image', per_page: 10, orderby: 'date', order: 'desc', _fields: 'id,source_url,title,mime_type' },
+      params: { search: q, media_type: 'image', per_page: 10, orderby: 'date', order: 'desc', _fields: 'id,source_url,title,mime_type,alt_text' },
     });
     const hit = (data || []).find((m: any) => String(m.mime_type || '').startsWith('image/'));
-    if (hit) return { id: hit.id, url: hit.source_url, title: hit.title?.rendered || '' };
+    if (hit) return { id: hit.id, url: hit.source_url, title: hit.title?.rendered || '', altText: String(hit.alt_text || '') };
   }
   return null;
 }
@@ -230,6 +230,28 @@ export interface WpMediaUpload {
   mimetype: string;
   /** Photo credit, e.g. "© Santiago Felipe/Getty Images" — set as media caption. */
   caption?: string;
+  /** Texte alternatif (Yoast signale une image a la une sans alt). */
+  altText?: string;
+}
+
+/** Met a jour legende et texte alternatif d'un media existant. */
+export async function setWpMediaMeta(mediaId: number, meta: { caption?: string; altText?: string }): Promise<void> {
+  const body: Record<string, string> = {};
+  if (meta.caption) body.caption = meta.caption;
+  if (meta.altText) body.alt_text = meta.altText;
+  if (Object.keys(body).length === 0) return;
+  const config = await getWpConfig();
+  await wpClient(config).post(`/media/${mediaId}`, body);
+}
+
+export interface WpCategoryInfo { id: number; name: string; link: string }
+
+/** Nom et URL publique d'une categorie (lien interne de repli). */
+export async function getWpCategory(id: number): Promise<WpCategoryInfo | null> {
+  const config = await getWpConfig();
+  const { data } = await wpClient(config).get(`/categories/${id}`, { params: { _fields: 'id,name,link' } });
+  if (!data?.link) return null;
+  return { id: data.id, name: String(data.name || ''), link: String(data.link) };
 }
 
 /**
@@ -249,7 +271,11 @@ export async function uploadWpMedia(upload: WpMediaUpload): Promise<{ id: number
     // WP may append -1, -scaled... — match on the exact name or name + suffix
     return remote === upload.filename || remote.startsWith(`${baseName}-`) || remote.startsWith(`${baseName}.`);
   });
-  if (dup) return { id: dup.id, url: dup.source_url };
+  if (dup) {
+    // Media deja en ligne (renvoi) : on complete quand meme alt et legende.
+    await setWpMediaMeta(dup.id, { caption: upload.caption, altText: upload.altText }).catch(() => undefined);
+    return { id: dup.id, url: dup.source_url };
+  }
 
   const { data: media } = await client.post('/media', upload.buffer, {
     headers: {
@@ -262,9 +288,7 @@ export async function uploadWpMedia(upload: WpMediaUpload): Promise<{ id: number
     timeout: 180_000,
   });
 
-  if (upload.caption) {
-    await client.post(`/media/${media.id}`, { caption: upload.caption });
-  }
+  await setWpMediaMeta(media.id, { caption: upload.caption, altText: upload.altText });
 
   return { id: media.id, url: media.source_url };
 }

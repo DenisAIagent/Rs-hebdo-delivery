@@ -544,6 +544,9 @@ export async function publishDeliveryToWordpress(
 
     // WordPress ignore en silence toute meta non enregistree : on le dit haut et
     // clair au lieu de laisser croire que le champ est rempli.
+    if (post.authorRejected) {
+      await logWarn('wp-format', `Auteur WordPress non modifie : le compte API n'a pas le droit d'attribuer l'article a ${input.journalistName} (role api_writer sans edit_others_posts). La signature dans le texte fait foi.`, ctx);
+    }
     if (post.metaRejected.length > 0) {
       await logWarn(
         'wp-meta',

@@ -308,6 +308,8 @@ export interface WpCreatePostResult {
    * reste a saisir a la main, au lieu d'echouer en silence.
    */
   metaRejected: string[];
+  /** Auteur demande mais refuse par WordPress (droits du compte API). */
+  authorRejected?: boolean;
 }
 
 /**
@@ -373,17 +375,36 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
 
   let data: any;
   let metaRejected: string[] = [];
+  let authorRejected = false;
+  const send = async (payload: Record<string, unknown>) => {
+    try {
+      return (await client.post(endpoint, payload)).data;
+    } catch (error: any) {
+      // 401/403 avec un auteur impose : le compte API (api_writer) n'a pas
+      // edit_others_posts. On garde l'article, sans changer l'auteur (la
+      // signature « Par Nom » dans le corps fait foi).
+      if (payload.author && [401, 403].includes(error?.response?.status)) {
+        authorRejected = true;
+        const { author: _a, ...rest } = payload;
+        return (await client.post(endpoint, rest)).data;
+      }
+      throw error;
+    }
+  };
   try {
-    ({ data } = await client.post(endpoint, withMeta));
+    data = await send(withMeta);
   } catch (error: any) {
     // 400 = au moins une cle de meta n'est pas enregistree cote WordPress.
     // L'article doit tout de meme partir, mais l'appelant doit le savoir.
     if (metaKeys.length > 0 && error?.response?.status === 400) {
       metaRejected = metaKeys;
-      ({ data } = await client.post(endpoint, body));
+      data = await send(body);
     } else {
       throw error;
     }
+  }
+  if (authorRejected) {
+    console.warn(`[wordpress] auteur #${input.authorId} refuse par WordPress (droits du compte API) — article ${data?.id} laisse a ${config.username}`);
   }
 
   // WordPress peut aussi accepter la requete en ignorant SILENCIEUSEMENT les
@@ -412,6 +433,7 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
     link: data.link,
     editUrl: `${config.baseUrl}/wp-admin/post.php?post=${data.id}&action=edit`,
     metaRejected,
+    authorRejected,
   };
 }
 

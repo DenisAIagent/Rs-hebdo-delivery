@@ -43,7 +43,19 @@ test('buildArticleHtml : un seul paragraphe, la vidéo va juste avant la signatu
 
 test('buildArticleHtml : plusieurs paragraphes, la vidéo se place au milieu de la chronique', () => {
   const html = buildArticleHtml({ bodyText: 'Un.\n\nDeux.\n\nTrois.', journalistName: 'Xavier Bonnet', videoUrl: 'https://youtu.be/x' });
-  assert.deepEqual(html.split('\n\n'), ['<p>Un.</p>', '<p>Deux.</p>', '<p>https://youtu.be/x</p>', '<p>Trois.</p>', '<p><em>Par Xavier Bonnet</em></p>']);
+  const clip = '<p><a href="https://youtu.be/x" target="_blank" rel="noopener">Voir le clip</a></p>';
+  assert.deepEqual(html.split('\n\n'), ['<p>Un.</p>', '<p>Deux.</p>', '<p>https://youtu.be/x</p>', '<p>Trois.</p>', clip, '<p><em>Par Xavier Bonnet</em></p>']);
   const two = buildArticleHtml({ bodyText: 'Un.\n\nDeux.', journalistName: '', videoUrl: 'https://youtu.be/x' });
-  assert.deepEqual(two.split('\n\n'), ['<p>Un.</p>', '<p>https://youtu.be/x</p>', '<p>Deux.</p>']);
+  assert.deepEqual(two.split('\n\n'), ['<p>Un.</p>', '<p>https://youtu.be/x</p>', '<p>Deux.</p>', clip]);
+});
+
+test('buildArticleHtml : lien « Voir le clip » quand il n’y a pas de lien d’achat, puis « À lire aussi »', () => {
+  const html = buildArticleHtml({ bodyText: 'Texte.', journalistName: 'X', videoUrl: 'https://youtu.be/x', readAlso: { url: 'https://www.rollingstone.fr/a', title: 'Un article' } });
+  assert.deepEqual(html.split('\n\n'), [
+    '<p>Texte.</p>',
+    '<p><a href="https://youtu.be/x" target="_blank" rel="noopener">Voir le clip</a></p>',
+    '<p>https://youtu.be/x</p>',
+    '<p><em>À lire aussi :</em> <a href="https://www.rollingstone.fr/a">Un article</a></p>',
+    '<p><em>Par X</em></p>',
+  ]);
 });

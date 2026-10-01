@@ -67,6 +67,8 @@ export interface ArticleHtmlInput {
   /** Lien d'ecoute / d'achat (site marchand, plateforme). */
   shopUrl?: string;
   shopLabel?: string;
+  /** Lien interne « A lire aussi » vers un article rollingstone.fr existant. */
+  readAlso?: { url: string; title: string };
 }
 
 const YOUTUBE_RE = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i;
@@ -99,7 +101,12 @@ export function buildArticleHtml(p: ArticleHtmlInput): string {
     if (video && i === videoAfter) blocks.push(video);
   });
   if (p.shopUrl) blocks.push(`<p><a href="${escapeHtmlAttr(p.shopUrl)}" target="_blank" rel="noopener">${escapeHtmlText(p.shopLabel || "Acheter l'album")}</a></p>`);
+  else if (p.videoUrl) {
+    // Lien sortant explicite (Yoast ne compte pas une video integree comme un lien).
+    blocks.push(`<p><a href="${escapeHtmlAttr(p.videoUrl)}" target="_blank" rel="noopener">Voir le clip</a></p>`);
+  }
   if (video && videoAfter < 0) blocks.push(video);
+  if (p.readAlso) blocks.push(`<p><em>À lire aussi :</em> <a href="${escapeHtmlAttr(p.readAlso.url)}">${escapeHtmlText(p.readAlso.title)}</a></p>`);
   const name = p.journalistName.trim();
   if (name) blocks.push(`<p><em>Par ${escapeHtmlText(name)}</em></p>`);
   return blocks.join('\n\n');
@@ -273,6 +280,8 @@ interface WpArticlePayload {
   mainArtist: string;
   styleMusic: string;
   photoCredit: string;
+  /** URL d'un article rollingstone.fr choisi parmi les candidats fournis (ou vide). */
+  internalLinkUrl?: string;
 }
 
 const WP_ARTICLE_TOOL = {
@@ -292,6 +301,7 @@ const WP_ARTICLE_TOOL = {
       mainArtist: { type: 'string', description: 'Artiste principal (vide si non musical). Plusieurs : virgules, principal en premier.' },
       styleMusic: { type: 'string', description: 'Style Music exact de la liste autorisee (vide si non musical).' },
       photoCredit: { type: 'string', description: 'Credit photo "© Photographe/Agence" si present dans les donnees, sinon vide.' },
+      internalLinkUrl: { type: 'string', description: "URL EXACTE d'un article de la liste <liens_internes_candidats> en rapport avec le papier (meme artiste, meme film, meme sujet), sinon chaine vide. Jamais une URL inventee." },
     },
     required: [
       'title', 'slug', 'excerpt', 'categories', 'tags',
@@ -493,11 +503,16 @@ export async function publishDeliveryToWordpress(
     const links = splitLinks(String(meta.lien || ''), String(meta.lien_achat || ''));
     const cinema = /cinema/i.test(input.paperTypeName);
     const livres = /livre/i.test(input.paperTypeName);
+    const chosen = candidates.find((c) => c.link && c.link === (fresh.internalLinkUrl || '').trim()) || candidates[0];
+    const readAlso = chosen ? { url: chosen.link, title: chosen.title } : undefined;
     payload.contentHtml = buildArticleHtml({
       chapo, bodyText: input.bodyText, journalistName: input.journalistName,
       videoUrl: links.videoUrl, shopUrl: links.shopUrl,
       shopLabel: cinema ? 'Voir' : livres ? 'En savoir plus' : "Acheter l'album",
+      readAlso,
     });
+    if (readAlso) await logInfo('wp-format', `Lien interne « A lire aussi » : ${readAlso.title}`, ctx);
+    else await logInfo('wp-format', 'Aucun article rollingstone.fr candidat pour le lien interne', ctx);
     await logInfo('wp-format', `Corps = texte livre mot pour mot (${input.bodyText.length} signes), chapo ${chapo ? 'present' : 'absent'}, signature « Par ${input.journalistName} »`, ctx);
     let contentHtml = insertImagesIntoBody(payload.contentHtml, bodyMedia, payload.title || input.title);
     const chronique = isChroniqueType(input.paperTypeName);

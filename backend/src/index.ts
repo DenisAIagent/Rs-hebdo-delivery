@@ -13,6 +13,7 @@ import adminRoutes from './routes/admin';
 import correctionRoutes from './routes/correction';
 import setupRoutes from './routes/setup';
 import { startHebdoRotation } from './services/hebdoRotation';
+import { startMonthlyRecapScheduler } from './services/monthlyRecap';
 
 dotenv.config();
 
@@ -125,6 +126,7 @@ const BIND_HOST = process.env.BIND_HOST?.trim();
 const onListening = () => {
   console.log(`RS Hebdo Delivery API running on port ${PORT}${BIND_HOST ? ` (host ${BIND_HOST})` : ''} (${isProd ? 'production' : 'development'})`);
   startHebdoRotation();
+  startMonthlyRecapScheduler();
 };
 const server = BIND_HOST
   ? app.listen(Number(PORT), BIND_HOST, onListening)

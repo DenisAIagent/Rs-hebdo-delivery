@@ -275,3 +275,17 @@ export async function adminGetLatestModel(): Promise<ClaudeModelInfo> {
   const { data } = await api.get('/api/admin/models/latest', { timeout: 30000 });
   return data;
 }
+
+// ========== Récapitulatif mensuel ==========
+
+/** PDF du récapitulatif du mois (AAAA-MM), à télécharger côté navigateur. */
+export async function adminDownloadRecap(ym: string): Promise<Blob> {
+  const { data } = await api.get(`/api/admin/recap/${ym}/pdf`, { responseType: 'blob' });
+  return data;
+}
+
+/** Envoie le récapitulatif du mois par email à la rédaction en chef. */
+export async function adminSendRecap(ym: string): Promise<{ sent: boolean; recipients: string[]; total: number }> {
+  const { data } = await api.post(`/api/admin/recap/${ym}/send`);
+  return data;
+}

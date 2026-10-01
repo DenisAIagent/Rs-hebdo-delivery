@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "SUPABASE_URL=http://localhost SUPABASE_SERVICE_KEY=test SUPABASE_ANON_KEY=test tsx --test 'src/**/*.test.ts'"
   },
   "keywords": [],
   "author": "",
@@ -28,12 +29,14 @@
     "helmet": "^8.1.0",
     "jsonrepair": "^3.14.0",
     "multer": "^2.1.1",
+    "pdfkit": "^0.15.2",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
+    "@types/pdfkit": "^0.17.6",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"

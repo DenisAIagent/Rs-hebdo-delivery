@@ -1230,6 +1230,17 @@ L'envoi/renvoi d'une livraison est documenté plus haut (`POST /api/admin/delive
 
 ---
 
+#### Récapitulatif mensuel
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/admin/recap/:ym/pdf` | PDF des livraisons du mois `ym` (`AAAA-MM`), `Content-Disposition: attachment` |
+| POST | `/api/admin/recap/:ym/send` | Envoi du PDF par email à la rédaction en chef ; réponse `{ sent, recipients, total }` |
+
+Erreurs : `400` si `ym` est invalide ou si Resend / `NOTIFY_EMAIL_ALMA` ne sont pas configurés, `500` si Resend refuse l'envoi.
+
+---
+
 ## 7. Flux de livraison
 
 ### Diagramme de séquence
@@ -1628,6 +1639,17 @@ Service de **rotation automatique des numéros hebdomadaires**. Démarre au boot
 **Impact pour l'admin** : Les numéros hebdomadaires sont créés automatiquement à l'expiration de la date de fin. L'admin n'a pas besoin de créer manuellement le prochain numéro, mais peut toujours le faire via l'onglet Hebdo de l'admin.
 
 ---
+
+### `services/monthlyRecap.ts`
+
+Récapitulatif mensuel des livraisons, par journaliste, envoyé en PDF à la rédaction en chef.
+
+- **Collecte** : `collectMonthlyRecap(year, month)` lit les livraisons dont `created_at` tombe dans le mois civil (jointures `profiles`, `paper_types`, `hebdo_config`) et les regroupe par auteur (`groupByAuthor`, tri par nom puis date, cumul des signes).
+- **PDF** : `buildRecapPdf(recap)` (pdfkit, A4) — en-tête rouge, un bloc par journaliste (nom, nombre de papiers, signes, email) avec un tableau Numéro · Format · Titre · Date · Signes, pied de page paginé.
+- **Envoi** : `sendMonthlyRecap(year, month)` envoie le PDF en pièce jointe via Resend à `NOTIFY_EMAIL_ALMA`, copie `NOTIFY_EMAIL_DENIS`, objet `[Hebdo Delivery] Récapitulatif des livraisons — <mois>`.
+- **Planification** : `startMonthlyRecapScheduler()` (démarré dans `index.ts`) vérifie toutes les 30 minutes ; `shouldSendNow` déclenche l'envoi **le 1er du mois à partir de 8 h (Europe/Paris)** pour le mois écoulé, une seule fois (clé `app_settings.RECAP_LAST_SENT` = `AAAA-MM`). Un redémarrage du serveur ne renvoie pas le mail.
+- **Admin** : `GET /api/admin/recap/:ym/pdf` (téléchargement) et `POST /api/admin/recap/:ym/send` (envoi manuel), exposés dans l'onglet Hebdo (carte « Récapitulatif mensuel », sélecteur de mois).
+- **Tests** : `npm test` dans `backend/` (node:test via tsx) couvre le parsing du mois, les bornes, le regroupement et la règle de déclenchement.
 
 ### `utils/supabase.ts`
 

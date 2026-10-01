@@ -9,6 +9,7 @@ import { todayString, nextFridayString } from '../utils/dates';
 import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
 import { testWpConnection } from '../services/wordpress';
 import { republishDeliveryToWordpress } from '../services/wordpressPublisher';
+import { collectMonthlyRecap, buildRecapPdf, sendMonthlyRecap, parseMonthKey, recapFilename } from '../services/monthlyRecap';
 
 const router = Router();
 
@@ -796,6 +797,36 @@ router.get('/models/latest', async (_req: AuthRequest, res: Response) => {
   }
 });
 
+// ========== RÉCAPITULATIF MENSUEL (PDF, envoi à la rédaction en chef) ==========
+
+// GET /api/admin/recap/:ym/pdf - Télécharger le PDF du mois (ym = AAAA-MM)
+router.get('/recap/:ym/pdf', async (req: AuthRequest, res: Response) => {
+  try {
+    const { year, month } = parseMonthKey(String(req.params.ym));
+    const recap = await collectMonthlyRecap(year, month);
+    const pdf = await buildRecapPdf(recap);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${recapFilename(year, month)}"`);
+    return res.send(pdf);
+  } catch (error: any) {
+    console.error('Recap pdf error:', error);
+    return res.status(400).json({ error: error?.message || 'Erreur génération du récapitulatif' });
+  }
+});
+
+// POST /api/admin/recap/:ym/send - Envoyer le PDF du mois par email (Alma, copie Denis)
+router.post('/recap/:ym/send', async (req: AuthRequest, res: Response) => {
+  try {
+    const { year, month } = parseMonthKey(String(req.params.ym));
+    const result = await sendMonthlyRecap(year, month);
+    if (!result.sent) return res.status(400).json({ error: result.reason || 'Envoi impossible' });
+    return res.json(result);
+  } catch (error: any) {
+    console.error('Recap send error:', error);
+    return res.status(500).json({ error: error?.message || 'Erreur envoi du récapitulatif' });
+  }
+});
+
 // ========== APP SETTINGS ==========
 
 // Keys that are not secrets and should be returned in clear
@@ -811,6 +842,7 @@ const NON_SECRET_KEYS = new Set([
   // Cles de meta du theme / des plugins, decouvertes sur le site puis saisies
   // ici. Ce n'est pas un secret : c'est de la configuration de mapping.
   'WP_META_MAP',
+  'RECAP_LAST_SENT',
 ]);
 
 function maskValue(key: string, value: string): string {

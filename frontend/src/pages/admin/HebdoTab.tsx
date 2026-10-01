@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useState, type FormEvent } from 'react';
-import { adminGetHebdos, adminCreateHebdo, adminSetCurrentHebdo, adminGetHebdoStatus } from '../../services/api.ts';
+import { adminGetHebdos, adminCreateHebdo, adminSetCurrentHebdo, adminGetHebdoStatus, adminDownloadRecap, adminSendRecap } from '../../services/api.ts';
 import type { HebdoConfig } from '../../types/index.ts';
 import type { HebdoStatusItem } from '../../services/api.ts';
-import { Plus, Check, AlertCircle, Calendar, ChevronDown, ChevronUp, CheckCircle, XCircle, User } from 'lucide-react';
+import { Plus, Check, AlertCircle, Calendar, ChevronDown, ChevronUp, CheckCircle, XCircle, User, FileDown, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -12,6 +12,80 @@ function formatRange(h: HebdoConfig): string {
   const s = new Date(h.start_date + 'T00:00:00');
   const e = new Date(h.end_date + 'T00:00:00');
   return `du ${format(s, 'd', { locale: fr })} au ${format(e, 'd MMM yyyy', { locale: fr })}`;
+}
+
+/** Mois précédent au format AAAA-MM (valeur par défaut du récapitulatif). */
+function previousMonthValue(): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function MonthlyRecapCard() {
+  const [month, setMonth] = useState(previousMonthValue());
+  const [busy, setBusy] = useState<'download' | 'send' | null>(null);
+
+  const download = async () => {
+    setBusy('download');
+    try {
+      const blob = await adminDownloadRecap(month);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `RS-Hebdo-recap-livraisons-${month}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Téléchargement impossible');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const send = async () => {
+    if (!window.confirm(`Envoyer le récapitulatif ${month} par email à la rédaction en chef ?`)) return;
+    setBusy('send');
+    try {
+      const r = await adminSendRecap(month);
+      toast.success(`Récapitulatif envoyé à ${r.recipients.join(', ')} (${r.total} papiers)`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || e?.message || 'Envoi impossible');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[220px]">
+          <h3 className="text-sm font-semibold text-rs-black">Récapitulatif mensuel des livraisons</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            PDF par journaliste (numéro, format, titre, date, signes). Envoyé automatiquement à la rédaction en chef
+            le 1er de chaque mois pour le mois écoulé ; vous pouvez aussi le télécharger ou l'envoyer manuellement.
+          </p>
+        </div>
+        <label className="text-xs text-gray-600">
+          Mois
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="block mt-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+          />
+        </label>
+        <button type="button" onClick={download} disabled={busy !== null} className="rs-btn ghost sm">
+          <FileDown size={14} />
+          {busy === 'download' ? 'Génération…' : 'Télécharger le PDF'}
+        </button>
+        <button type="button" onClick={send} disabled={busy !== null} className="rs-btn primary sm">
+          <Send size={14} />
+          {busy === 'send' ? 'Envoi…' : 'Envoyer à la rédaction'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function HebdoTab() {
@@ -106,6 +180,8 @@ export function HebdoTab() {
       )}
 
       {/* Create form */}
+      <MonthlyRecapCard />
+
       <form onSubmit={handleCreate} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-28">

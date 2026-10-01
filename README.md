@@ -132,6 +132,10 @@ Côté site, le mu-plugin `scripts/wp/rs-delivery-rest-meta.php` expose les mét
 
 2FA TOTP optionnelle, pilotée depuis l'admin (`REQUIRE_MFA`) ou verrouillée par la variable d'environnement `REQUIRE_MFA=true`. Quand elle est active, toute l'API exige un JWT AAL2 ; un admin peut réinitialiser la 2FA d'un compte (Journalistes → bouclier barré). Prérequis : TOTP activé sur le projet Supabase.
 
+## Récapitulatif mensuel
+
+Le 1er de chaque mois à 8 h (Paris), l'app envoie à la rédaction en chef un PDF récapitulant les livraisons du mois écoulé, journaliste par journaliste (numéro, format, titre, date, signes). Téléchargement et envoi manuel depuis l'admin, onglet Hebdo. Détails : `DOCUMENTATION.md`, section `services/monthlyRecap.ts`.
+
 ## Scripts
 
 | Script | Usage |

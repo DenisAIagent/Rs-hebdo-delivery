@@ -113,7 +113,12 @@ export function splitLinks(lien?: string, lienAchat?: string): { videoUrl?: stri
 
 /** Premiere phrase d'un texte (ponctuation forte, guillemets fermants inclus). */
 export function firstSentence(text: string): string {
-  const t = text.replace(/\s+/g, ' ').trim();
+  // On saute les lignes de mention placees en tete par le journaliste
+  // (« Dargaud », « Disponible sur Netflix », « Sur Ciné+ OCS a partir du 6 octobre ») :
+  // premier paragraphe d'au moins 80 signes avec une ponctuation de phrase.
+  const paragraphs = text.replace(/\r\n?/g, '\n').split(/\n\s*\n|\n/).map((x) => x.trim()).filter(Boolean);
+  const para = paragraphs.find((x) => x.length >= 80 && /[.!?…]/.test(x)) || paragraphs[0] || '';
+  const t = para.replace(/\s+/g, ' ').trim();
   // Fin de phrase = ponctuation forte (ou points de suspension) suivie d'une
   // majuscule, d'un guillemet ouvrant ou d'un chiffre ; « final… du moins » continue.
   const m = t.match(/^.*?(?:[.!?]|…)(?:\s?[»"”)])?(?=\s+[A-ZÀ-ÝŒ«"“\d]|$)/);

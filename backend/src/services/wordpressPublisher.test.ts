@@ -90,5 +90,6 @@ test('firstSentence : premiere phrase du texte livre, guillemets et points de su
   assert.equal(firstSentence('« Forer, forer, forer », vociférait Donald Trump lors de sa campagne. Digger ne l’a pas attendu.'), '« Forer, forer, forer », vociférait Donald Trump lors de sa campagne.');
   assert.equal(firstSentence('Un point final… du moins pour le moment. Suite.'), 'Un point final… du moins pour le moment.');
   assert.equal(firstSentence('Sans ponctuation finale'), 'Sans ponctuation finale');
+  assert.equal(firstSentence('Dargaud\n\nEn 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente l’expérience de vivre à l’écart de la société. Suite.'), 'En 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente l’expérience de vivre à l’écart de la société.');
   assert.equal(firstSentence('Il a dit « ça suffit. » Puis il est parti.'), 'Il a dit « ça suffit. »');
 });

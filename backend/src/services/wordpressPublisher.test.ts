@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink, firstSentence } from './wordpressPublisher';
+import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink, firstSentence, splitChapoFromBody } from './wordpressPublisher';
 
 const body = `Alors, comme ça, le rock serait mort ! Passé par pertes et profits.
 
@@ -92,4 +92,12 @@ test('firstSentence : premiere phrase du texte livre, guillemets et points de su
   assert.equal(firstSentence('Sans ponctuation finale'), 'Sans ponctuation finale');
   assert.equal(firstSentence('Dargaud\n\nEn 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente l’expérience de vivre à l’écart de la société. Suite.'), 'En 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente l’expérience de vivre à l’écart de la société.');
   assert.equal(firstSentence('Il a dit « ça suffit. » Puis il est parti.'), 'Il a dit « ça suffit. »');
+});
+
+test('splitChapoFromBody : la premiere phrase devient le chapo et disparait du corps, les mentions restent', () => {
+  const r = splitChapoFromBody('Dargaud\n\nEn 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente une expérience de vie à l’écart. Il construit une cabane.\n\nSuite du texte.');
+  assert.equal(r.chapo, 'En 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente une expérience de vie à l’écart.');
+  assert.equal(r.body, 'Dargaud\n\nIl construit une cabane.\n\nSuite du texte.');
+  const one = splitChapoFromBody('Une seule phrase assez longue pour servir de chapô, avec ses quatre-vingts signes et plus.\n\nDeuxième paragraphe.');
+  assert.equal(one.body, 'Deuxième paragraphe.');
 });

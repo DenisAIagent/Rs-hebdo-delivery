@@ -125,6 +125,22 @@ export function firstSentence(text: string): string {
   return (m ? m[0] : t).trim();
 }
 
+/**
+ * Chapo par defaut = premiere phrase du texte livre ; le corps renvoye commence
+ * a la phrase suivante (la phrase n'est jamais repetee sous le chapo). Les
+ * lignes de mention en tete (editeur, plateforme) restent dans le corps.
+ */
+export function splitChapoFromBody(text: string): { chapo: string; body: string } {
+  const chapo = firstSentence(text);
+  if (!chapo) return { chapo: '', body: text };
+  const paragraphs = text.replace(/\r\n?/g, '\n').split(/\n\s*\n|\n/).map((x) => x.trim()).filter(Boolean);
+  const idx = paragraphs.findIndex((x) => x.replace(/\s+/g, ' ').startsWith(chapo));
+  if (idx < 0) return { chapo, body: text };
+  const rest = paragraphs[idx].replace(/\s+/g, ' ').slice(chapo.length).trim();
+  const next = rest ? [...paragraphs.slice(0, idx), rest, ...paragraphs.slice(idx + 1)] : [...paragraphs.slice(0, idx), ...paragraphs.slice(idx + 1)];
+  return { chapo, body: next.join('\n\n') };
+}
+
 export function buildArticleHtml(p: ArticleHtmlInput): string {
   const blocks: string[] = [];
   const chapo = (p.chapo || '').replace(/\s+/g, ' ').trim();
@@ -629,7 +645,11 @@ export async function publishDeliveryToWordpress(
     const meta = input.metadata as Record<string, unknown>;
     // Chapo = celui du journaliste (champ chapo / accroche), sinon la premiere
     // phrase du texte livre. Jamais un resume genere : consigne du 01/10/2026.
-    const chapo = String(meta.chapo || meta.accroche || '').trim() || firstSentence(input.bodyText);
+    const formChapo = String(meta.chapo || meta.accroche || '').trim();
+    const split = formChapo ? null : splitChapoFromBody(input.bodyText);
+    const chapo = formChapo || split?.chapo || '';
+    // Quand la premiere phrase sert de chapo, le corps commence a la phrase suivante.
+    const bodyForWp = split ? split.body : input.bodyText;
     payload.excerpt = chapo;
     const links = splitLinks(String(meta.lien || ''), String(meta.lien_achat || ''));
     const kind: PaperKind = /cinema/i.test(input.paperTypeName) ? 'cinema' : /livre/i.test(input.paperTypeName) ? 'livres' : 'musique';
@@ -641,7 +661,7 @@ export async function publishDeliveryToWordpress(
       candidates, aiChoice: fresh.internalLinkUrl, artiste: artisteIn, categories,
     });
     payload.contentHtml = buildArticleHtml({
-      chapo, bodyText: input.bodyText, journalistName: input.journalistName,
+      chapo, bodyText: bodyForWp, journalistName: input.journalistName,
       videoUrl: links.videoUrl, shopUrl: links.shopUrl,
       shopLabel: links.shopUrl ? outboundLinkLabel(links.shopUrl, kind) : undefined,
       readAlso,

@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
 import { invalidateMfaPolicyCache } from '../services/mfaPolicy';
 import { generateDocx } from '../services/docx';
-import { reattributeDelivery, relocateDeliveryFiles } from '../services/dropbox';
+import { reattributeDelivery, relocateDeliveryFiles, replaceDeliveryDocx } from '../services/dropbox';
+import { normalizeMetadata } from '../services/fieldValidation';
 import { logInfo, logWarn, type LogContext } from '../services/deliveryLogger';
 import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
@@ -753,6 +754,40 @@ router.post('/hebdos/:id/reorganize-dropbox', async (req: AuthRequest, res: Resp
     }
   }
   return res.json({ dryRun, report });
+});
+
+// POST /api/admin/hebdos/:id/regenerate-docx
+// Regenere le DOCX Dropbox de chaque livraison d'un hebdo avec les regles
+// courantes (artiste en MAJUSCULES, chapo exclu, note affichee) : les
+// metadonnees normalisees sont enregistrees, le fichier est remplace en place.
+router.post('/hebdos/:id/regenerate-docx', async (req: AuthRequest, res: Response) => {
+  const { data: rows, error } = await supabaseAdmin
+    .from('deliveries')
+    .select('id, title, metadata, paper_type:paper_types(name, drive_folder_name, fields_config), hebdo:hebdo_config(label), author:profiles(full_name, email)')
+    .eq('hebdo_id', String(req.params.id));
+  if (error) return res.status(500).json({ error: error.message });
+  const report: Array<Record<string, unknown>> = [];
+  for (const d of rows || []) {
+    const pt = d.paper_type as any; const hebdo = d.hebdo as any; const author = d.author as any;
+    const journalistName = author?.full_name || author?.email || 'Unknown';
+    try {
+      const fields = pt?.fields_config || [];
+      const metadata = normalizeMetadata(fields, (d.metadata as Record<string, unknown>) || {});
+      if (JSON.stringify(metadata) !== JSON.stringify(d.metadata || {})) {
+        await supabaseAdmin.from('deliveries').update({ metadata }).eq('id', d.id);
+      }
+      const docxFileName = `${hebdo?.label || ''} - ${pt?.name || ''} - ${d.title}.docx`;
+      const docxBuffer = await generateDocx({ title: d.title, author: journalistName, paperType: pt?.name || '', metadata, fieldsConfig: fields });
+      const { path } = await replaceDeliveryDocx({
+        folder: { hebdoNumber: hebdo?.label || '', driveFolderName: pt?.drive_folder_name || pt?.name || 'Papier', journalistName, subject: d.title },
+        docxFileName, docxBuffer,
+      });
+      report.push({ title: d.title, journalist: journalistName, artiste: metadata.artiste, path });
+    } catch (err: any) {
+      report.push({ title: d.title, journalist: journalistName, error: err?.message || String(err) });
+    }
+  }
+  return res.json({ report });
 });
 
 // ========== WORDPRESS ==========

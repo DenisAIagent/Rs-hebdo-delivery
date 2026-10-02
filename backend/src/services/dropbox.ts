@@ -356,6 +356,22 @@ export async function fetchDeliveryImages(
   return result;
 }
 
+/**
+ * Remplace le DOCX d'une livraison deja deposee (meme nom de fichier, mode
+ * overwrite) dans son dossier resolu ; les images ne sont pas touchees.
+ */
+export async function replaceDeliveryDocx(params: {
+  folder: DeliveryFolderParams;
+  docxFileName: string;
+  docxBuffer: Buffer;
+}): Promise<{ path: string }> {
+  const { targetPath } = resolveDeliveryFolderPaths(params.folder);
+  await ensureFolder(targetPath);
+  const docxPath = `${targetPath}/${sanitizePathComponent(params.docxFileName)}`;
+  await uploadFile(docxPath, params.docxBuffer);
+  return { path: docxPath };
+}
+
 export interface RelocateDeliveryParams {
   folder: DeliveryFolderParams;
   docxFileName: string;

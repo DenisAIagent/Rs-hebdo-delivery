@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateMetadata, urlProblem, isYoutubeUrl, type FieldRule } from './fieldValidation';
+import { validateMetadata, urlProblem, isYoutubeUrl, normalizeMetadata, type FieldRule } from './fieldValidation';
 
 const music: FieldRule[] = [
   { key: 'artiste', label: 'Artiste', type: 'text', required: true },
@@ -41,4 +41,15 @@ test('validateMetadata : alternateKey (lien Drive OU photos), étoiles à 0 refu
   assert.deepEqual(validateMetadata({ fields: couv, imageCount: 0, metadata: { lien_photos: 'https://drive.google.com/x', etoiles: '0' } }), ['Étoiles : obligatoire']);
   assert.deepEqual(validateMetadata({ fields: couv, imageCount: 3, metadata: { etoiles: '4' } }), []);
   assert.equal(validateMetadata({ fields: couv, imageCount: 1, metadata: { etoiles: '4' } }).length, 2);
+});
+
+test('normalizeMetadata : le nom de l’artiste passe en capitales, le reste est intact', () => {
+  const fields: FieldRule[] = [
+    { key: 'artiste', label: 'Artiste', type: 'text', required: true, transform: 'uppercase' },
+    { key: 'album', label: 'Album', type: 'text', required: true },
+  ];
+  const meta = { artiste: ' Howlin’ Jaws ', album: 'Living The Dream' };
+  assert.deepEqual(normalizeMetadata(fields, meta), { artiste: 'HOWLIN’ JAWS', album: 'Living The Dream' });
+  assert.equal(meta.artiste, ' Howlin’ Jaws ');
+  assert.equal(normalizeMetadata(fields, { artiste: 'Dééfait' }).artiste, 'DÉÉFAIT');
 });

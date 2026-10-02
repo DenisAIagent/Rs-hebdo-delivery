@@ -9,7 +9,7 @@ import { uploadDelivery, ensureHebdoFolderStructure } from '../services/dropbox'
 import { notifyDelivery } from '../services/email';
 import { publishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { logInfo, logError, logWarn, type LogContext } from '../services/deliveryLogger';
-import { validateMetadata } from '../services/fieldValidation';
+import { validateMetadata, normalizeMetadata } from '../services/fieldValidation';
 
 /** Strip HTML tags safely (removes all tags, decodes entities) */
 function stripHtml(str: string): string {
@@ -359,6 +359,7 @@ router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, uplo
 
     // Validation serveur de tous les champs du type (chapo, clip YouTube,
     // site officiel... selon fields_config) : le formulaire ne fait pas foi.
+    parsedMetadata = normalizeMetadata(paperType.fields_config || [], parsedMetadata);
     const problems = validateMetadata({
       fields: paperType.fields_config || [], metadata: parsedMetadata, imageCount: imageFiles?.length || 0,
     });
@@ -575,6 +576,7 @@ router.put('/:id', (req, _res, next) => { req.setTimeout(900_000); next(); }, up
     const updatedTitle = title || existing.title;
 
     // Get body text
+    parsedMetadata = normalizeMetadata(paperType.fields_config || [], parsedMetadata);
     const problems = validateMetadata({
       fields: paperType.fields_config || [], metadata: parsedMetadata,
       imageCount: imageFiles?.length || 0, hasExistingImages: !!existing.image_filename,

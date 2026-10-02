@@ -1153,11 +1153,12 @@ function StepContentView(props: StepContentViewProps) {
             if (field.type === 'text') {
               return (
                 <div key={field.key}>
-                  <FieldLabel label={field.label} required={field.required} />
+                  <FieldLabel label={field.label} required={field.required} hint={field.transform === 'uppercase' ? 'en MAJUSCULES' : field.hint} />
                   <input
                     type="text"
                     value={metadata[field.key] || ''}
-                    onChange={(e) => updateMetadata(field.key, e.target.value)}
+                    onChange={(e) => updateMetadata(field.key, field.transform === 'uppercase' ? e.target.value.toLocaleUpperCase('fr-FR') : e.target.value)}
+                    style={field.transform === 'uppercase' ? { textTransform: 'uppercase' } : undefined}
                     className={`rs-input${missing ? ' error' : ''}`}
                   />
                   {missing && <FieldError message="Ce champ est obligatoire" />}

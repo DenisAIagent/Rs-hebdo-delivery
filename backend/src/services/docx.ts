@@ -6,6 +6,7 @@ interface FieldConfig {
   type: 'text' | 'textarea' | 'url' | 'images' | 'stars';
   required: boolean;
   validation?: 'youtube' | 'website';
+  transform?: 'uppercase';
   min?: number;
   max?: number;
 }

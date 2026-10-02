@@ -19,6 +19,8 @@ export interface FieldRule {
   max?: number;
   alternateKey?: string;
   validation?: 'youtube' | 'website';
+  /** Normalisation a l'enregistrement : `uppercase` = NOM DE L'ARTISTE en capitales (consigne du 02/10/2026). */
+  transform?: 'uppercase';
 }
 
 export const YOUTUBE_URL_RE = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i;
@@ -78,4 +80,14 @@ export function validateMetadata(input: MetadataCheckInput): string[] {
     }
   }
   return problems;
+}
+
+/** Applique les normalisations declarees (sans muter l'objet recu). */
+export function normalizeMetadata(fields: FieldRule[], metadata: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...metadata };
+  for (const field of fields) {
+    const v = out[field.key];
+    if (field.transform === 'uppercase' && typeof v === 'string') out[field.key] = v.trim().toLocaleUpperCase('fr-FR');
+  }
+  return out;
 }

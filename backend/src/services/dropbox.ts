@@ -356,6 +356,67 @@ export async function fetchDeliveryImages(
   return result;
 }
 
+export interface RelocateDeliveryParams {
+  folder: DeliveryFolderParams;
+  docxFileName: string;
+  imageNames: string[];
+  dryRun: boolean;
+}
+
+export interface RelocateDeliveryResult {
+  from: string;
+  to: string;
+  /** Fichiers trouves dans l'ancien dossier et (si !dryRun) deplaces. */
+  files: string[];
+  /** Fichiers attendus mais introuvables dans l'ancien dossier. */
+  missing: string[];
+  skipped: boolean;
+  folderUrl?: string;
+}
+
+/**
+ * Range une livraison deja deposee directement dans le dossier du type vers
+ * son sous-dossier journaliste (regle elargie le 02/10/2026). Ne deplace que
+ * le DOCX et les images de CETTE livraison, jamais le dossier entier ; rien
+ * n'est supprime ni ecrase (autorename si un nom existe deja a l'arrivee).
+ */
+export async function relocateDeliveryFiles(params: RelocateDeliveryParams): Promise<RelocateDeliveryResult> {
+  const { typePath, targetPath } = resolveDeliveryFolderPaths(params.folder);
+  if (targetPath === typePath) {
+    return { from: typePath, to: targetPath, files: [], missing: [], skipped: true };
+  }
+  const wanted = [params.docxFileName, ...params.imageNames]
+    .map((n) => sanitizePathComponent(n.trim()).toLowerCase())
+    .filter(Boolean);
+  const inType = await listFolderFiles(typePath).catch(() => [] as Array<{ name: string; path_lower: string }>);
+  const found = wanted
+    .map((w) => inType.find((f) => f.name.toLowerCase() === w))
+    .filter((f): f is { name: string; path_lower: string } => Boolean(f));
+  const missing = wanted.filter((w) => !found.some((f) => f.name.toLowerCase() === w));
+  if (params.dryRun) {
+    return { from: typePath, to: targetPath, files: found.map((f) => f.name), missing, skipped: false };
+  }
+  await ensureFolder(targetPath);
+  for (const f of found) {
+    await movePath(f.path_lower, `${targetPath}/${f.name}`);
+  }
+  const folderUrl = await getOrCreateSharedLink(targetPath);
+  console.log(`[Dropbox] ${found.length} fichier(s) ranges dans ${targetPath}`);
+  return { from: typePath, to: targetPath, files: found.map((f) => f.name), missing, skipped: false, folderUrl };
+}
+
+/** Move a file or folder (Dropbox move_v2). */
+async function movePath(fromPath: string, toPath: string): Promise<void> {
+  await withRetry(async () => {
+    const token = await getAccessToken();
+    await axios.post(
+      'https://api.dropboxapi.com/2/files/move_v2',
+      { from_path: fromPath, to_path: toPath, autorename: true },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+  });
+}
+
 /** Move a folder (Dropbox move_v2). Returns false when the source is missing. */
 async function moveFolder(fromPath: string, toPath: string): Promise<boolean> {
   try {

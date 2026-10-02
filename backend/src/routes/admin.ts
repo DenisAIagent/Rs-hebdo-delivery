@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { invalidateMfaPolicyCache } from '../services/mfaPolicy';
 import { generateDocx } from '../services/docx';
-import { reattributeDelivery } from '../services/dropbox';
+import { reattributeDelivery, relocateDeliveryFiles } from '../services/dropbox';
 import { logInfo, logWarn, type LogContext } from '../services/deliveryLogger';
 import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
@@ -721,6 +721,38 @@ router.put('/prompt', async (req: AuthRequest, res: Response) => {
     console.error('Update prompt error:', error);
     return res.status(500).json({ error: 'Erreur mise a jour prompt' });
   }
+});
+
+// ========== DROPBOX ==========
+
+// POST /api/admin/hebdos/:id/reorganize-dropbox?dry=1
+// Range les livraisons d'un hebdo dans leur sous-dossier journaliste (livraisons
+// deposees avant la regle du 02/10/2026). dry=1 : plan sans rien deplacer.
+router.post('/hebdos/:id/reorganize-dropbox', async (req: AuthRequest, res: Response) => {
+  const dryRun = String(req.query.dry || '') === '1';
+  const { data: rows, error } = await supabaseAdmin
+    .from('deliveries')
+    .select('id, title, image_filename, drive_folder_url, paper_type:paper_types(name, drive_folder_name), hebdo:hebdo_config(label), author:profiles(full_name, email)')
+    .eq('hebdo_id', String(req.params.id));
+  if (error) return res.status(500).json({ error: error.message });
+  const report: Array<Record<string, unknown>> = [];
+  for (const d of rows || []) {
+    const pt = d.paper_type as any; const hebdo = d.hebdo as any; const author = d.author as any;
+    const journalistName = author?.full_name || author?.email || 'Unknown';
+    const folder = { hebdoNumber: hebdo?.label || '', driveFolderName: pt?.drive_folder_name || pt?.name || 'Papier', journalistName, subject: d.title };
+    const docxFileName = `${hebdo?.label || ''} - ${pt?.name || ''} - ${d.title}.docx`;
+    const imageNames = String(d.image_filename || '').split(',').map((x: string) => x.trim()).filter(Boolean);
+    try {
+      const r = await relocateDeliveryFiles({ folder, docxFileName, imageNames, dryRun });
+      if (!dryRun && !r.skipped && r.folderUrl && r.files.length > 0) {
+        await supabaseAdmin.from('deliveries').update({ drive_folder_url: r.folderUrl }).eq('id', d.id);
+      }
+      report.push({ title: d.title, journalist: journalistName, type: pt?.name, ...r });
+    } catch (err: any) {
+      report.push({ title: d.title, journalist: journalistName, type: pt?.name, error: err?.message || String(err) });
+    }
+  }
+  return res.json({ dryRun, report });
 });
 
 // ========== WORDPRESS ==========

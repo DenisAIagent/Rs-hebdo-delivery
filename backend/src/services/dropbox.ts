@@ -71,6 +71,15 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
       return await fn();
     } catch (err: any) {
       const status = err?.response?.status;
+      if (status === 429 && attempt < maxRetries) {
+        // Limitation Dropbox (too_many_write_operations / too_many_requests) :
+        // on respecte Retry-After, sinon un palier croissant.
+        const retryAfter = parseInt(String(err?.response?.headers?.['retry-after'] || ''), 10);
+        const waitMs = (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5 * (attempt + 1)) * 1000;
+        console.log(`[Dropbox] 429 — attente ${waitMs} ms avant nouvel essai (${attempt + 1}/${maxRetries})`);
+        await sleep(waitMs);
+        continue;
+      }
       if (status === 401 && attempt < maxRetries) {
         // Token expired mid-session — force refresh and retry
         const url = err?.config?.url || 'unknown';

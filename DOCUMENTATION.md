@@ -1342,7 +1342,7 @@ Le service `dropbox.ts` :
 2. Crée les dossiers manquants (idempotent — les conflits sont ignorés)
 3. Construit le chemin de destination. **Règle de base : un papier reste toujours dans le dossier de son type**, celui pré-créé par `ensureHebdoFolderStructure` (`RSH249/Interview 3000`, `RSH249/Chroniques`…). Certains types ajoutent un sous-dossier *à l'intérieur* :
    - `Interview *` : un sous-dossier par sujet — `RSH249/Interview 3000/Interview Keb' Mo'`
-   - `Chroniques Musique`, `Chronique cinema`, `Livres et expo` : un sous-dossier par journaliste — `RSH249/Livres et expo/Loraine Adam`
+   - toutes les chroniques (`Chroniques`, `Chronique cinema`, `Chronique coup de coeur`, `Disque de la semaine`, `frenchie`) et `Livres et expo` : un sous-dossier par journaliste — `RSH249/Chroniques/Xavier Bonnet` (`hasJournalistSubfolder`, règle élargie le 02/10/2026 : avant, seuls cinéma et livres l'avaient, les chroniques musique et coups de cœur de plusieurs auteurs se mélangeaient). `fetchDeliveryImages` retombe sur le dossier du type pour les livraisons antérieures (RSH240).
    - tous les autres types : les fichiers sont déposés directement dans le dossier du type
 
    > Avant le 3 septembre 2026, les interviews créaient un dossier `Interview <sujet>` **à côté** du dossier du type (hors arborescence) et `Livres et expo` était renommé `Livres et expo <journaliste>`. Les livraisons antérieures peuvent donc se trouver hors du dossier de leur type.

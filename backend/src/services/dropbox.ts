@@ -258,18 +258,23 @@ export function resolveDeliveryFolderPaths(params: DeliveryFolderParams): {
 
   // Sous-dossier a l'interieur du dossier du format :
   //  - interviews : un dossier par sujet (plusieurs interviews par numero) ;
-  //  - chroniques musique / cinema, livres et expo : un dossier par journaliste.
+  //  - toutes les chroniques (musique, cinema, coup de coeur, disque de la
+  //    semaine, frenchie), livres et expo : un dossier par journaliste, pour ne
+  //    pas melanger les textes et les pochettes de plusieurs auteurs
+  //    (consigne redaction du 02/10/2026).
   let targetPath = typePath;
   if (folder.startsWith('interview') && params.subject) {
     targetPath = `${typePath}/${sanitizePathComponent(`Interview ${params.subject}`)}`;
-  } else if (
-    params.journalistName &&
-    ['chroniques musique', 'chronique cinema', 'livres et expo'].some((t) => folder.includes(t))
-  ) {
+  } else if (params.journalistName && hasJournalistSubfolder(folder)) {
     targetPath = `${typePath}/${sanitizePathComponent(params.journalistName)}`;
   }
 
   return { root, hebdoPath, typePath, targetPath };
+}
+
+/** Formats ranges par journaliste (nom de dossier du type, en minuscules). */
+export function hasJournalistSubfolder(folderLower: string): boolean {
+  return ['chronique', 'livres et expo', 'disque de la semaine', 'frenchie'].some((t) => folderLower.includes(t));
 }
 
 /** Download a file's bytes from Dropbox. */
@@ -327,8 +332,13 @@ export async function fetchDeliveryImages(
   params: DeliveryFolderParams,
   wantedNames: string[] = [],
 ): Promise<ImageFile[]> {
-  const { targetPath } = resolveDeliveryFolderPaths(params);
-  const files = await listFolderFiles(targetPath);
+  const { targetPath, typePath } = resolveDeliveryFolderPaths(params);
+  let files = await listFolderFiles(targetPath).catch(() => [] as Array<{ name: string; path_lower: string }>);
+  if (files.length === 0 && targetPath !== typePath) {
+    // Livraisons anterieures au 02/10/2026 : les chroniques etaient deposees
+    // directement dans le dossier du type, sans sous-dossier journaliste.
+    files = await listFolderFiles(typePath);
+  }
   const imagesInFolder = files.filter((f) => mimeFromFilename(f.name));
 
   const ordered = wantedNames.length > 0

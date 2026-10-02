@@ -6,6 +6,7 @@ Applique les regles de formulaire decidees le 01/10/2026 (redaction) :
   clip YouTube obligatoire (`lien`, validation youtube) + Bandcamp ou site officiel
   obligatoire (`lien_achat`, validation website) ;
 - nom de l'artiste / titre du film / titre du livre en MAJUSCULES (transform uppercase) sur tous les types ;
+- Livres et Expo : note facultative (livres notes, expos pas toujours) ;
 - Disque de la semaine : note (etoiles) obligatoire, comme les autres chroniques
   (elle manquait, donc absente du document Dropbox du RSH240).
 Idempotent : relance sans risque. Usage : RS_ADMIN_TOKEN=... python3 scripts/update-fields-config.py [--dry-run]
@@ -38,6 +39,10 @@ def upgrade(name, fields):
     # chapo juste avant le corps du texte
     idx = next((i for i, f in enumerate(out) if f.get("key") == "corps"), len(out))
     out.insert(idx, CHAPO)
+    if name == "Livres et Expo" and not any(f.get("key") == "etoiles" for f in out):
+        # Note facultative : les livres sont notes, les expos pas toujours.
+        album = next((i for i, f in enumerate(out) if f.get("key") == "album"), 0)
+        out.insert(album + 1, {**STARS, "required": False, "label": "Nombre d'etoiles (sur 5) — livres"})
     if name in MUSIC:
         if not any(f.get("key") == "etoiles" for f in out):
             album = next((i for i, f in enumerate(out) if f.get("key") == "album"), 0)

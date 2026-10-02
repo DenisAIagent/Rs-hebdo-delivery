@@ -5,7 +5,7 @@ Applique les regles de formulaire decidees le 01/10/2026 (redaction) :
 - chroniques musique (Chroniques, Disque de la semaine, Coup de Coeur, Frenchie) :
   clip YouTube obligatoire (`lien`, validation youtube) + Bandcamp ou site officiel
   obligatoire (`lien_achat`, validation website) ;
-- nom de l'artiste en MAJUSCULES (transform uppercase) sur les types musique, couv, interview, live ;
+- nom de l'artiste / titre du film / titre du livre en MAJUSCULES (transform uppercase) sur tous les types ;
 - Disque de la semaine : note (etoiles) obligatoire, comme les autres chroniques
   (elle manquait, donc absente du document Dropbox du RSH240).
 Idempotent : relance sans risque. Usage : RS_ADMIN_TOKEN=... python3 scripts/update-fields-config.py [--dry-run]
@@ -16,8 +16,8 @@ API = os.environ.get("RS_API", "https://hebdo-rs.up.railway.app")
 TOKEN = os.environ.get("RS_ADMIN_TOKEN") or sys.exit("RS_ADMIN_TOKEN manquant")
 DRY = "--dry-run" in sys.argv
 MUSIC = {"Chroniques", "Disque de la semaine", "Chronique Coup de Coeur", "Frenchie"}
-# Types dont le champ `artiste` est un nom d'artiste (et non un titre de film ou de livre) : en MAJUSCULES.
-ARTIST_UPPER = MUSIC | {"Sujet de couv", "Interview 3000", "Live report"}
+# Le champ `artiste` (nom d'artiste, titre du film, titre du livre ou de l'expo) est en MAJUSCULES sur tous les types (02/10/2026).
+ARTIST_UPPER = MUSIC | {"Sujet de couv", "Interview 3000", "Live report", "Chronique Cinema", "Livres et Expo"}
 CHAPO = {"key": "chapo", "type": "textarea", "label": "Chapô (pour le site)", "required": True,
          "hint": "1 à 2 phrases d'accroche pour rollingstone.fr — n'apparaît pas dans le document livré"}
 CLIP = {"key": "lien", "type": "url", "label": "Clip YouTube", "required": True, "validation": "youtube"}

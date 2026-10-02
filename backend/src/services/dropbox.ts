@@ -65,17 +65,19 @@ function rootFolder(): string {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Retry wrapper — retries on 429 (rate limit) and 401 (expired token) */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 429 && attempt < maxRetries) {
-        // Limitation Dropbox (too_many_write_operations / too_many_requests) :
-        // on respecte Retry-After, sinon un palier croissant.
+        // Limitation Dropbox (too_many_write_operations / too_many_requests).
+        // Retry-After annonce souvent 1 s, trop court en pratique : on attend au
+        // moins 3 s, en doublant a chaque essai (3, 6, 12 s...).
         const retryAfter = parseInt(String(err?.response?.headers?.['retry-after'] || ''), 10);
-        const waitMs = (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5 * (attempt + 1)) * 1000;
+        const base = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 1;
+        const waitMs = Math.max(base, 3 * 2 ** attempt) * 1000;
         console.log(`[Dropbox] 429 — attente ${waitMs} ms avant nouvel essai (${attempt + 1}/${maxRetries})`);
         await sleep(waitMs);
         continue;

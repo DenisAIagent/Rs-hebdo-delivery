@@ -762,10 +762,13 @@ router.post('/hebdos/:id/reorganize-dropbox', async (req: AuthRequest, res: Resp
 // courantes (artiste en MAJUSCULES, chapo exclu, note affichee) : les
 // metadonnees normalisees sont enregistrees, le fichier est remplace en place.
 router.post('/hebdos/:id/regenerate-docx', async (req: AuthRequest, res: Response) => {
-  const { data: rows, error } = await supabaseAdmin
+  // ?delivery=<id> limite a une seule livraison (reprise apres une limitation Dropbox).
+  let query = supabaseAdmin
     .from('deliveries')
     .select('id, title, metadata, paper_type:paper_types(name, drive_folder_name, fields_config), hebdo:hebdo_config(label), author:profiles(full_name, email)')
     .eq('hebdo_id', String(req.params.id));
+  if (typeof req.query.delivery === 'string' && req.query.delivery) query = query.eq('id', req.query.delivery);
+  const { data: rows, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   const report: Array<Record<string, unknown>> = [];
   for (const d of rows || []) {

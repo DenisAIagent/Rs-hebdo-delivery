@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
 import { invalidateMfaPolicyCache } from '../services/mfaPolicy';
 import { generateDocx } from '../services/docx';
-import { reattributeDelivery, relocateDeliveryFiles, replaceDeliveryDocx } from '../services/dropbox';
+import { reattributeDelivery, relocateDeliveryFiles, replaceDeliveryDocx, renameDeliveryFiles } from '../services/dropbox';
+import { fixMojibake } from '../utils/filenames';
 import { normalizeMetadata } from '../services/fieldValidation';
 import { logInfo, logWarn, type LogContext } from '../services/deliveryLogger';
 import { AuthRequest } from '../middleware/auth';
@@ -785,6 +786,36 @@ router.post('/hebdos/:id/regenerate-docx', async (req: AuthRequest, res: Respons
       report.push({ title: d.title, journalist: journalistName, artiste: metadata.artiste, path });
     } catch (err: any) {
       report.push({ title: d.title, journalist: journalistName, error: err?.message || String(err) });
+    }
+  }
+  return res.json({ report });
+});
+
+// POST /api/admin/hebdos/:id/fix-image-names
+// Repare les noms d'images mal encodes (UTF-8 lu en latin-1) sur Dropbox et en base.
+router.post('/hebdos/:id/fix-image-names', async (req: AuthRequest, res: Response) => {
+  const { data: rows, error } = await supabaseAdmin
+    .from('deliveries')
+    .select('id, title, image_filename, paper_type:paper_types(name, drive_folder_name), hebdo:hebdo_config(label), author:profiles(full_name, email)')
+    .eq('hebdo_id', String(req.params.id));
+  if (error) return res.status(500).json({ error: error.message });
+  const report: Array<Record<string, unknown>> = [];
+  for (const d of rows || []) {
+    const names = String(d.image_filename || '').split(',').map((x: string) => x.trim()).filter(Boolean);
+    const renames = names.map((n) => ({ from: n, to: fixMojibake(n) })).filter((r) => r.from !== r.to);
+    if (renames.length === 0) continue;
+    const pt = d.paper_type as any; const hebdo = d.hebdo as any; const author = d.author as any;
+    const journalistName = author?.full_name || author?.email || 'Unknown';
+    try {
+      const done = await renameDeliveryFiles({
+        folder: { hebdoNumber: hebdo?.label || '', driveFolderName: pt?.drive_folder_name || pt?.name || 'Papier', journalistName, subject: d.title },
+        renames,
+      });
+      const fixed = names.map((n) => fixMojibake(n)).join(', ');
+      await supabaseAdmin.from('deliveries').update({ image_filename: fixed }).eq('id', d.id);
+      report.push({ title: d.title, renamed: done, image_filename: fixed });
+    } catch (err: any) {
+      report.push({ title: d.title, error: err?.message || String(err) });
     }
   }
   return res.json({ report });

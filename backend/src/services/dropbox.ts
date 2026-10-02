@@ -381,6 +381,30 @@ export async function replaceDeliveryDocx(params: {
   return { path: docxPath };
 }
 
+/**
+ * Renomme des fichiers d'une livraison dans son dossier resolu (ex. noms mal
+ * encodes). Renvoie les renommages effectues ; un nom source absent est ignore.
+ */
+export async function renameDeliveryFiles(params: {
+  folder: DeliveryFolderParams;
+  renames: Array<{ from: string; to: string }>;
+}): Promise<Array<{ from: string; to: string }>> {
+  const { targetPath, typePath } = resolveDeliveryFolderPaths(params.folder);
+  const done: Array<{ from: string; to: string }> = [];
+  for (const dir of [...new Set([targetPath, typePath])]) {
+    const files = await listFolderFiles(dir).catch(() => [] as Array<{ name: string; path_lower: string }>);
+    for (const r of params.renames) {
+      const safeFrom = sanitizePathComponent(r.from).toLowerCase();
+      const safeTo = sanitizePathComponent(r.to);
+      const hit = files.find((f) => f.name.toLowerCase() === safeFrom);
+      if (!hit || hit.name === safeTo) continue;
+      await movePath(hit.path_lower, `${dir}/${safeTo}`);
+      done.push({ from: hit.name, to: safeTo });
+    }
+  }
+  return done;
+}
+
 export interface RelocateDeliveryParams {
   folder: DeliveryFolderParams;
   docxFileName: string;

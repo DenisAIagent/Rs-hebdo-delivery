@@ -10,6 +10,7 @@ import { notifyDelivery } from '../services/email';
 import { publishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { logInfo, logError, logWarn, type LogContext } from '../services/deliveryLogger';
 import { validateMetadata, normalizeMetadata } from '../services/fieldValidation';
+import { fixMojibake } from '../utils/filenames';
 
 /** Strip HTML tags safely (removes all tags, decodes entities) */
 function stripHtml(str: string): string {
@@ -59,6 +60,9 @@ function detectImageType(buf: Buffer): string | null {
 
 /** Rejette toute pièce jointe dont le contenu binaire n'est pas une image reconnue. */
 function assertRealImages(files: Express.Multer.File[]): void {
+  // Repare d'abord les noms mal decodes (UTF-8 lu en latin-1) : ils finissent
+  // sur Dropbox et dans la mediatheque WordPress.
+  for (const f of files || []) f.originalname = fixMojibake(f.originalname);
   for (const f of files || []) {
     if (!detectImageType(f.buffer)) {
       throw new Error(`Fichier « ${f.originalname} » : contenu non reconnu comme une image valide`);

@@ -4,7 +4,9 @@ Applique les regles de formulaire decidees le 01/10/2026 (redaction) :
 - chapo obligatoire sur TOUS les types (il ne sert qu'a WordPress, jamais sur Dropbox) ;
 - chroniques musique (Chroniques, Disque de la semaine, Coup de Coeur, Frenchie) :
   clip YouTube obligatoire (`lien`, validation youtube) + Bandcamp ou site officiel
-  obligatoire (`lien_achat`, validation website).
+  obligatoire (`lien_achat`, validation website) ;
+- Disque de la semaine : note (etoiles) obligatoire, comme les autres chroniques
+  (elle manquait, donc absente du document Dropbox du RSH240).
 Idempotent : relance sans risque. Usage : RS_ADMIN_TOKEN=... python3 scripts/update-fields-config.py [--dry-run]
 """
 import json, os, sys, urllib.request
@@ -16,6 +18,7 @@ MUSIC = {"Chroniques", "Disque de la semaine", "Chronique Coup de Coeur", "Frenc
 CHAPO = {"key": "chapo", "type": "textarea", "label": "Chapô (pour le site)", "required": True,
          "hint": "1 à 2 phrases d'accroche pour rollingstone.fr — n'apparaît pas dans le document livré"}
 CLIP = {"key": "lien", "type": "url", "label": "Clip YouTube", "required": True, "validation": "youtube"}
+STARS = {"key": "etoiles", "max": 5, "type": "stars", "label": "Nombre d'etoiles (sur 5)", "required": True}
 SITE = {"key": "lien_achat", "type": "url", "label": "Bandcamp ou site officiel", "required": True, "validation": "website",
         "hint": "Lien vers le Bandcamp, le site de l'artiste ou du label (pas YouTube)"}
 
@@ -30,6 +33,9 @@ def upgrade(name, fields):
     idx = next((i for i, f in enumerate(out) if f.get("key") == "corps"), len(out))
     out.insert(idx, CHAPO)
     if name in MUSIC:
+        if not any(f.get("key") == "etoiles" for f in out):
+            album = next((i for i, f in enumerate(out) if f.get("key") == "album"), 0)
+            out.insert(album + 1, STARS)
         out = [f for f in out if f.get("key") not in ("lien", "lien_achat")]
         photos = next((i for i, f in enumerate(out) if f.get("type") == "images"), len(out))
         out[photos:photos] = [CLIP, SITE]

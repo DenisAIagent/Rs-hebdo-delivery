@@ -1704,6 +1704,13 @@ L'application dispose d'un flux complet de réinitialisation de mot de passe :
 
 **Prérequis** : Configurer les Redirect URLs dans Supabase → Authentication → URL Configuration (voir section 2b, étape 1.8).
 
+### Invitation d'un nouveau membre
+
+L'admin ne choisit pas de mot de passe : `POST /api/admin/journalists` crée le compte (`auth.admin.createUser` sans mot de passe, `email_confirm: true`) puis appelle `sendInvitation()` (`services/invitations.ts`). Celle-ci génère un lien à usage unique (`auth.admin.generateLink`, type `recovery`, `redirectTo` = `FRONTEND_URL/reset-password`) et l'envoie par Resend, avec la config de l'onglet Email, dans le modèle aux couleurs de l'app (`services/inviteEmail.ts`, logo servi par `FRONTEND_URL/logo-rs-france.png`). La personne arrive sur `/reset-password` et choisit son mot de passe.
+
+- La réponse contient `invitation: { sent, reason? }` : si l'envoi échoue, le compte existe quand même et l'admin voit la raison.
+- `POST /api/admin/journalists/:id/invite` renvoie un nouveau lien (bouton enveloppe dans l'onglet Journalistes), par exemple si le premier a expiré. La durée de validité du lien est celle des emails Supabase (Authentication → Email → expiration de l'OTP).
+
 ### Onboarding
 
 Au premier login, les journalistes sont redirigés vers `/onboarding` — un tutoriel interactif en 5 étapes :

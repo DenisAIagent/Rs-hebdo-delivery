@@ -5,6 +5,7 @@ import { generateDocx } from '../services/docx';
 import { reattributeDelivery, relocateDeliveryFiles, replaceDeliveryDocx, renameDeliveryFiles } from '../services/dropbox';
 import { fixMojibake } from '../utils/filenames';
 import { normalizeEmail } from '../utils/email';
+import { sendInvitation } from '../services/invitations';
 import { normalizeMetadata } from '../services/fieldValidation';
 import { logInfo, logWarn, type LogContext } from '../services/deliveryLogger';
 import { AuthRequest } from '../middleware/auth';
@@ -271,16 +272,13 @@ router.get('/journalists', async (_req: AuthRequest, res: Response) => {
 });
 
 // POST /api/admin/journalists - Create a journalist account
+// Pas de mot de passe : la personne recoit une invitation par email et le choisit elle-meme.
 router.post('/journalists', async (req: AuthRequest, res: Response) => {
-  const { email, full_name, password, role } = req.body;
+  const { full_name, role } = req.body;
+  const email = normalizeEmail(req.body.email);
 
-  if (!email || !full_name || !password) {
-    return res.status(400).json({ error: 'Email, nom complet et mot de passe requis' });
-  }
-
-  // Password complexity check
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caracteres' });
+  if (!email || typeof full_name !== 'string' || !full_name.trim()) {
+    return res.status(400).json({ error: 'Nom complet et adresse email valide requis' });
   }
 
   // Role validation
@@ -290,14 +288,18 @@ router.post('/journalists', async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    // Create auth user
+    // Create auth user (sans mot de passe : il sera defini via le lien d'invitation)
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password,
       email_confirm: true,
     });
 
-    if (authError) throw authError;
+    if (authError) {
+      if (/already|registered|exists/i.test(authError.message)) {
+        return res.status(409).json({ error: 'Cette adresse email a deja un compte' });
+      }
+      throw authError;
+    }
 
     // Create profile
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -305,19 +307,41 @@ router.post('/journalists', async (req: AuthRequest, res: Response) => {
       .insert({
         id: authUser.user.id,
         email,
-        full_name,
+        full_name: full_name.trim(),
         role: validRole,
         is_active: true,
       })
       .select()
       .single();
 
-    if (profileError) throw profileError;
-    return res.status(201).json(profile);
+    if (profileError) {
+      // Pas de compte de connexion orphelin sans fiche.
+      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+      throw profileError;
+    }
+
+    const invitation = await sendInvitation({ email, fullName: profile.full_name });
+    return res.status(201).json({ ...profile, invitation });
   } catch (error: any) {
     console.error('Create journalist error:', error);
     return res.status(500).json({ error: 'Erreur creation compte' });
   }
+});
+
+// POST /api/admin/journalists/:id/invite - (Re)envoyer le lien pour definir le mot de passe
+router.post('/journalists/:id/invite', async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id);
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('email, full_name, is_active')
+    .eq('id', id)
+    .single();
+  if (!profile) return res.status(404).json({ error: 'Compte introuvable' });
+  if (!profile.is_active) return res.status(400).json({ error: 'Compte desactive : reactivez-le avant de renvoyer une invitation' });
+
+  const invitation = await sendInvitation({ email: profile.email, fullName: profile.full_name, reminder: true });
+  if (!invitation.sent) return res.status(502).json({ error: invitation.reason || 'Envoi impossible' });
+  return res.json({ message: `Invitation renvoyee a ${profile.email}` });
 });
 
 type EmailChange =

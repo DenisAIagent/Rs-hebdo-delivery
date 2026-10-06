@@ -148,8 +148,22 @@ export async function adminGetJournalists(): Promise<Profile[]> {
   return data;
 }
 
-export async function adminCreateJournalist(j: { email: string; full_name: string; password: string; role?: string }): Promise<Profile> {
+export interface InvitationResult {
+  sent: boolean;
+  reason?: string;
+}
+
+/** Cree le compte sans mot de passe ; la personne recoit un email pour le definir. */
+export async function adminCreateJournalist(
+  j: { email: string; full_name: string; role?: string },
+): Promise<Profile & { invitation?: InvitationResult }> {
   const { data } = await api.post('/api/admin/journalists', j);
+  return data;
+}
+
+/** Renvoie le lien pour definir le mot de passe (lien expire, email perdu...). */
+export async function adminInviteJournalist(id: string): Promise<{ message: string }> {
+  const { data } = await api.post(`/api/admin/journalists/${id}/invite`);
   return data;
 }
 

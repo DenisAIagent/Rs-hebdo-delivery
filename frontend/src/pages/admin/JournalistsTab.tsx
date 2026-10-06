@@ -1,7 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { adminGetJournalists, adminCreateJournalist, adminUpdateJournalist, adminResetJournalistMfa } from '../../services/api.ts';
+import { adminGetJournalists, adminCreateJournalist, adminUpdateJournalist, adminResetJournalistMfa, adminInviteJournalist } from '../../services/api.ts';
 import type { Profile } from '../../types/index.ts';
-import { Plus, Save, X, AlertCircle, UserCheck, UserX, ShieldOff, Pencil } from 'lucide-react';
+import { Plus, Save, X, AlertCircle, UserCheck, UserX, ShieldOff, Pencil, Mail } from 'lucide-react';
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  return (err as { response?: { data?: { error?: string } } })?.response?.data?.error || fallback;
+}
 import toast from 'react-hot-toast';
 
 export function JournalistsTab() {
@@ -13,8 +17,9 @@ export function JournalistsTab() {
   // Form
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [password, setPassword] = useState('');
   const [role, setRole] = useState<'journalist' | 'admin'>('journalist');
+  const [creating, setCreating] = useState(false);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -32,7 +37,6 @@ export function JournalistsTab() {
   const resetForm = () => {
     setEmail('');
     setFullName('');
-    setPassword('');
     setRole('journalist');
     setShowForm(false);
     setError('');
@@ -41,15 +45,37 @@ export function JournalistsTab() {
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setCreating(true);
     try {
-      await adminCreateJournalist({ email, full_name: fullName, password, role });
-      toast.success(`Compte cree pour ${fullName}`);
+      const created = await adminCreateJournalist({ email, full_name: fullName, role });
+      if (created.invitation?.sent) {
+        toast.success(`Compte cree : ${fullName} recoit un email pour definir son mot de passe`);
+      } else {
+        toast.error(
+          `Compte cree, mais l'invitation n'est pas partie : ${created.invitation?.reason || 'erreur inconnue'}. Utilisez « Renvoyer l'invitation ».`,
+          { duration: 8000 },
+        );
+      }
       resetForm();
       await load();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur creation';
+      const msg = apiErrorMessage(err, 'Erreur creation');
       setError(msg);
       toast.error(msg);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const resendInvite = async (j: Profile) => {
+    setInvitingId(j.id);
+    try {
+      const { message } = await adminInviteJournalist(j.id);
+      toast.success(message);
+    } catch (err: unknown) {
+      toast.error(apiErrorMessage(err, "Erreur envoi de l'invitation"));
+    } finally {
+      setInvitingId(null);
     }
   };
 
@@ -176,21 +202,6 @@ export function JournalistsTab() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Mot de passe</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={10}
-                pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{10,}"
-                title="Min. 10 caracteres, 1 majuscule, 1 minuscule, 1 chiffre"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rs-red focus:border-transparent"
-                placeholder="Min. 10 car., maj+min+chiffre"
-              />
-              <p className="text-xs text-gray-400 mt-1">Min. 10 caracteres, 1 majuscule, 1 minuscule, 1 chiffre</p>
-            </div>
-            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
               <select
                 value={role}
@@ -202,13 +213,18 @@ export function JournalistsTab() {
               </select>
             </div>
           </div>
+          <p className="flex items-start gap-2 text-xs text-gray-500 mt-3">
+            <Mail size={14} className="mt-0.5 shrink-0" />
+            Pas de mot de passe a choisir : la personne recoit un email pour definir le sien.
+          </p>
           <div className="flex items-center gap-2 mt-3">
             <button
               type="submit"
-              className="flex items-center gap-1 bg-rs-red hover:bg-rs-red-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              disabled={creating}
+              className="flex items-center gap-1 bg-rs-red hover:bg-rs-red-dark disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
               <Save size={14} />
-              Creer le compte
+              {creating ? 'Envoi en cours…' : "Creer et envoyer l'invitation"}
             </button>
             <button
               type="button"
@@ -311,6 +327,15 @@ export function JournalistsTab() {
                     title="Modifier l'email"
                   >
                     <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={() => resendInvite(j)}
+                    disabled={!j.is_active || invitingId === j.id}
+                    className="p-1.5 text-gray-400 hover:text-rs-red disabled:opacity-40 disabled:hover:text-gray-400 transition-colors"
+                    title="Renvoyer l'invitation (lien pour definir le mot de passe)"
+                    aria-label={`Renvoyer l'invitation a ${j.full_name}`}
+                  >
+                    <Mail size={16} />
                   </button>
                   <button
                     onClick={() => resetMfa(j)}

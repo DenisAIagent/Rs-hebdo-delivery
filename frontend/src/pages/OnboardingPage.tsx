@@ -28,9 +28,9 @@ const TUTO_VIDEO_POSTER = '/tuto-rs-hebdo.jpg';
 /**
  * Clé versionnée : incrémenter ONBOARDING_VERSION force tous les journalistes
  * à revoir la présentation une fois à leur prochaine connexion
- * (v3 = vidéo sans mention d'IA, octobre 2026).
+ * (v4 = vidéo sans mention d'IA, avec musique, octobre 2026).
  */
-const ONBOARDING_VERSION = 3;
+const ONBOARDING_VERSION = 4;
 
 function getOnboardingKey(userId: string) {
   return `rs-onboarding-done-v${ONBOARDING_VERSION}-${userId}`;

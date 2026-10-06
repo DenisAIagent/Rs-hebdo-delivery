@@ -640,7 +640,7 @@ Référentiel des numéros hebdomadaires. Un seul hebdo peut avoir `is_current =
 2. À défaut, le premier hebdo dont `end_date >= aujourd'hui`
 3. En dernier recours, le plus récent par `numero`
 
-**Rotation automatique** : Le service `hebdoRotation.ts` vérifie toutes les heures si `end_date` de l'hebdo courant est dépassée. Si oui, il crée automatiquement l'hebdo N+1 avec une fenêtre de 7 jours (voir section 9).
+**Rotation automatique** : Le service `hebdoRotation.ts` vérifie toutes les heures si la date de diffusion (`start_date`) de l'hebdo courant est atteinte. Si oui, il crée automatiquement l'hebdo N+1, diffusé le vendredi suivant sur 7 jours (voir section 9).
 
 **Politiques RLS** : Lecture ouverte à tous les utilisateurs authentifiés. Écriture réservée aux admins.
 
@@ -1629,11 +1629,13 @@ Le contexte `LogContext` transporte les métadonnées du log (`journalistId`, `j
 Service de **rotation automatique des numéros hebdomadaires**. Démarre au boot du serveur (`startHebdoRotation()` appelé dans `index.ts`) et vérifie toutes les heures si l'hebdo courant doit être remplacé.
 
 **Comportement** :
+`start_date` / `end_date` sont les dates de **diffusion** du numéro. L'hebdo courant est celui sur lequel les journalistes livrent, c'est-à-dire le **prochain à paraître** : il cesse d'être courant le jour de sa diffusion.
+
 1. Récupère l'hebdo avec `is_current = true`
-2. Vérifie si `end_date` est dépassée (comparaison UTC)
+2. Vérifie si sa date de diffusion `start_date` est atteinte (comparaison UTC, `isRotationDue`) ; à défaut de `start_date`, utilise `end_date`
 3. Si oui :
    - Passe l'hebdo courant à `is_current = false`
-   - Crée un nouvel hebdo N+1 avec label `RSH{numero+1}` et une fenêtre **vendredi → vendredi** calculée par `utils/dates.ts` (même logique que le pré-remplissage des dates dans l'onglet Hebdo de l'admin)
+   - Crée un nouvel hebdo N+1 avec label `RSH{numero+1}`, diffusé le vendredi suivant sur une semaine (`nextHebdoWindow`). Exemple : RSH241 (diffusé le 09/10) reste courant jusqu'au 09/10, puis RSH242 (16/10 → 23/10) prend le relais
    - Définit le nouvel hebdo comme courant
 4. Si la création échoue, restaure le flag `is_current` sur l'ancien hebdo (rollback)
 
@@ -2208,7 +2210,7 @@ Les sources embarquent une déclaration d'auteur signée Ed25519 (`backend/src/m
 | **Nixpacks** | Système de build automatique de Railway, configuré via `nixpacks.toml` |
 | **RS Hebdo** | Rolling Stone Hebdomadaire — désigne le magazine ou ses numéros dans le contexte de l'application |
 | **Setup Wizard** | Assistant de configuration initiale affiché au premier lancement si les clés API ne sont pas configurées. Protégé par `SETUP_SECRET_TOKEN` |
-| **Rotation auto** | Service `hebdoRotation.ts` qui crée automatiquement le prochain numéro hebdomadaire lorsque la date de fin de l'hebdo courant est dépassée |
+| **Rotation auto** | Service `hebdoRotation.ts` qui crée automatiquement le prochain numéro hebdomadaire le jour de la diffusion de l'hebdo courant |
 | **Onboarding** | Tutoriel interactif en 5 étapes affiché au premier login d'un journaliste. Tracké via localStorage |
 | **Crisp** | Widget de chat en direct intégré pour le support utilisateur en production |
 | **AAL1 / AAL2** | Niveau d'assurance d'authentification du JWT Supabase : mot de passe seul (AAL1) ou mot de passe + TOTP vérifié (AAL2). Exigé AAL2 par le backend quand la 2FA est active |

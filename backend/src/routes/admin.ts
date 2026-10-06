@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { invalidateMfaPolicyCache } from '../services/mfaPolicy';
+import { invalidateDropboxConfigCache } from '../services/dropboxConfig';
 import { generateDocx } from '../services/docx';
 import { reattributeDelivery, relocateDeliveryFiles, replaceDeliveryDocx, renameDeliveryFiles } from '../services/dropbox';
 import { fixMojibake } from '../utils/filenames';
@@ -990,6 +991,8 @@ const NON_SECRET_KEYS = new Set([
   'RESEND_FROM_EMAIL',
   'NOTIFY_EMAIL_ALMA',
   'NOTIFY_EMAIL_DENIS',
+  // Chemin du dossier racine Dropbox : de la configuration, pas un secret.
+  'DROPBOX_ROOT_FOLDER',
 ]);
 
 function maskValue(key: string, value: string): string {
@@ -1060,6 +1063,7 @@ router.put('/settings', async (req: AuthRequest, res: Response) => {
         continue;
       }
       if (s.key === 'REQUIRE_MFA') invalidateMfaPolicyCache();
+      if (s.key.startsWith('DROPBOX_')) invalidateDropboxConfigCache();
       results.push(data);
     }
 

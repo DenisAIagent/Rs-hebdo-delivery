@@ -750,6 +750,7 @@ Stockage des clés API et paramètres configurables par les admins depuis l'inte
 | `ANTHROPIC_WORKSPACE_ID` | non | Identifiant de workspace (`wrkspc_…`) envoyé en en-tête `anthropic-workspace-id` ; obligatoire seulement si la clé a été créée au niveau de l'organisation (sinon l'API répond `This API key is not scoped to a workspace`) |
 | `GEMINI_API_KEY`, `MISTRAL_API_KEY` | oui | Moteurs de correction alternatifs |
 | `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN` | oui | Dropbox |
+| `DROPBOX_ROOT_FOLDER` | non | Dossier racine Dropbox des numéros (défaut `/Hebdo Delivery`) |
 | `WORDPRESS_APP_PASSWORD` | oui | Mot de passe application WordPress (vide en prod : variable Railway) |
 | `AI_PROVIDER` | non | `anthropic` / `gemini` / `mistral` / `claude-code` |
 | `CLAUDE_MODEL` | non | Modèle Claude choisi dans l'admin |
@@ -759,7 +760,7 @@ Stockage des clés API et paramètres configurables par les admins depuis l'inte
 
 Les clés « non secrètes » (`NON_SECRET_KEYS` dans `routes/admin.ts`) sont renvoyées en clair par `GET /api/admin/settings` ; les autres sont masquées.
 
-**Note** : `claude.ts`, `gemini.ts`, `mistral.ts` et `getWpConfig()` (WordPress) lisent leur clé dans cette table en priorité, avec fallback sur la variable d'environnement. `mfaPolicy.ts` lit `REQUIRE_MFA` ici, sauf si la variable d'environnement `REQUIRE_MFA=true` force l'activation. Le service `dropbox.ts` utilise uniquement les variables d'environnement.
+**Note** : `claude.ts`, `gemini.ts`, `mistral.ts` et `getWpConfig()` (WordPress) lisent leur clé dans cette table en priorité, avec fallback sur la variable d'environnement. `mfaPolicy.ts` lit `REQUIRE_MFA` ici, sauf si la variable d'environnement `REQUIRE_MFA=true` force l'activation. Le service Dropbox (`dropboxConfig.ts`) et l'email (`email.ts`, Resend) suivent la même règle : réglage admin en priorité, variable d'environnement si le réglage est vide. La config Dropbox est mise en cache 30 s et rechargée dès qu'un réglage `DROPBOX_*` est enregistré ; si les identifiants changent, le token d'accès en cache est jeté.
 
 **Secrets recommandés en variables d'environnement Railway** (plutôt qu'en clair dans cette table) : `ANTHROPIC_API_KEY`, `DROPBOX_APP_SECRET`, `DROPBOX_REFRESH_TOKEN`, `GEMINI_API_KEY`, `MISTRAL_API_KEY`, `WORDPRESS_APP_PASSWORD`. Le mot de passe applicatif WordPress **a déjà été déplacé** vers Railway (`WORDPRESS_APP_PASSWORD`), sa ligne `app_settings` est vidée. Le fallback `process.env` rend la bascule transparente pour le code.
 

@@ -14,6 +14,7 @@ import correctionRoutes from './routes/correction';
 import setupRoutes from './routes/setup';
 import { startHebdoRotation } from './services/hebdoRotation';
 import { startMonthlyRecapScheduler } from './services/monthlyRecap';
+import { loadDropboxConfig } from './services/dropboxConfig';
 
 dotenv.config();
 
@@ -127,6 +128,8 @@ const onListening = () => {
   console.log(`RS Hebdo Delivery API running on port ${PORT}${BIND_HOST ? ` (host ${BIND_HOST})` : ''} (${isProd ? 'production' : 'development'})`);
   startHebdoRotation();
   startMonthlyRecapScheduler();
+  // Charge la config Dropbox (reglages admin) avant le premier calcul de chemin.
+  void loadDropboxConfig();
 };
 const server = BIND_HOST
   ? app.listen(Number(PORT), BIND_HOST, onListening)

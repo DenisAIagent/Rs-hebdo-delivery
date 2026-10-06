@@ -2,34 +2,45 @@
  * Dropbox storage service — replaces Google Drive.
  * Uses the Dropbox HTTP API v2 with a long-lived refresh token.
  *
- * Required env vars:
+ * Configuration (admin > Reglages > Dropbox en priorite, sinon variables d'env) :
  *   DROPBOX_APP_KEY
  *   DROPBOX_APP_SECRET
  *   DROPBOX_REFRESH_TOKEN
  *   DROPBOX_ROOT_FOLDER  (e.g. "/Hebdo Delivery")
+ * Voir services/dropboxConfig.ts.
  */
 
 import axios from 'axios';
+import { loadDropboxConfig, getCachedRootFolder, credentialsFingerprint, type DropboxConfig } from './dropboxConfig';
 
 // ── Token management ────────────────────────────────────────────
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
+// Identifiants ayant servi a obtenir cachedToken : si l'admin les change,
+// le token en cache appartient a l'ancien compte et doit etre jete.
+let tokenFingerprint = '';
 let refreshPromise: Promise<string> | null = null;
 
 async function getAccessToken(): Promise<string> {
+  const cfg = await loadDropboxConfig();
+  const fingerprint = credentialsFingerprint(cfg);
+  if (fingerprint !== tokenFingerprint) {
+    cachedToken = null;
+    tokenExpiry = 0;
+  }
   if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
 
   // Avoid concurrent refresh calls — reuse in-flight promise
   if (refreshPromise) return refreshPromise;
-  refreshPromise = doRefreshToken().finally(() => { refreshPromise = null; });
+  refreshPromise = doRefreshToken(cfg, fingerprint).finally(() => { refreshPromise = null; });
   return refreshPromise;
 }
 
-async function doRefreshToken(): Promise<string> {
-
-  const key = process.env.DROPBOX_APP_KEY!;
-  const secret = process.env.DROPBOX_APP_SECRET!;
-  const refreshToken = process.env.DROPBOX_REFRESH_TOKEN!;
+async function doRefreshToken(cfg: DropboxConfig, fingerprint: string): Promise<string> {
+  const { appKey: key, appSecret: secret, refreshToken } = cfg;
+  if (!key || !secret || !refreshToken) {
+    throw new Error('Dropbox non configure : renseigner App Key, App Secret et Refresh Token dans Admin > Reglages > Dropbox.');
+  }
 
   try {
     const res = await axios.post(
@@ -45,6 +56,7 @@ async function doRefreshToken(): Promise<string> {
     );
 
     cachedToken = res.data.access_token;
+    tokenFingerprint = fingerprint;
     // Expire 5 min before actual expiry to be safe
     tokenExpiry = Date.now() + (res.data.expires_in - 300) * 1000;
     console.log(`[Dropbox] Token refreshed, expires in ${res.data.expires_in}s`);
@@ -58,7 +70,7 @@ async function doRefreshToken(): Promise<string> {
 // ── Helpers ─────────────────────────────────────────────────────
 
 function rootFolder(): string {
-  return process.env.DROPBOX_ROOT_FOLDER || '/Hebdo Delivery';
+  return getCachedRootFolder();
 }
 
 /** Sleep helper */
@@ -208,7 +220,7 @@ export async function ensureHebdoFolderStructure(
   hebdoLabel: string,
   paperTypes: { drive_folder_name: string }[]
 ): Promise<{ hebdoFolderId: string; hebdoFolderUrl: string }> {
-  const root = rootFolder();
+  const root = (await loadDropboxConfig()).rootFolder;
   const hebdoPath = `${root}/${hebdoLabel}`;
 
   // Create root + hebdo folder

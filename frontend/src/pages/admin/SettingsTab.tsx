@@ -81,9 +81,10 @@ const SECRET_SECTIONS: SettingSection[] = [
     title: 'Dropbox',
     icon: <Key size={18} className="text-blue-600" />,
     fields: [
-      { key: 'DROPBOX_APP_KEY', label: 'App Key', description: "Identifiant de l'application Dropbox." },
+      { key: 'DROPBOX_APP_KEY', label: 'App Key', description: "Identifiant de l'application Dropbox. Prioritaire sur la variable Railway ; vide = variable Railway utilisee." },
       { key: 'DROPBOX_APP_SECRET', label: 'App Secret', description: "Secret de l'application Dropbox." },
-      { key: 'DROPBOX_REFRESH_TOKEN', label: 'Refresh Token', description: "Token de rafraichissement pour l'acces Dropbox." },
+      { key: 'DROPBOX_REFRESH_TOKEN', label: 'Refresh Token', description: "Token de rafraichissement pour l'acces Dropbox. Les trois identifiants doivent venir du meme compte." },
+      { key: 'DROPBOX_ROOT_FOLDER', label: 'Dossier racine', description: 'Ex. "/Hebdo Delivery" — dossier ou sont crees les numeros. Par defaut /Hebdo Delivery.' },
     ],
   },
 ];

@@ -38,3 +38,6 @@ videos/**/.hyperframes/
 videos/**/node_modules/
 videos/**/assets/vo/*.wav
 videos/**/assets/vo/*.aiff
+
+# Acces temporaires pour la migration Supabase
+.env.migration

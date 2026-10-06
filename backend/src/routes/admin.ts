@@ -4,6 +4,7 @@ import { invalidateDropboxConfigCache } from '../services/dropboxConfig';
 import { generateDocx } from '../services/docx';
 import { reattributeDelivery, relocateDeliveryFiles, replaceDeliveryDocx, renameDeliveryFiles } from '../services/dropbox';
 import { fixMojibake } from '../utils/filenames';
+import { normalizeEmail } from '../utils/email';
 import { normalizeMetadata } from '../services/fieldValidation';
 import { logInfo, logWarn, type LogContext } from '../services/deliveryLogger';
 import { AuthRequest } from '../middleware/auth';
@@ -319,14 +320,61 @@ router.post('/journalists', async (req: AuthRequest, res: Response) => {
   }
 });
 
+type EmailChange =
+  | { ok: true; email: string | null; previous: string | null }
+  | { ok: false; status: number; error: string };
+
+/**
+ * Change l'email de connexion (Supabase Auth) d'un compte, apres validation.
+ * Renvoie l'ancienne adresse pour pouvoir annuler si la mise a jour du profil echoue.
+ * email null = adresse inchangee, rien a faire.
+ */
+async function changeAccountEmail(id: string, rawEmail: unknown): Promise<EmailChange> {
+  const email = normalizeEmail(rawEmail);
+  if (!email) return { ok: false, status: 400, error: 'Adresse email invalide' };
+
+  const { data: target } = await supabaseAdmin.from('profiles').select('email').eq('id', id).single();
+  if (!target) return { ok: false, status: 404, error: 'Compte introuvable' };
+  if ((target.email || '').toLowerCase() === email) return { ok: true, email: null, previous: null };
+
+  const { count } = await supabaseAdmin
+    .from('profiles')
+    .select('id', { count: 'exact', head: true })
+    // ilike = insensible a la casse ; on echappe _ et % (jokers SQL frequents dans les emails).
+    .ilike('email', email.replace(/[\\%_]/g, '\\$&'))
+    .neq('id', id);
+  if (count) return { ok: false, status: 409, error: 'Cette adresse email est deja utilisee par un autre compte' };
+
+  // email_confirm : l'admin valide l'adresse, pas de mail de confirmation au journaliste.
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(id, { email, email_confirm: true });
+  if (error) {
+    console.error(`Update auth email error for ${id}:`, error.message);
+    const taken = /already|registered|exists/i.test(error.message);
+    return taken
+      ? { ok: false, status: 409, error: 'Cette adresse email est deja utilisee par un autre compte' }
+      : { ok: false, status: 500, error: "Impossible de modifier l'email du compte de connexion" };
+  }
+  return { ok: true, email, previous: target.email };
+}
+
 // PUT /api/admin/journalists/:id - Update journalist
 router.put('/journalists/:id', async (req: AuthRequest, res: Response) => {
-  const { id } = req.params;
-  const { full_name, role, is_active } = req.body;
+  const id = String(req.params.id);
+  const { full_name, role, is_active, email } = req.body;
+  let previousEmail: string | null = null;
 
   try {
     const updates: Record<string, unknown> = {};
     if (full_name !== undefined) updates.full_name = full_name;
+
+    if (email !== undefined) {
+      const change = await changeAccountEmail(id, email);
+      if (!change.ok) return res.status(change.status).json({ error: change.error });
+      if (change.email) {
+        updates.email = change.email;
+        previousEmail = change.previous;
+      }
+    }
 
     if (role !== undefined) {
       if (!['journalist', 'admin'].includes(role)) {
@@ -377,7 +425,16 @@ router.put('/journalists/:id', async (req: AuthRequest, res: Response) => {
 
     if (error) throw error;
     return res.json(data);
-  } catch {
+  } catch (error: any) {
+    console.error('Update journalist error:', error?.message || error);
+    if (previousEmail) {
+      // Le profil n'a pas suivi : on remet l'ancienne adresse de connexion.
+      const { error: rollbackError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        email: previousEmail,
+        email_confirm: true,
+      });
+      if (rollbackError) console.error(`Rollback auth email failed for ${id}:`, rollbackError.message);
+    }
     return res.status(500).json({ error: 'Erreur mise a jour' });
   }
 });

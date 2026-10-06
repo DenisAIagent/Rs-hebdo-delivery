@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { adminGetJournalists, adminCreateJournalist, adminUpdateJournalist, adminResetJournalistMfa } from '../../services/api.ts';
 import type { Profile } from '../../types/index.ts';
-import { Plus, Save, X, AlertCircle, UserCheck, UserX, ShieldOff } from 'lucide-react';
+import { Plus, Save, X, AlertCircle, UserCheck, UserX, ShieldOff, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function JournalistsTab() {
@@ -73,6 +73,41 @@ export function JournalistsTab() {
       toast.success(message);
     } catch {
       toast.error('Erreur reinitialisation 2FA');
+    }
+  };
+
+  // Modification de l'email (compte de connexion + fiche)
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState('');
+  const [savingEmail, setSavingEmail] = useState(false);
+
+  const startEditEmail = (j: Profile) => {
+    setEditingEmailId(j.id);
+    setEmailDraft(j.email);
+  };
+
+  const cancelEditEmail = () => {
+    setEditingEmailId(null);
+    setEmailDraft('');
+  };
+
+  const saveEmail = async (j: Profile) => {
+    const next = emailDraft.trim();
+    if (!next || next.toLowerCase() === j.email.toLowerCase()) {
+      cancelEditEmail();
+      return;
+    }
+    setSavingEmail(true);
+    try {
+      await adminUpdateJournalist(j.id, { email: next } as Partial<Profile>);
+      toast.success(`Email de ${j.full_name} modifie : il se connecte desormais avec ${next.toLowerCase()}`);
+      cancelEditEmail();
+      await load();
+    } catch (err: unknown) {
+      const apiError = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(apiError || 'Erreur modification email');
+    } finally {
+      setSavingEmail(false);
     }
   };
 
@@ -203,7 +238,52 @@ export function JournalistsTab() {
             {journalists.map((j) => (
               <tr key={j.id} className={`hover:bg-gray-50 ${!j.is_active ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 font-medium text-rs-black">{j.full_name}</td>
-                <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{j.email}</td>
+                <td className={`px-4 py-3 text-gray-500 ${editingEmailId === j.id ? '' : 'hidden sm:table-cell'}`}>
+                  {editingEmailId === j.id ? (
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); saveEmail(j); }}
+                      className="flex items-center gap-1"
+                    >
+                      <input
+                        type="email"
+                        value={emailDraft}
+                        onChange={(e) => setEmailDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Escape') cancelEditEmail(); }}
+                        required
+                        autoFocus
+                        disabled={savingEmail}
+                        aria-label={`Nouvel email de ${j.full_name}`}
+                        className="w-full min-w-0 px-2 py-1 border border-gray-300 rounded-md text-sm text-rs-black focus:ring-2 focus:ring-rs-red focus:border-transparent"
+                      />
+                      <button
+                        type="submit"
+                        disabled={savingEmail}
+                        className="p-1.5 text-gray-400 hover:text-green-600 disabled:opacity-50 transition-colors"
+                        title="Enregistrer"
+                      >
+                        <Save size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditEmail}
+                        disabled={savingEmail}
+                        className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors"
+                        title="Annuler"
+                      >
+                        <X size={16} />
+                      </button>
+                    </form>
+                  ) : (
+                    <button
+                      onClick={() => startEditEmail(j)}
+                      className="group inline-flex items-center gap-1.5 text-left hover:text-rs-black transition-colors"
+                      title="Modifier l'email (adresse de connexion)"
+                    >
+                      {j.email}
+                      <Pencil size={13} className="text-gray-300 group-hover:text-rs-red transition-colors" />
+                    </button>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-center">
                   <button
                     onClick={() => toggleRole(j.id, j.role)}
@@ -225,6 +305,13 @@ export function JournalistsTab() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => startEditEmail(j)}
+                    className="p-1.5 text-gray-400 hover:text-rs-red transition-colors sm:hidden"
+                    title="Modifier l'email"
+                  >
+                    <Pencil size={16} />
+                  </button>
                   <button
                     onClick={() => resetMfa(j)}
                     className="p-1.5 text-gray-400 hover:text-amber-600 transition-colors"

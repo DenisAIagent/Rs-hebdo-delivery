@@ -1,3 +1,4 @@
+import { isAdminRole } from '../types/index.ts';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.ts';
 
@@ -22,7 +23,7 @@ export function ProtectedRoute({ children, adminOnly = false }: Props) {
     return <Navigate to={mfaRequired ? '/mfa' : '/login'} replace />;
   }
 
-  if (adminOnly && user.role !== 'admin') {
+  if (adminOnly && !isAdminRole(user.role)) {
     return <Navigate to="/" replace />;
   }
 

@@ -15,6 +15,7 @@ import setupRoutes from './routes/setup';
 import { startHebdoRotation } from './services/hebdoRotation';
 import { startMonthlyRecapScheduler } from './services/monthlyRecap';
 import { loadDropboxConfig } from './services/dropboxConfig';
+import { startCanary } from './services/canary';
 
 dotenv.config();
 
@@ -130,6 +131,7 @@ const onListening = () => {
   startMonthlyRecapScheduler();
   // Charge la config Dropbox (reglages admin) avant le premier calcul de chemin.
   void loadDropboxConfig();
+  startCanary();
 };
 const server = BIND_HOST
   ? app.listen(Number(PORT), BIND_HOST, onListening)

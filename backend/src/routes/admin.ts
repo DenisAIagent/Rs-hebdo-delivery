@@ -6,6 +6,8 @@ import { reattributeDelivery, relocateDeliveryFiles, replaceDeliveryDocx, rename
 import { fixMojibake } from '../utils/filenames';
 import { normalizeEmail } from '../utils/email';
 import { sendInvitation } from '../services/invitations';
+import { ADMIN_ROLES, isAdminRole, isValidRole } from '../utils/roles';
+import { getCanaryStatus, runCanary, sendCanaryAlert } from '../services/canary';
 import { normalizeMetadata } from '../services/fieldValidation';
 import { logInfo, logWarn, type LogContext } from '../services/deliveryLogger';
 import { AuthRequest } from '../middleware/auth';
@@ -283,8 +285,8 @@ router.post('/journalists', async (req: AuthRequest, res: Response) => {
 
   // Role validation
   const validRole = role || 'journalist';
-  if (!['journalist', 'admin'].includes(validRole)) {
-    return res.status(400).json({ error: 'Role invalide (journalist ou admin)' });
+  if (!isValidRole(validRole)) {
+    return res.status(400).json({ error: 'Role invalide (journalist, admin ou cto)' });
   }
 
   try {
@@ -401,20 +403,20 @@ router.put('/journalists/:id', async (req: AuthRequest, res: Response) => {
     }
 
     if (role !== undefined) {
-      if (!['journalist', 'admin'].includes(role)) {
-        return res.status(400).json({ error: 'Role invalide (journalist ou admin)' });
+      if (!isValidRole(role)) {
+        return res.status(400).json({ error: 'Role invalide (journalist, admin ou cto)' });
       }
-      // Prevent removing the last admin
-      if (role !== 'admin') {
+      // Prevent removing the last admin (admin et CTO comptent comme administrateurs)
+      if (!isAdminRole(role)) {
         const { count } = await supabaseAdmin
           .from('profiles')
           .select('*', { count: 'exact', head: true })
-          .eq('role', 'admin')
+          .in('role', [...ADMIN_ROLES])
           .eq('is_active', true);
         if (count !== null && count <= 1) {
           // Check if target is currently admin
           const { data: target } = await supabaseAdmin.from('profiles').select('role').eq('id', id).single();
-          if (target?.role === 'admin') {
+          if (isAdminRole(target?.role)) {
             return res.status(400).json({ error: 'Impossible de retirer le dernier admin' });
           }
         }
@@ -426,11 +428,11 @@ router.put('/journalists/:id', async (req: AuthRequest, res: Response) => {
       // Prevent deactivating the last admin
       if (is_active === false) {
         const { data: target } = await supabaseAdmin.from('profiles').select('role').eq('id', id).single();
-        if (target?.role === 'admin') {
+        if (isAdminRole(target?.role)) {
           const { count } = await supabaseAdmin
             .from('profiles')
             .select('*', { count: 'exact', head: true })
-            .eq('role', 'admin')
+            .in('role', [...ADMIN_ROLES])
             .eq('is_active', true);
           if (count !== null && count <= 1) {
             return res.status(400).json({ error: 'Impossible de desactiver le dernier admin' });
@@ -1052,6 +1054,36 @@ router.post('/recap/:ym/send', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ========== CANARI (surveillance, alertes au CTO) ==========
+
+// GET /api/admin/canary - Derniers etats connus (Supabase vu par le serveur, Railway vu par la base)
+router.get('/canary', async (_req: AuthRequest, res: Response) => {
+  try {
+    return res.json(await getCanaryStatus());
+  } catch (error: any) {
+    console.error('Canary status error:', error?.message || error);
+    return res.status(500).json({ error: 'Erreur lecture du canari' });
+  }
+});
+
+// POST /api/admin/canary/run - Lance un controle immediat de la base
+router.post('/canary/run', async (_req: AuthRequest, res: Response) => {
+  const state = await runCanary();
+  return res.json({ supabase: state });
+});
+
+// POST /api/admin/canary/test - Envoie une alerte de test aux CTO
+router.post('/canary/test', async (_req: AuthRequest, res: Response) => {
+  await runCanary(); // rafraichit la liste des CTO et la config email
+  const result = await sendCanaryAlert({
+    component: 'supabase',
+    transition: 'test',
+    since: new Date().toISOString(),
+  });
+  if (!result.sent) return res.status(400).json({ error: result.reason || 'Envoi impossible' });
+  return res.json({ message: 'Alerte de test envoyée aux CTO' });
+});
+
 // ========== APP SETTINGS ==========
 
 // Keys that are not secrets and should be returned in clear
@@ -1074,6 +1106,8 @@ const NON_SECRET_KEYS = new Set([
   'NOTIFY_EMAIL_DENIS',
   // Chemin du dossier racine Dropbox : de la configuration, pas un secret.
   'DROPBOX_ROOT_FOLDER',
+  // Adresse publique surveillee par le canari cote base (pg_cron).
+  'CANARY_APP_URL',
 ]);
 
 function maskValue(key: string, value: string): string {

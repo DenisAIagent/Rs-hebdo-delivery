@@ -177,6 +177,37 @@ export async function adminResetJournalistMfa(id: string): Promise<{ message: st
   return data;
 }
 
+// ========== CANARI (surveillance) ==========
+export interface CanaryComponentState {
+  status: 'ok' | 'down';
+  since: string;
+  detail?: string | null;
+  last_checked?: string;
+}
+
+export interface CanaryStatus {
+  /** Base Supabase, controlee par le serveur Railway (null tant qu'aucun controle). */
+  supabase: CanaryComponentState | null;
+  /** Serveur Railway, controle par la base (pg_cron). */
+  railway: CanaryComponentState | null;
+  ctoCount: number;
+}
+
+export async function adminGetCanary(): Promise<CanaryStatus> {
+  const { data } = await api.get('/api/admin/canary');
+  return data;
+}
+
+export async function adminRunCanary(): Promise<{ supabase: CanaryComponentState }> {
+  const { data } = await api.post('/api/admin/canary/run');
+  return data;
+}
+
+export async function adminTestCanaryAlert(): Promise<{ message: string }> {
+  const { data } = await api.post('/api/admin/canary/test');
+  return data;
+}
+
 export async function adminGetDeliveries(): Promise<Delivery[]> {
   const { data } = await api.get('/api/admin/deliveries');
   return data;

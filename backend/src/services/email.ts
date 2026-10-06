@@ -4,6 +4,7 @@
  */
 
 import { supabaseAdmin } from '../utils/supabase';
+import { ADMIN_ROLES } from '../utils/roles';
 
 /** Escape HTML special characters to prevent injection in email templates */
 function escapeHtml(str: string): string {
@@ -167,7 +168,7 @@ async function getAdminEmails(): Promise<string[]> {
     const { data } = await supabaseAdmin
       .from('profiles')
       .select('email')
-      .eq('role', 'admin')
+      .in('role', [...ADMIN_ROLES])
       .eq('is_active', true);
     const emails = (data || []).map((p: { email: string }) => p.email).filter(Boolean);
     if (emails.length > 0) return emails;

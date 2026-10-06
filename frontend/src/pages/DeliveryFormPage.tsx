@@ -15,6 +15,7 @@ import {
   adminGetJournalists,
 } from '../services/api.ts';
 import type { PaperType, HebdoConfig, CorrectionResult, Delivery, FieldConfig, Profile } from '../types/index.ts';
+import { isAdminRole } from '../types/index.ts';
 import {
   ChevronRight,
   ChevronLeft,
@@ -65,7 +66,7 @@ export function DeliveryFormPage() {
   // Livraison au nom d'un journaliste (admin uniquement) : l'admin choisit
   // pour qui il livre avant de selectionner le type de papier.
   const currentUser = useAuthStore((s) => s.user);
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = isAdminRole(currentUser?.role);
   const [journalists, setJournalists] = useState<Profile[]>([]);
   const [authorId, setAuthorId] = useState('');
 
@@ -100,7 +101,7 @@ export function DeliveryFormPage() {
         setNextHebdo(hebdo);
 
         // Admin : liste des journalistes actifs pour choisir l'auteur du papier.
-        if (useAuthStore.getState().user?.role === 'admin') {
+        if (isAdminRole(useAuthStore.getState().user?.role)) {
           try {
             const people = await adminGetJournalists();
             setJournalists(people.filter((p: Profile) => p.is_active));

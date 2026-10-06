@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.ts';
 import { getNextHebdo } from '../services/api.ts';
 import type { HebdoConfig } from '../types/index.ts';
+import { isAdminRole } from '../types/index.ts';
 import { LogOut, HelpCircle, Sparkles } from 'lucide-react';
 
 declare global {
@@ -128,7 +129,7 @@ export function Layout({ children, saveLabel = null }: LayoutProps) {
               <NavLink to="/livrer" active={isActive('/livrer')}>
                 Livrer un papier
               </NavLink>
-              {user?.role === 'admin' && (
+              {isAdminRole(user?.role) && (
                 <NavLink to="/admin" active={isActive('/admin')}>
                   Admin
                 </NavLink>

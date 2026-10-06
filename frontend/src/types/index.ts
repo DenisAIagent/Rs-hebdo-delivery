@@ -1,8 +1,15 @@
+/** Le CTO a les memes droits qu'un admin et recoit les alertes du canari. */
+export type Role = 'journalist' | 'admin' | 'cto';
+
+export function isAdminRole(role: string | null | undefined): boolean {
+  return role === 'admin' || role === 'cto';
+}
+
 export interface Profile {
   id: string;
   email: string;
   full_name: string;
-  role: 'journalist' | 'admin';
+  role: Role;
   is_active: boolean;
   created_at: string;
 }

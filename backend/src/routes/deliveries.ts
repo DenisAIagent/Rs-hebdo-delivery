@@ -11,6 +11,7 @@ import { publishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { logInfo, logError, logWarn, type LogContext } from '../services/deliveryLogger';
 import { validateMetadata, normalizeMetadata } from '../services/fieldValidation';
 import { fixMojibake } from '../utils/filenames';
+import { isAdminRole } from '../utils/roles';
 
 /** Strip HTML tags safely (removes all tags, decodes entities) */
 function stripHtml(str: string): string {
@@ -278,7 +279,7 @@ router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, uplo
     // Resolve the author: admins can attribute a delivery to another active user
     let authorId = req.userId!;
     if (rawAuthorId && typeof rawAuthorId === 'string' && rawAuthorId !== req.userId) {
-      if (req.userRole !== 'admin') {
+      if (!isAdminRole(req.userRole)) {
         return res.status(403).json({ error: "Seul un admin peut attribuer une livraison a un autre utilisateur" });
       }
       const { data: targetProfile, error: targetError } = await supabaseAdmin

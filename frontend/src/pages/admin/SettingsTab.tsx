@@ -10,6 +10,7 @@ import {
 import type { AppSetting } from '../../types/index.ts';
 import { Key, Eye, EyeOff, Save, AlertCircle, Loader2, Sparkles, Cpu, RefreshCw, Globe, PlugZap, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { CanaryPanel } from './CanaryPanel.tsx';
 
 interface SettingField {
   key: string;
@@ -384,6 +385,8 @@ export function SettingsTab() {
           {error}
         </div>
       )}
+
+      <CanaryPanel />
 
       {/* AI Engine selector */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">

@@ -1,7 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { adminGetJournalists, adminCreateJournalist, adminUpdateJournalist, adminResetJournalistMfa, adminInviteJournalist } from '../../services/api.ts';
-import type { Profile } from '../../types/index.ts';
+import type { Profile, Role } from '../../types/index.ts';
 import { Plus, Save, X, AlertCircle, UserCheck, UserX, ShieldOff, Pencil, Mail } from 'lucide-react';
+
+const ROLE_ORDER: Role[] = ['journalist', 'admin', 'cto'];
+const ROLE_LABELS: Record<Role, string> = { journalist: 'Journaliste', admin: 'Admin', cto: 'CTO' };
+const ROLE_BADGES: Record<Role, string> = {
+  journalist: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+  admin: 'bg-purple-50 text-purple-700 hover:bg-purple-100',
+  cto: 'bg-amber-50 text-amber-800 hover:bg-amber-100',
+};
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   return (err as { response?: { data?: { error?: string } } })?.response?.data?.error || fallback;
@@ -17,7 +25,7 @@ export function JournalistsTab() {
   // Form
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'journalist' | 'admin'>('journalist');
+  const [role, setRole] = useState<Role>('journalist');
   const [creating, setCreating] = useState(false);
   const [invitingId, setInvitingId] = useState<string | null>(null);
 
@@ -137,15 +145,16 @@ export function JournalistsTab() {
     }
   };
 
-  const toggleRole = async (id: string, currentRole: string) => {
-    const newRole = currentRole === 'admin' ? 'journalist' : 'admin';
+  const changeRole = async (j: Profile, newRole: Role) => {
+    if (newRole === j.role) return;
     try {
-      await adminUpdateJournalist(id, { role: newRole } as Partial<Profile>);
-      toast.success(`Role change en ${newRole === 'admin' ? 'Admin' : 'Journaliste'}`);
+      await adminUpdateJournalist(j.id, { role: newRole } as Partial<Profile>);
+      toast.success(`${j.full_name} : role ${ROLE_LABELS[newRole]}`);
       await load();
-    } catch {
-      setError('Erreur mise a jour');
-      toast.error('Erreur mise a jour');
+    } catch (err: unknown) {
+      const msg = apiErrorMessage(err, 'Erreur mise a jour');
+      setError(msg);
+      toast.error(msg);
     }
   };
 
@@ -205,12 +214,16 @@ export function JournalistsTab() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as 'journalist' | 'admin')}
+                onChange={(e) => setRole(e.target.value as Role)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rs-red focus:border-transparent"
               >
-                <option value="journalist">Journaliste</option>
-                <option value="admin">Admin</option>
+                {ROLE_ORDER.map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                ))}
               </select>
+              {role === 'cto' && (
+                <p className="text-xs text-gray-400 mt-1">Droits admin + alertes techniques du canari.</p>
+              )}
             </div>
           </div>
           <p className="flex items-start gap-2 text-xs text-gray-500 mt-3">
@@ -301,17 +314,17 @@ export function JournalistsTab() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-center">
-                  <button
-                    onClick={() => toggleRole(j.id, j.role)}
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors ${
-                      j.role === 'admin'
-                        ? 'bg-purple-50 text-purple-700 hover:bg-purple-100'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                    title="Cliquer pour changer le role"
+                  <select
+                    value={j.role}
+                    onChange={(e) => changeRole(j, e.target.value as Role)}
+                    className={`appearance-none text-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer border-0 transition-colors focus:ring-2 focus:ring-rs-red ${ROLE_BADGES[j.role]}`}
+                    title={j.role === 'cto' ? 'CTO : droits admin + alertes du canari' : 'Changer le role'}
+                    aria-label={`Role de ${j.full_name}`}
                   >
-                    {j.role === 'admin' ? 'Admin' : 'Journaliste'}
-                  </button>
+                    {ROLE_ORDER.map((r) => (
+                      <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                    ))}
+                  </select>
                 </td>
                 <td className="px-4 py-3 text-center">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${

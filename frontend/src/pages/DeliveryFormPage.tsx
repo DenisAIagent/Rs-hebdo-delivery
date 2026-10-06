@@ -39,6 +39,9 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 
+/** Cle du champ chapo (texte affiche sur le site), relu avec le corps du texte. */
+const CHAPO_KEY = 'chapo';
+
 type Step = 'type' | 'content' | 'correction' | 'review';
 
 const STEPS: { key: Step; label: string }[] = [
@@ -228,14 +231,33 @@ export function DeliveryFormPage() {
   const signOverLimit = signLimit > 0 && signCount > signLimit;
   const signRatio = signLimit > 0 ? Math.min(1, signCount / signLimit) : 0;
 
+  const hasChapo = !!selectedType?.fields_config?.some((f) => f.key === CHAPO_KEY);
+
   const handleCorrection = async () => {
     const k = getBodyFieldKey();
     if (!k || !metadata[k]?.trim()) return;
+    const chapo = hasChapo ? String(metadata[CHAPO_KEY] || '').trim() : '';
 
     setCorrecting(true);
     try {
-      const result = await correctText(metadata[k]);
-      setCorrection(result);
+      // Le chapo (affiche sur le site) est relu en meme temps que le corps.
+      // Un echec sur le chapo seul ne bloque pas : il reste tel que saisi.
+      const [result, chapoResult] = await Promise.all([
+        correctText(metadata[k]),
+        chapo ? correctText(chapo).catch(() => null) : Promise.resolve(null),
+      ]);
+      setCorrection(
+        chapoResult
+          ? {
+              ...result,
+              corrections: [
+                ...chapoResult.corrections.map((c) => ({ ...c, type: `chapô · ${c.type}` })),
+                ...result.corrections,
+              ],
+            }
+          : result,
+      );
+      if (chapoResult) updateMetadata(CHAPO_KEY, chapoResult.correctedText);
       setBodyCorrected(result.correctedText);
       setStep('correction');
     } catch (err) {
@@ -542,6 +564,8 @@ export function DeliveryFormPage() {
               correction={correction}
               bodyCorrected={bodyCorrected}
               onChangeBody={setBodyCorrected}
+              chapo={hasChapo ? String(metadata[CHAPO_KEY] || '') : null}
+              onChangeChapo={(v) => updateMetadata(CHAPO_KEY, v)}
               signLimit={signLimit}
               signOverLimit={signOverLimit}
             />
@@ -1336,6 +1360,9 @@ interface StepCorrectionViewProps {
   correction: CorrectionResult | null;
   bodyCorrected: string;
   onChangeBody: (v: string) => void;
+  /** Chapo relu en meme temps que le corps ; null si le type de papier n'en a pas. */
+  chapo: string | null;
+  onChangeChapo: (v: string) => void;
   signLimit: number;
   signOverLimit: boolean;
 }
@@ -1344,6 +1371,8 @@ function StepCorrectionView({
   correction,
   bodyCorrected,
   onChangeBody,
+  chapo,
+  onChangeChapo,
   signLimit,
   signOverLimit,
 }: StepCorrectionViewProps) {
@@ -1412,6 +1441,26 @@ function StepCorrectionView({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {chapo !== null && (
+          <div style={{ marginBottom: 18 }}>
+            <div className="mb-2">
+              <FieldLabel label="Chapô final (modifiable)" inline />
+            </div>
+            <textarea
+              value={chapo}
+              onChange={(e) => onChangeChapo(e.target.value)}
+              rows={3}
+              className="rs-textarea"
+              style={{
+                fontFamily: 'Cambria, Georgia, serif',
+                fontSize: 14,
+                lineHeight: 1.6,
+                resize: 'vertical',
+              }}
+            />
           </div>
         )}
 

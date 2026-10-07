@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../utils/supabase';
 import { getEmailConfig } from './email';
 import { buildInviteEmail } from './inviteEmail';
+import { redirectsToApp } from './inviteLink';
 
 export interface InvitationResult {
   sent: boolean;
@@ -33,6 +34,13 @@ export async function sendInvitation(params: {
   if (error || !link) {
     console.error('[invitation] generateLink failed:', error?.message);
     return { sent: false, reason: 'Impossible de générer le lien d\'invitation' };
+  }
+  if (!redirectsToApp(link, appUrl)) {
+    console.error('[invitation] redirect_to rejected by Supabase, link does not point to', appUrl);
+    return {
+      sent: false,
+      reason: `Supabase refuse de rediriger vers ${appUrl} : ajoutez ${appUrl}/** dans Authentication > URL Configuration > Redirect URLs`,
+    };
   }
 
   const { subject, html, text } = buildInviteEmail({

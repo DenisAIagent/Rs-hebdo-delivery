@@ -1089,6 +1089,8 @@ router.post('/canary/test', async (_req: AuthRequest, res: Response) => {
 // Keys that are not secrets and should be returned in clear
 const NON_SECRET_KEYS = new Set([
   'REQUIRE_MFA',
+  // Interrupteur « chapo, clip et lien d'achat obligatoires » (fieldPolicy).
+  'STRICT_EDITORIAL_FIELDS',
   'AI_PROVIDER',
   'CLAUDE_MODEL',
   // Identifiant de workspace Anthropic : un identifiant, pas un secret.

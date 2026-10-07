@@ -10,6 +10,7 @@ import { notifyDelivery } from '../services/email';
 import { publishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { logInfo, logError, logWarn, type LogContext } from '../services/deliveryLogger';
 import { validateMetadata, normalizeMetadata } from '../services/fieldValidation';
+import { applyFieldPolicy, isStrictEditorialFields } from '../services/fieldPolicy';
 import { fixMojibake } from '../utils/filenames';
 import { isAdminRole } from '../utils/roles';
 
@@ -250,7 +251,9 @@ router.get('/paper-types', async (_req: AuthRequest, res: Response) => {
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
 
-    return res.json(data || []);
+    // Le formulaire lit `required` ici : l'interrupteur admin s'y applique.
+    const strict = await isStrictEditorialFields();
+    return res.json((data || []).map((t: any) => ({ ...t, fields_config: applyFieldPolicy(t.fields_config || [], strict) })));
   } catch {
     return res.status(500).json({ error: 'Erreur chargement types' });
   }
@@ -366,7 +369,8 @@ router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, uplo
     // site officiel... selon fields_config) : le formulaire ne fait pas foi.
     parsedMetadata = normalizeMetadata(paperType.fields_config || [], parsedMetadata);
     const problems = validateMetadata({
-      fields: paperType.fields_config || [], metadata: parsedMetadata, imageCount: imageFiles?.length || 0,
+      fields: applyFieldPolicy(paperType.fields_config || [], await isStrictEditorialFields()),
+      metadata: parsedMetadata, imageCount: imageFiles?.length || 0,
     });
     if (problems.length > 0) {
       await logWarn('validation', 'Champs invalides ou manquants', ctx, problems.join(' ; '));
@@ -583,7 +587,8 @@ router.put('/:id', (req, _res, next) => { req.setTimeout(900_000); next(); }, up
     // Get body text
     parsedMetadata = normalizeMetadata(paperType.fields_config || [], parsedMetadata);
     const problems = validateMetadata({
-      fields: paperType.fields_config || [], metadata: parsedMetadata,
+      fields: applyFieldPolicy(paperType.fields_config || [], await isStrictEditorialFields()),
+      metadata: parsedMetadata,
       imageCount: imageFiles?.length || 0, hasExistingImages: !!existing.image_filename,
     });
     if (problems.length > 0) {

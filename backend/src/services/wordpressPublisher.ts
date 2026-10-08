@@ -30,6 +30,7 @@ import { buildWpSystemPrompt, normalizeWpCategories, WP_STYLE_MUSIC } from './wo
 import { hasReviewBox, hasScalarMeta, missingEditorialMeta, WP_META_MAIN_ARTIST, WP_META_REVIEWS, WP_META_STYLE_MUSIC, type ReviewBoxInput } from './wordpressReviewBox';
 import { fetchDeliveryImages, type ImageFile } from './dropbox';
 import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SIDE } from './imageResize';
+import { boldToHtml } from './inlineBold';
 
 export interface WpPublishInput {
   deliveryId: string;
@@ -151,7 +152,7 @@ export function buildArticleHtml(p: ArticleHtmlInput): string {
   // paragraphes) quand il y en a au moins deux, sinon juste avant la signature.
   const videoAfter = video && paragraphs.length >= 2 ? Math.ceil(paragraphs.length / 2) - 1 : -1;
   paragraphs.forEach((para, i) => {
-    const html = escapeHtmlText(para).replace(/«\s?([^»]+?)\s?»/g, (_m, q: string) => `<em>« ${q.trim()} »</em>`);
+    const html = boldToHtml(escapeHtmlText(para).replace(/«\s?([^»]+?)\s?»/g, (_m, q: string) => `<em>« ${q.trim()} »</em>`));
     blocks.push(`<p>${html}</p>`);
     if (video && i === videoAfter) blocks.push(video);
   });

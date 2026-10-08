@@ -849,7 +849,7 @@ router.post('/hebdos/:id/regenerate-docx', async (req: AuthRequest, res: Respons
   // ?delivery=<id> limite a une seule livraison (reprise apres une limitation Dropbox).
   let query = supabaseAdmin
     .from('deliveries')
-    .select('id, title, metadata, paper_type:paper_types(name, drive_folder_name, fields_config), hebdo:hebdo_config(label), author:profiles(full_name, email)')
+    .select('id, title, subject, metadata, paper_type:paper_types(name, drive_folder_name, fields_config), hebdo:hebdo_config(label), author:profiles(full_name, email)')
     .eq('hebdo_id', String(req.params.id));
   if (typeof req.query.delivery === 'string' && req.query.delivery) query = query.eq('id', req.query.delivery);
   const { data: rows, error } = await query;
@@ -866,10 +866,15 @@ router.post('/hebdos/:id/regenerate-docx', async (req: AuthRequest, res: Respons
       }
       const docxFileName = `${hebdo?.label || ''} - ${pt?.name || ''} - ${d.title}.docx`;
       const docxBuffer = await generateDocx({ title: d.title, author: journalistName, paperType: pt?.name || '', metadata, fieldsConfig: fields });
-      const { path } = await replaceDeliveryDocx({
-        folder: { hebdoNumber: hebdo?.label || '', driveFolderName: pt?.drive_folder_name || pt?.name || 'Papier', journalistName, subject: d.title },
-        docxFileName, docxBuffer,
-      });
+      // Dossier = celui de la livraison (subject || title, comme a l'upload) :
+      // renommer le papier ne doit pas creer un nouveau dossier.
+      const folder = { hebdoNumber: hebdo?.label || '', driveFolderName: pt?.drive_folder_name || pt?.name || 'Papier', journalistName, subject: (d as any).subject || d.title };
+      // ?previous_title=<ancien titre> : l'ancien DOCX est renomme (pas de doublon, rien de supprime).
+      const previousTitle = typeof req.query.previous_title === 'string' ? req.query.previous_title : '';
+      if (previousTitle && previousTitle !== d.title) {
+        await renameDeliveryFiles({ folder, renames: [{ from: `${hebdo?.label || ''} - ${pt?.name || ''} - ${previousTitle}.docx`, to: docxFileName }] });
+      }
+      const { path } = await replaceDeliveryDocx({ folder, docxFileName, docxBuffer });
       report.push({ title: d.title, journalist: journalistName, artiste: metadata.artiste, path });
     } catch (err: any) {
       report.push({ title: d.title, journalist: journalistName, error: err?.message || String(err) });

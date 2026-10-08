@@ -1,4 +1,5 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import { splitBold, PRINT_CHAPO_TYPES } from './inlineBold';
 
 interface FieldConfig {
   key: string;
@@ -80,7 +81,7 @@ export async function generateDocx(params: {
       if (field.type === 'images') continue;
       // Le chapo ne sert qu'au site (WordPress) : il ne part JAMAIS sur Dropbox
       // (consigne redaction du 01/10/2026).
-      if (field.key === 'chapo') continue;
+      if (field.key === 'chapo' && !PRINT_CHAPO_TYPES.has(params.paperType)) continue;
 
       // Star rating — render as "★★★★½ (4.5/5)"
       if (field.type === 'stars') {
@@ -115,6 +116,9 @@ export async function generateDocx(params: {
 
       // Special handling for different field types
       if (field.key === 'accroche') {
+        // Deja affichee comme titre du document : pas de doublon
+        const same = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+        if (typeof value === 'string' && same(value) === same(params.title)) continue;
         // Accroche in italic
         paragraphs.push(
           new Paragraph({
@@ -175,13 +179,13 @@ export async function generateDocx(params: {
           }
           paragraphs.push(
             new Paragraph({
-              children: [
-                new TextRun({
-                  text: line,
-                  size: 24,
-                  font: 'Georgia',
-                }),
-              ],
+              // **question** -> gras (interviews), cf. inlineBold
+              children: splitBold(line).map((seg) => new TextRun({
+                text: seg.text,
+                size: 24,
+                font: 'Georgia',
+                bold: seg.bold,
+              })),
               spacing: { after: 200, line: 360 },
             })
           );

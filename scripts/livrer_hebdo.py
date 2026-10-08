@@ -94,6 +94,11 @@ def added_words(original, corrected):
     return added
 
 
+def removed_words(original, corrected):
+    """Mots du journaliste que la correction supprime (au-dela des remplacements mot pour mot)."""
+    return added_words(corrected, original)
+
+
 # --- Livraison --------------------------------------------------------------
 
 def correct(token, text):
@@ -116,26 +121,37 @@ def checked_body(token, body):
     extra = added_words(body, corrected)
     if extra:
         return body, f"CORRECTION ECARTEE (mots ajoutes : {' '.join(extra[:12])}) — texte d'origine livre"
+    gone = removed_words(body, corrected)
+    if gone:
+        return body, f"CORRECTION ECARTEE (mots supprimes : {' '.join(gone[:12])}) — texte d'origine livre"
     return corrected, info
 
 
-def deliver(token, paper, ids, dry_run):
+def deliver(token, paper, ids, dry_run, reviewed=None):
+    """reviewed : texte deja corrige et valide (fichier du dry-run), sinon correction a la volee."""
     hebdo_id, types, authors = ids
     if paper["type"] not in types:
-        return False, f"type inconnu: {paper['type']}"
+        return False, f"type inconnu: {paper['type']}", None
     if paper["author"] not in authors:
-        return False, f"auteur sans compte: {paper['author']}"
+        return False, f"auteur sans compte: {paper['author']}", None
     meta = dict(paper["metadata"])
-    corrected, info = checked_body(token, meta.get("corps", ""))
+    if reviewed is not None:
+        if added_words(meta.get("corps", ""), reviewed):
+            return False, "texte relu contenant des mots ajoutes : refuse", None
+        if removed_words(meta.get("corps", ""), reviewed):
+            return False, f"texte relu amputé de mots ({' '.join(removed_words(meta.get('corps', ''), reviewed)[:8])}) : refuse", None
+        corrected, info = reviewed, "texte relu (dry-run)"
+    else:
+        corrected, info = checked_body(token, meta.get("corps", ""))
     if corrected is None:
-        return False, info
+        return False, info, None
     meta["corps"] = corrected
     images = [os.path.join(BASE, img) for img in paper.get("images", [])]
     missing = [p for p in images if not os.path.exists(p)]
     if missing:
-        return False, f"image introuvable: {missing[0]}"
+        return False, f"image introuvable: {missing[0]}", corrected
     if dry_run:
-        return True, f"[dry-run] {len(corrected)} signes, {len(images)} image(s), {info}"
+        return True, f"[dry-run] {len(corrected)} signes, {len(images)} image(s), {info}", corrected
 
     # --form-string et non -F : curl interprete ";", "@" et "<" dans une valeur
     # -F, ce qui tronquait silencieusement tout papier contenant un point-virgule.
@@ -158,8 +174,8 @@ def deliver(token, paper, ids, dry_run):
             err = json.loads(payload).get("error", payload[:150])
         except Exception:
             err = payload[:150]
-        return False, f"HTTP {code} — {err}"
-    return True, f"{len(corrected)} signes, {len(images)} image(s), {info}"
+        return False, f"HTTP {code} — {err}", corrected
+    return True, f"{len(corrected)} signes, {len(images)} image(s), {info}", corrected
 
 
 def main():
@@ -168,6 +184,7 @@ def main():
     ap.add_argument("--numero", required=True)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", help="ne traiter que les papiers dont le titre contient ce texte")
+    ap.add_argument("--reviewed", help="fichier des textes corriges produit par --dry-run (pas de nouvelle correction)")
     args = ap.parse_args()
     if not BASE:
         sys.exit("RS_BASE manquant (dossier HEBDOxxx)")
@@ -176,12 +193,23 @@ def main():
         papers = [p for p in papers if args.only.lower() in p["title"].lower()]
     token = login()
     ids = resolve_ids(token, args.numero)
+    reviewed = json.load(open(args.reviewed, encoding="utf-8")) if args.reviewed else {}
+    out_path = os.path.splitext(args.papers)[0] + ".corrige.json"
+    corrected_bodies = {}
     ok = fail = 0
     for p in papers:
+        key = f"{p['author']} | {p['type']} | {p['title']}"
         label = f"{p['author']:18s} | {p['type']:24s} | {p['title'][:38]:38s}"
-        success, detail = deliver(token, p, ids, args.dry_run)
+        if args.reviewed and key not in reviewed:
+            print(f"ECHEC {label} -> absent du fichier relu", flush=True); fail += 1; continue
+        success, detail, body = deliver(token, p, ids, args.dry_run, reviewed.get(key))
+        if body is not None:
+            corrected_bodies[key] = body
         print(f"{'OK  ' if success else 'ECHEC'} {label} -> {detail}", flush=True)
         ok, fail = (ok + 1, fail) if success else (ok, fail + 1)
+    if args.dry_run:
+        json.dump(corrected_bodies, open(out_path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        print(f"Textes corriges -> {out_path} (a relire, puis --reviewed {out_path})")
     print(f"\n{ok} {'verifie(s)' if args.dry_run else 'livre(s)'}, {fail} echec(s)")
 
 

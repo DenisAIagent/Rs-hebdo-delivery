@@ -98,7 +98,9 @@ export function AgentsTab() {
       </div>
 
       {selected && (
-        <AgentEditor agent={selected} meta={data.meta} paperTypeNames={paperTypeNames} categoryNames={categoryNames}
+        // key : un formulaire neuf par agent (sinon le brouillon de l'agent precedent
+        // est affiche un instant avec le mauvais formulaire et fait planter la page).
+        <AgentEditor key={selected.id} agent={selected} meta={data.meta} paperTypeNames={paperTypeNames} categoryNames={categoryNames}
           onSaved={replace} onClose={() => setSelectedId(null)} />
       )}
     </div>

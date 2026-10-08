@@ -27,6 +27,7 @@ export function AgentEditor({ agent, meta, paperTypeNames, categoryNames, onSave
   const [saving, setSaving] = useState(false);
   const [versions, setVersions] = useState<AgentVersion[] | null>(null);
 
+  // Apres un enregistrement ou une restauration, l'agent recu remplace le brouillon.
   useEffect(() => { setDraft(agent); setVersions(null); }, [agent]);
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(agent), [draft, agent]);
   const set = <K extends keyof EditorialAgent>(key: K, value: EditorialAgent[K]) => setDraft((d) => ({ ...d, [key]: value }));
@@ -64,6 +65,8 @@ export function AgentEditor({ agent, meta, paperTypeNames, categoryNames, onSave
     }
   };
 
+  // Garde-fou : jamais le brouillon d'un autre agent dans ce formulaire.
+  if (draft.id !== agent.id) return null;
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">

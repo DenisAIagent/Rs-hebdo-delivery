@@ -845,7 +845,7 @@ router.post('/hebdos/:id/reorganize-dropbox', async (req: AuthRequest, res: Resp
 // Regenere le DOCX Dropbox de chaque livraison d'un hebdo avec les regles
 // courantes (artiste en MAJUSCULES, chapo exclu, note affichee) : les
 // metadonnees normalisees sont enregistrees, le fichier est remplace en place.
-router.post('/hebdos/:id/regenerate-docx', async (req: AuthRequest, res: Response) => {
+router.post('/hebdos/:id/regenerate-docx', (req, _res, next) => { req.setTimeout(300_000); next(); }, async (req: AuthRequest, res: Response) => {
   // ?delivery=<id> limite a une seule livraison (reprise apres une limitation Dropbox).
   let query = supabaseAdmin
     .from('deliveries')

@@ -877,7 +877,10 @@ router.post('/hebdos/:id/regenerate-docx', (req, _res, next) => { req.setTimeout
       const { path } = await replaceDeliveryDocx({ folder, docxFileName, docxBuffer });
       report.push({ title: d.title, journalist: journalistName, artiste: metadata.artiste, path });
     } catch (err: any) {
-      report.push({ title: d.title, journalist: journalistName, error: err?.message || String(err) });
+      // Detail Dropbox (raison + delai demande) pour savoir quand reessayer.
+      const reason = err?.response?.data?.error_summary || '';
+      const retryAfter = err?.response?.headers?.['retry-after'] || '';
+      report.push({ title: d.title, journalist: journalistName, error: err?.message || String(err), reason, retryAfter });
     }
   }
   return res.json({ report });

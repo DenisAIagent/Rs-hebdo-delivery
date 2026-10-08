@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Save, X, History, RotateCcw, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { adminUpdateAgent, adminGetAgentVersions, adminRestoreAgentVersion } from '../../../services/api.ts';
@@ -51,6 +51,24 @@ export function AgentEditor({ agent, meta, paperTypeNames, categoryNames, onSave
     }
   };
 
+  // Fermeture : on demande confirmation si des modifications ne sont pas enregistrees.
+  const requestClose = useCallback(() => {
+    if (dirty && !window.confirm('Fermer sans enregistrer les modifications ?')) return;
+    onClose();
+  }, [dirty, onClose]);
+
+  // Modale : touche Echap pour fermer, page de fond bloquee pendant l'edition.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') requestClose(); };
+    document.addEventListener('keydown', onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [requestClose]);
+
   const loadVersions = async () => {
     try { setVersions(await adminGetAgentVersions(agent.id)); } catch (err) { toast.error(errorMessage(err)); }
   };
@@ -68,16 +86,19 @@ export function AgentEditor({ agent, meta, paperTypeNames, categoryNames, onSave
   // Garde-fou : jamais le brouillon d'un autre agent dans ce formulaire.
   if (draft.id !== agent.id) return null;
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/50 p-2 sm:p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+    <div role="dialog" aria-modal="true" aria-labelledby="agent-editor-title"
+      className="flex flex-col w-full max-w-4xl max-h-[96vh] sm:max-h-[90vh] bg-white rounded-xl shadow-xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50 shrink-0">
         <div>
-          <h3 className="font-semibold text-rs-black">{agent.name}</h3>
+          <h3 id="agent-editor-title" className="font-semibold text-rs-black">{agent.name}</h3>
           <p className="text-xs text-gray-500">Version {agent.version}{agent.updated_at ? ` · modifié le ${new Date(agent.updated_at).toLocaleString('fr-FR')}` : ''}</p>
         </div>
-        <button type="button" onClick={onClose} className="p-2 rounded-lg text-gray-400 hover:text-rs-black hover:bg-gray-100" aria-label="Fermer"><X size={18} /></button>
+        <button type="button" onClick={requestClose} className="p-2 rounded-lg text-gray-400 hover:text-rs-black hover:bg-gray-100" aria-label="Fermer"><X size={18} /></button>
       </div>
 
-      <div className="px-5 py-5 space-y-5">
+      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
         <Section title="Identité">
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Nom de l'agent"><input className={inputCls} value={draft.name} onChange={(e) => set('name', e.target.value)} /></Field>
@@ -134,7 +155,7 @@ export function AgentEditor({ agent, meta, paperTypeNames, categoryNames, onSave
         </Section>
       </div>
 
-      <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50 sticky bottom-0">
+      <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
         <button type="button" onClick={() => setDraft(agent)} disabled={!dirty || saving}
           className="text-sm font-medium px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-40">Annuler les modifications</button>
         <button type="button" onClick={save} disabled={!dirty || saving}
@@ -142,6 +163,7 @@ export function AgentEditor({ agent, meta, paperTypeNames, categoryNames, onSave
           {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Enregistrer
         </button>
       </div>
+    </div>
     </div>
   );
 }

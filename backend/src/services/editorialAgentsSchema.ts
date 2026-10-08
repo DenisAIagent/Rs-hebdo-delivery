@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Messages de validation en francais (affiches dans l'admin).
+z.config(z.locales.fr());
+
 /**
  * Schema des regles d'un agent web (onglet admin « Agents IA »). Transcription
  * structuree des fiches v0.1 de Denis (agent.md + une fiche par type de papier).

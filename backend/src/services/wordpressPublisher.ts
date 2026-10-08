@@ -27,6 +27,8 @@ import {
   writeWpPostMeta,
   type WpPostCandidate, findWpUserByName } from './wordpress';
 import { buildWpSystemPrompt, normalizeWpCategories, WP_STYLE_MUSIC } from './wordpressRules';
+import { decideChapoMode, checkGeneratedChapo, chapoPromptInstruction, type ChapoMode } from './chapoPolicy';
+import { isStrictEditorialFields } from './fieldPolicy';
 import { hasReviewBox, hasScalarMeta, missingEditorialMeta, WP_META_MAIN_ARTIST, WP_META_REVIEWS, WP_META_STYLE_MUSIC, type ReviewBoxInput } from './wordpressReviewBox';
 import { fetchDeliveryImages, type ImageFile } from './dropbox';
 import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SIDE } from './imageResize';
@@ -111,36 +113,6 @@ export function splitLinks(lien?: string, lienAchat?: string): { videoUrl?: stri
     else if (!out.shopUrl) out.shopUrl = url;
   }
   return out;
-}
-
-/** Premiere phrase d'un texte (ponctuation forte, guillemets fermants inclus). */
-export function firstSentence(text: string): string {
-  // On saute les lignes de mention placees en tete par le journaliste
-  // (« Dargaud », « Disponible sur Netflix », « Sur Ciné+ OCS a partir du 6 octobre ») :
-  // premier paragraphe d'au moins 80 signes avec une ponctuation de phrase.
-  const paragraphs = text.replace(/\r\n?/g, '\n').split(/\n\s*\n|\n/).map((x) => x.trim()).filter(Boolean);
-  const para = paragraphs.find((x) => x.length >= 80 && /[.!?…]/.test(x)) || paragraphs[0] || '';
-  const t = para.replace(/\s+/g, ' ').trim();
-  // Fin de phrase = ponctuation forte (ou points de suspension) suivie d'une
-  // majuscule, d'un guillemet ouvrant ou d'un chiffre ; « final… du moins » continue.
-  const m = t.match(/^.*?(?:[.!?]|…)(?:\s?[»"”)])?(?=\s+[A-ZÀ-ÝŒ«"“\d]|$)/);
-  return (m ? m[0] : t).trim();
-}
-
-/**
- * Chapo par defaut = premiere phrase du texte livre ; le corps renvoye commence
- * a la phrase suivante (la phrase n'est jamais repetee sous le chapo). Les
- * lignes de mention en tete (editeur, plateforme) restent dans le corps.
- */
-export function splitChapoFromBody(text: string): { chapo: string; body: string } {
-  const chapo = firstSentence(text);
-  if (!chapo) return { chapo: '', body: text };
-  const paragraphs = text.replace(/\r\n?/g, '\n').split(/\n\s*\n|\n/).map((x) => x.trim()).filter(Boolean);
-  const idx = paragraphs.findIndex((x) => x.replace(/\s+/g, ' ').startsWith(chapo));
-  if (idx < 0) return { chapo, body: text };
-  const rest = paragraphs[idx].replace(/\s+/g, ' ').slice(chapo.length).trim();
-  const next = rest ? [...paragraphs.slice(0, idx), rest, ...paragraphs.slice(idx + 1)] : [...paragraphs.slice(0, idx), ...paragraphs.slice(idx + 1)];
-  return { chapo, body: next.join('\n\n') };
 }
 
 export function buildArticleHtml(p: ArticleHtmlInput): string {
@@ -384,7 +356,12 @@ interface WpArticlePayload {
   internalLinkUrl?: string;
   /** Agent web applique (onglet « Agents IA »), trace dans wp_payload. */
   agent?: { name: string; version: number; alerts: string[] } | null;
+  /** Origine du chapo decidee avant l'appel IA (journaliste, genere, aucun). */
+  chapoPlan?: { mode: ChapoMode; maxWords: number | null };
 }
+
+/** Chapo du journaliste saisi dans le formulaire (champ chapo, sinon accroche). */
+const providedChapo = (metadata: Record<string, unknown>) => String(metadata?.chapo || metadata?.accroche || '').trim();
 
 const WP_ARTICLE_TOOL = {
   name: 'submit_wp_article',
@@ -416,6 +393,7 @@ const WP_ARTICLE_TOOL = {
 async function formatArticleForWp(
   input: WpPublishInput,
   internalCandidates: WpPostCandidate[],
+  strictChapo: boolean,
 ): Promise<WpArticlePayload> {
   const anthropic = await getAnthropicClient(120_000);
   let model = await getClaudeModel();
@@ -438,11 +416,21 @@ ${candidatesBlock}
 
   // Agent web du type de papier (onglet « Agents IA ») ; absent = prompt historique.
   const subtype = typeof input.metadata?.sous_type === 'string' ? input.metadata.sous_type : null;
-  const agentInfo = await loadAgentRulesForPaperType(input.paperTypeName, subtype);
+  const agentInfo = await loadAgentRulesForPaperType(input.paperTypeName, subtype, { strictChapo });
   if (!agentInfo.agent) console.warn(`[agents] aucun agent actif pour « ${input.paperTypeName} » : regles generiques`);
   const agentMeta = agentInfo.agent
     ? { name: agentInfo.agent.name, version: agentInfo.agent.version, alerts: agentInfo.alerts }
     : null;
+
+  // Chapo : journaliste, sinon genere tant que l'interrupteur « chapo obligatoire » est coupe.
+  const agentChapo = (agentInfo.agent?.config as { chapo?: { ifMissing: 'none' | 'generate'; maxWords: number | null; example?: string } } | undefined)?.chapo;
+  const chapoMode = decideChapoMode({
+    provided: providedChapo(input.metadata as Record<string, unknown>),
+    strict: strictChapo,
+    agentIfMissing: agentChapo?.ifMissing ?? 'generate',
+  });
+  const chapoPlan = { mode: chapoMode, maxWords: agentChapo?.maxWords ?? null };
+  const chapoInstruction = chapoPromptInstruction(chapoMode, { maxWords: chapoPlan.maxWords, example: agentChapo?.example });
 
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -450,14 +438,14 @@ ${candidatesBlock}
       const response = await anthropic.messages.create({
         model,
         max_tokens: 16384,
-        system: buildWpSystemPrompt(agentInfo.rules),
+        system: buildWpSystemPrompt(agentInfo.rules, chapoInstruction),
         tools: [WP_ARTICLE_TOOL],
         tool_choice: { type: 'tool', name: 'submit_wp_article' },
         messages: [{ role: 'user', content: userContent }],
       });
 
       const toolUse = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-      if (toolUse) return { ...(toolUse.input as WpArticlePayload), agent: agentMeta };
+      if (toolUse) return { ...(toolUse.input as WpArticlePayload), agent: agentMeta, chapoPlan };
 
       lastErr = new Error(`stop_reason=${response.stop_reason}`);
     } catch (e: any) {
@@ -560,7 +548,8 @@ export async function publishDeliveryToWordpress(
     // L'IA ne sert plus qu'aux metadonnees et a un chapo court. Sur un renvoi,
     // on ne garde de sa reponse que l'excerpt : titre, slug, SEO, categories,
     // tags, Style Music et Main Artist restent ceux du brouillon existant.
-    const fresh = await formatArticleForWp(input, candidates);
+    const strictChapo = await isStrictEditorialFields();
+    const fresh = await formatArticleForWp(input, candidates, strictChapo);
     const prev = input.previousPayload;
     const payload: WpArticlePayload = prev && prev.title
       ? { ...(prev as WpArticlePayload), categories: prev.categories || [], tags: prev.tags || [], excerpt: fresh.excerpt }
@@ -655,13 +644,26 @@ export async function publishDeliveryToWordpress(
     // Le corps est le texte livre, mot pour mot ; le chapo vient du formulaire
     // (accroche / chapo) ou, a defaut, de l'excerpt propose par l'IA (1-2 phrases).
     const meta = input.metadata as Record<string, unknown>;
-    // Chapo = celui du journaliste (champ chapo / accroche), sinon la premiere
-    // phrase du texte livre. Jamais un resume genere : consigne du 01/10/2026.
-    const formChapo = String(meta.chapo || meta.accroche || '').trim();
-    const split = formChapo ? null : splitChapoFromBody(input.bodyText);
-    const chapo = formChapo || split?.chapo || '';
-    // Quand la premiere phrase sert de chapo, le corps commence a la phrase suivante.
-    const bodyForWp = split ? split.body : input.bodyText;
+    // Chapo (consigne du 08/10/2026) : celui du journaliste ; sinon un chapo
+    // neutre genere, verifie mecaniquement, tant que l'interrupteur « chapo
+    // obligatoire » est coupe. Jamais une phrase du journaliste : le corps reste entier.
+    const chapoPlan = fresh.chapoPlan ?? { mode: 'aucun' as ChapoMode, maxWords: null };
+    let chapo = '';
+    if (chapoPlan.mode === 'journaliste') {
+      chapo = providedChapo(meta);
+    } else if (chapoPlan.mode === 'generer') {
+      const source = [input.title, input.bodyText, ...Object.values(meta).filter((v): v is string => typeof v === 'string')].join('\n');
+      const check = checkGeneratedChapo(fresh.excerpt || '', source, chapoPlan.maxWords);
+      if (check.ok) {
+        chapo = check.chapo;
+        await logInfo('wp-format', `Chapô généré (non fourni par le journaliste) : « ${chapo} »`, ctx);
+      } else {
+        await logWarn('wp-format', `Chapô généré rejeté (${check.reason}) : article sans chapô`, ctx);
+      }
+    } else {
+      await logInfo('wp-format', strictChapo ? 'Chapô non fourni ; interrupteur « chapô obligatoire » allumé : aucun chapô généré' : 'Chapô non fourni ; agent réglé sur « aucun chapô »', ctx);
+    }
+    const bodyForWp = input.bodyText;
     payload.excerpt = chapo;
     const links = splitLinks(String(meta.lien || ''), String(meta.lien_achat || ''));
     const kind: PaperKind = /cinema/i.test(input.paperTypeName) ? 'cinema' : /livre/i.test(input.paperTypeName) ? 'livres' : 'musique';

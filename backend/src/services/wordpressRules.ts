@@ -95,7 +95,7 @@ Alternatif/Indie, Blues, Classique, Country, Electronique, Folk, Funk, Hip Hop/R
  * System prompt: turns a delivered paper into a WordPress-ready payload
  * following the rollingstone.fr editorial conventions.
  */
-export function buildWpSystemPrompt(agentRules?: string): string {
+export function buildWpSystemPrompt(agentRules?: string, chapoInstruction?: string): string {
   // Regles de l'agent du type de papier (onglet admin « Agents IA ») : elles
   // priment sur les formats generiques ci-dessus, jamais sur le texte mot pour mot.
   const agentBlock = agentRules?.trim()
@@ -105,7 +105,7 @@ export function buildWpSystemPrompt(agentRules?: string): string {
 
 CONTENU DE L'ARTICLE :
 - Le corps de l'article est assemble par l'application a partir du texte livre, MOT POUR MOT. Tu ne produis PAS le HTML du corps, tu ne reecris rien, tu n'ajoutes aucune phrase, aucun intertitre, aucune information.
-- Ton seul texte redactionnel est le champ excerpt : un chapo LEGER, 1 a 2 phrases maximum, en texte brut, qui resume le papier avec ses propres informations. Aucun fait, nom, date ou jugement absent du papier. Si le formulaire fournit deja une accroche ou un chapo, reprends-le tel quel.
+- Ton seul texte redactionnel est le champ excerpt (le chapo), selon la consigne CHAPO ci-dessous.
 - La signature du journaliste est ajoutee automatiquement en fin d'article.
 
 LIEN INTERNE (champ internalLinkUrl) : choisis dans la liste <liens_internes_candidats> un article qui parle VRAIMENT du meme artiste, du meme film ou du meme sujet, et renvoie son URL exacte ; l'application l'affiche en bloc « A lire aussi » sous l'article. Une playlist, un replay ou un article sans rapport direct ne sont PAS pertinents : dans ce cas renvoie une chaine vide (c'est le cas le plus frequent). N'invente jamais d'URL.
@@ -129,12 +129,12 @@ YOAST SEO :
 - slug : court, mots-cles separes par des tirets, sans mots vides ni accents.
 
 FORMATS PAR TYPE DE PAPIER :
-- Chronique disque (types « Chroniques », « Disque de la semaine ») : title = « Chronique : Artiste, Album » (ex. « Chronique : Brandon Flowers, Thrasher »). L'excerpt resume l'avis en 1-2 phrases, sans rien inventer. Categories [3627, 6716] (+ 6275 si metal) ; « Disque de la semaine » -> [3627, 23176]. Ne mets PAS le shortcode de la review box ni la note dans le texte : ils sont ajoutes automatiquement.
+- Chronique disque (types « Chroniques », « Disque de la semaine ») : title = « Chronique : Artiste, Album » (ex. « Chronique : Brandon Flowers, Thrasher »). Categories [3627, 6716] (+ 6275 si metal) ; « Disque de la semaine » -> [3627, 23176]. Ne mets PAS le shortcode de la review box ni la note dans le texte : ils sont ajoutes automatiquement.
 - Chronique cinema (type « Chronique Cinema ») : title = « Critique : Titre du film » ; categories [3619, 3, 6714].
 - Interview : categories [3627, 6708] (musique) ou [3619, 6709] (culture).
 - Sujet de couv / grand format : [3627, 6713] (musique) ou [3619, 6712] (culture).
 
-EXCERPT : le chapo leger en texte brut (sans balises), 1 a 2 phrases, fidele au papier.${agentBlock}
+${(chapoInstruction || 'CHAPO (champ excerpt) : si le formulaire fournit un chapo, recopie-le tel quel ; sinon excerpt = chaine vide.').trim()}${agentBlock}
 
 Tu reponds UNIQUEMENT via l'outil submit_wp_article.`;
 }

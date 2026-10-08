@@ -20,10 +20,21 @@ test('chaque agent par defaut passe son schema', () => {
   }
 });
 
-test('le chapo n\'est jamais genere par defaut (decision du 08/10)', () => {
+test('chapo genere par defaut (consigne du 08/10), sauf le cinema a introduction fixe', () => {
   for (const a of DEFAULT_AGENTS.filter((x) => !x.is_lead)) {
-    assert.equal((a.config as any).chapo.ifMissing, 'none', a.name);
+    const expected = a.slug === 'chroniqueur-cinema' ? 'none' : 'generate';
+    assert.equal((a.config as any).chapo.ifMissing, expected, a.name);
   }
+  const musique = DEFAULT_AGENTS.find((a) => a.slug === 'chroniqueur-musique')!;
+  assert.match((musique.config as any).chapo.example, /Greta Van Fleet/);
+});
+
+test('interrupteur « chapo obligatoire » allume : les regles interdisent de generer', () => {
+  const musique = asRows().find((a) => a.slug === 'chroniqueur-musique')!;
+  assert.match(buildAgentRules(lead(), musique), /chapô neutre généré/);
+  const strict = buildAgentRules(lead(), musique, { strictChapo: true });
+  assert.match(strict, /aucun chapô généré/);
+  assert.doesNotMatch(strict, /chapô neutre généré selon/);
 });
 
 test('chaque type de papier a un agent', () => {
@@ -53,7 +64,7 @@ test('un agent inactif est ignore, type inconnu = aucun agent', () => {
   assert.equal(resolveAgentForPaperType(asRows(), 'Type inexistant').agent, null);
 });
 
-test('les regles pour l\'IA contiennent categories, titre, interdits, et interdisent de generer un chapo', () => {
+test('les regles pour l\'IA contiennent categories, titre, interdits et la regle du chapo', () => {
   const rows = asRows();
   const cinema = rows.find((a) => a.slug === 'chroniqueur-cinema')!;
   const txt = buildAgentRules(lead(), cinema);
@@ -61,7 +72,7 @@ test('les regles pour l\'IA contiennent categories, titre, interdits, et interdi
   assert.match(txt, /6714/);
   assert.match(txt, /CINÉMA : \{N\} films/);
   assert.match(txt, /Ne jamais modifier, raccourcir/);
-  assert.match(txt, /ne jamais generer de chapo/i);
+  assert.match(txt, /jamais une phrase ou un extrait du texte du journaliste/);
 });
 
 test('validation des modifications : categories numeriques, chapo borne', () => {

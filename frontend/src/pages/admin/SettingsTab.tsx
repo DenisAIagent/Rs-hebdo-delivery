@@ -642,6 +642,8 @@ export function SettingsTab() {
             Activé, chaque livraison doit avoir un chapô et, pour les chroniques musique, un clip YouTube et un lien
             Bandcamp ou site officiel. Désactivé, ces trois champs deviennent facultatifs dans le formulaire et côté
             serveur ; un lien saisi reste vérifié. La configuration des types de papier n'est pas modifiée.
+            Côté web : désactivé, un chapô neutre est généré quand le journaliste n'en fournit pas ; activé, plus aucun
+            chapô n'est généré.
           </p>
         </div>
       </div>

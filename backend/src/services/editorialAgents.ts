@@ -56,10 +56,19 @@ function leadRules(lead: LeadConfig): string {
   ].join('\n');
 }
 
-function agentRules(agent: EditorialAgent, cfg: AgentConfig): string {
-  const chapo = cfg.chapo.ifMissing === 'none'
-    ? 'Chapô : uniquement celui fourni par le journaliste. Ne jamais generer de chapo ; s\'il manque, aucun chapô et alerte « chapô non fourni ».'
-    : 'Chapô : celui du journaliste ; s\'il manque, une phrase neutre construite uniquement avec les éléments de la livraison.';
+export interface AgentRulesOptions {
+  /** Interrupteur « chapo obligatoire » allume : plus aucun chapo genere. */
+  strictChapo?: boolean;
+}
+
+function chapoRule(cfg: AgentConfig, strictChapo: boolean): string {
+  if (cfg.chapo.ifMissing === 'none') return 'Chapô : uniquement celui fourni par le journaliste ; s\'il manque, aucun chapô et alerte « chapô non fourni ».';
+  if (strictChapo) return 'Chapô : uniquement celui fourni par le journaliste (interrupteur « chapô obligatoire » allumé : aucun chapô généré).';
+  return 'Chapô : celui du journaliste ; s\'il manque, un chapô neutre généré selon la consigne CHAPO (jamais une phrase du journaliste).';
+}
+
+function agentRules(agent: EditorialAgent, cfg: AgentConfig, strictChapo: boolean): string {
+  const chapo = chapoRule(cfg, strictChapo);
   const limits = [cfg.chapo.maxWords && `${cfg.chapo.maxWords} mots`, cfg.chapo.maxSentences && `${cfg.chapo.maxSentences} phrase(s)`].filter(Boolean);
   return [
     `RÈGLES DE L'AGENT « ${agent.name} » (types : ${agent.paper_types.join(', ')}${agent.subtype ? `, sous-type ${agent.subtype}` : ''}, version ${agent.version}) :`,
@@ -77,10 +86,10 @@ function agentRules(agent: EditorialAgent, cfg: AgentConfig): string {
 }
 
 /** Bloc de regles en texte, pour le prompt systeme de l'IA WordPress. */
-export function buildAgentRules(lead: EditorialAgent | null, agent: EditorialAgent): string {
+export function buildAgentRules(lead: EditorialAgent | null, agent: EditorialAgent, opts: AgentRulesOptions = {}): string {
   const parts: string[] = [];
   if (lead && lead.is_active) parts.push(`RÈGLES COMMUNES (${lead.name}, version ${lead.version}) :\n${leadRules(lead.config as LeadConfig)}`);
-  parts.push(agentRules(agent, agent.config as AgentConfig));
+  parts.push(agentRules(agent, agent.config as AgentConfig, opts.strictChapo ?? false));
   return parts.join('\n\n');
 }
 
@@ -113,12 +122,12 @@ export async function listAgents(): Promise<EditorialAgent[]> {
 }
 
 /** Agent (et agent principal) du type de papier, pour la publication WordPress. Ne leve jamais. */
-export async function loadAgentRulesForPaperType(typeName: string, subtype?: string | null): Promise<{ rules: string; agent: EditorialAgent | null; alerts: string[] }> {
+export async function loadAgentRulesForPaperType(typeName: string, subtype?: string | null, opts: AgentRulesOptions = {}): Promise<{ rules: string; agent: EditorialAgent | null; alerts: string[] }> {
   try {
     const agents = await listAgents();
     const { agent, alerts } = resolveAgentForPaperType(agents, typeName, subtype);
     if (!agent) return { rules: '', agent: null, alerts };
-    return { rules: buildAgentRules(agents.find((a) => a.is_lead) || null, agent), agent, alerts };
+    return { rules: buildAgentRules(agents.find((a) => a.is_lead) || null, agent, opts), agent, alerts };
   } catch (err) {
     console.error('[agents] chargement des agents impossible:', err instanceof Error ? err.message : err);
     return { rules: '', agent: null, alerts: [] };

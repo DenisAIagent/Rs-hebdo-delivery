@@ -4,7 +4,9 @@ import type { AgentConfig, LeadConfig } from './editorialAgentsSchema';
  * Equipe de depart de l'onglet « Agents IA », transcrite des fiches v0.1 de Denis
  * (docs/agents-web/*.md, 08/10/2026). Inseree en base au premier affichage si la
  * table est vide ; ensuite, seule la base fait foi (modifications depuis l'admin).
- * Difference volontaire avec les fiches : chapo JAMAIS genere (decision du 08/10).
+ * Chapo (consigne du 08/10) : celui du journaliste, sinon un chapo neutre genere
+ * tant que l'interrupteur « chapo obligatoire » (Reglages) est coupe ; jamais une
+ * phrase du journaliste. Le chroniqueur cinema garde son introduction fixe.
  */
 export interface DefaultAgent {
   slug: string;
@@ -18,8 +20,13 @@ export interface DefaultAgent {
   notes_md: string;
 }
 
+/** Exemple de Denis (08/10/2026) pour le ton d'un chapo genere. */
+export const CHAPO_EXAMPLE_MUSIQUE = 'Porté par la voix de Josh Kiszka, Greta Van Fleet revient avec Palace For The People (Polydor), un disque au souffle mystique.';
+
+const genChapo = (maxWords: number | null, maxSentences: number | null, example = '') =>
+  ({ ifMissing: 'generate' as const, maxWords, maxSentences, example });
 const noChapo = (maxWords: number | null, maxSentences: number | null) =>
-  ({ ifMissing: 'none' as const, maxWords, maxSentences });
+  ({ ifMissing: 'none' as const, maxWords, maxSentences, example: '' });
 
 const COMMON_CHECKS_NO_PHOTO = ['Corps sans <img> ni [caption]'];
 
@@ -29,7 +36,7 @@ const lead: LeadConfig = {
   forbidden: [
     'Ne jamais modifier, raccourcir, résumer ou réécrire le texte du journaliste. Seules corrections admises : espaces insécables avant « : ; ! ? » et « ».',
     'Ne jamais déplacer une partie du texte du journaliste dans le chapô. Le chapô s\'ajoute au texte, il ne le remplace pas.',
-    'Ne jamais générer de chapô : il n\'existe que s\'il est fourni par le journaliste (sinon aucun chapô et alerte « chapô non fourni »).',
+    'Chapô : celui du journaliste s\'il est fourni. Sinon, tant que l\'interrupteur « chapô obligatoire » (Réglages) est coupé, une phrase neutre générée avec les seuls éléments de la livraison ; jamais une phrase ou un extrait du texte du journaliste. Interrupteur allumé : plus aucun chapô généré.',
     'Ne jamais ajouter un fait absent de la livraison : date, chiffre, numéro d\'album, label, nom, citation, classement, lieu.',
     'Ne jamais aller chercher soi-même une vidéo, un lien, une photo ou une note : seuls les éléments fournis dans la livraison sont utilisés.',
     'Ne jamais utiliser de blocs Gutenberg (<!-- wp:... -->), ni de <figure>, ni d\'<iframe>.',
@@ -60,7 +67,7 @@ const lead: LeadConfig = {
     { name: 'News (Culture)', id: 6717 },
   ],
   htmlFormats: [
-    { element: 'Chapô', format: '<h3>…</h3>, toujours le premier bloc, une seule fois (seulement si fourni)' },
+    { element: 'Chapô', format: '<h3>…</h3>, toujours le premier bloc, une seule fois (s\'il y a un chapô)' },
     { element: 'Intertitre / question d\'interview', format: '<h4>…</h4>' },
     { element: 'Intitulé de liste (tracklist, setlist)', format: '<h6>Voici la tracklist :</h6> ou <h6>Setlist :</h6>' },
     { element: 'Liste', format: '<ol><li>…</li></ol>' },
@@ -72,9 +79,10 @@ const lead: LeadConfig = {
     { element: 'Lien interne rollingstone.fr', format: '<a href="…">…</a>' },
   ],
   finalChecks: [
-    'Si un chapô est fourni : le premier bloc est un <h3>, et il n\'y en a qu\'un',
+    'S\'il y a un chapô : le premier bloc est un <h3>, et il n\'y en a qu\'un',
     'Le texte du journaliste est présent en entier dans le corps, mot pour mot',
-    'Le chapô fourni respecte la longueur de la fiche (sinon alerte, non bloquant)',
+    'Chapô fourni : longueur de la fiche indicative (alerte, non bloquant). Chapô généré : longueur maximale respectée, sinon article sans chapô',
+    'Aucun nom propre ni chiffre du chapô généré n\'est absent de la livraison, et le chapô ne recopie aucune phrase du journaliste (sinon article sans chapô + alerte)',
     'Aucune balise interdite (h1, h2, h5, second h3, <br> en série), aucun bloc Gutenberg, aucune iframe',
     'Nombre de photos dans le corps ≤ maximum de la fiche du type',
     'Catégories = exactement celles de la fiche',
@@ -87,7 +95,7 @@ const lead: LeadConfig = {
 const chroniqueMusique: AgentConfig = {
   categories: [6716, 3627],
   titleTemplates: [{ label: 'Titre', template: '{Artiste} – {Album}' }],
-  chapo: noChapo(35, 1),
+  chapo: genChapo(35, 1, CHAPO_EXAMPLE_MUSIQUE),
   body: { mode: 'article', photosMax: 0, headings: 'interdits', minWordsBetweenPhotos: null },
   featuredImage: { format: '1280x853', source: 'pochette', crop: 'recadrage_centre', caption: '' },
   endBlocks: ['site_officiel', 'video', 'a_lire_aussi', 'note', 'signature'],
@@ -98,7 +106,7 @@ const chroniqueMusique: AgentConfig = {
 const empty = (categories: number[]): AgentConfig => ({
   categories,
   titleTemplates: [{ label: 'Titre', template: '{Titre livré}' }],
-  chapo: noChapo(null, null),
+  chapo: genChapo(40, 2),
   body: { mode: 'article', photosMax: 3, headings: 'journaliste', minWordsBetweenPhotos: 150 },
   featuredImage: { format: '1280x853', source: 'photo 1', crop: 'recadrage_centre', caption: '© {Photographe}' },
   endBlocks: ['signature'],
@@ -149,7 +157,7 @@ export const DEFAULT_AGENTS: DefaultAgent[] = [
     config: {
       categories: [6716, 23176, 3627],
       titleTemplates: [{ label: 'Titre', template: '{Artiste} – {Album}' }],
-      chapo: noChapo(30, 1),
+      chapo: genChapo(30, 1, CHAPO_EXAMPLE_MUSIQUE),
       body: { mode: 'article', photosMax: 0, headings: 'interdits', minWordsBetweenPhotos: null },
       featuredImage: { format: '1000x1000', source: 'pochette', crop: 'entiere', caption: '' },
       endBlocks: ['video', 'note', 'tracklist', 'signature'],
@@ -174,7 +182,7 @@ export const DEFAULT_AGENTS: DefaultAgent[] = [
         { label: 'Avec accroche', template: 'INTERVIEW : {Nom}, {accroche}' },
         { label: 'Sans accroche', template: 'INTERVIEW : {Nom}' },
       ],
-      chapo: noChapo(45, 2),
+      chapo: genChapo(45, 2, '{Nom}, {présentation reprise du texte}, revient sur {objet}.'),
       body: { mode: 'article', photosMax: 3, headings: 'questions_h4', minWordsBetweenPhotos: 200 },
       featuredImage: { format: '1280x853', source: 'photo 1', crop: 'recadrage_centre', caption: '© {Photographe}' },
       endBlocks: [],
@@ -196,7 +204,7 @@ export const DEFAULT_AGENTS: DefaultAgent[] = [
     config: {
       categories: [72709, 3627],
       titleTemplates: [{ label: 'Titre', template: 'LIVE REPORT : {Artiste} {au|à} {Salle}' }],
-      chapo: noChapo(40, 2),
+      chapo: genChapo(40, 2, '{Artiste} était sur la scène {de la salle} à {Ville} le {date}.'),
       body: { mode: 'article', photosMax: 3, headings: 'interdits', minWordsBetweenPhotos: 150 },
       featuredImage: { format: '1280x853', source: 'photo 1', crop: 'recadrage_centre', caption: '© {Photographe} pour Rolling Stone' },
       endBlocks: ['setlist'],
@@ -243,7 +251,7 @@ export const DEFAULT_AGENTS: DefaultAgent[] = [
         { label: 'Roman', template: '{Titre}, le nouveau roman de {Auteur}' },
         { label: 'Autre', template: '{Titre}, de {Auteur}' },
       ],
-      chapo: noChapo(35, 2),
+      chapo: genChapo(35, 2, '{Auteur} signe {Titre}, {genre} paru chez {Éditeur}.'),
       body: { mode: 'article', photosMax: 0, headings: 'journaliste', minWordsBetweenPhotos: null },
       featuredImage: { format: '1280x853', source: 'couverture', crop: 'recadrage_centre', caption: '' },
       endBlocks: ['note', 'signature'],
@@ -266,7 +274,7 @@ export const DEFAULT_AGENTS: DefaultAgent[] = [
         { label: 'Avec accroche', template: '{Nom de l\'exposition} : {accroche}' },
         { label: 'Sans accroche', template: '{Nom de l\'exposition}' },
       ],
-      chapo: noChapo(40, 2),
+      chapo: genChapo(40, 2, '{Lieu} consacre l\'exposition {Nom} à {Sujet}, du {date} au {date}.'),
       body: { mode: 'article', photosMax: 2, headings: 'interdits', minWordsBetweenPhotos: 150 },
       featuredImage: { format: '1280x853', source: 'visuel 1', crop: 'recadrage_centre', caption: '© {crédit}' },
       endBlocks: ['infos_pratiques', 'signature'],
@@ -284,7 +292,7 @@ export const DEFAULT_AGENTS: DefaultAgent[] = [
   {
     slug: 'chroniqueur-frenchie', name: 'Chroniqueur Frenchie', is_lead: false, paper_types: ['Frenchie'], subtype: null, is_active: true,
     role: 'Met en forme le Frenchie. Fiche à compléter : seules les règles communes s\'appliquent.',
-    config: { ...empty([6716, 3627]), body: { mode: 'article', photosMax: 0, headings: 'interdits', minWordsBetweenPhotos: null } },
+    config: { ...empty([6716, 3627]), chapo: genChapo(35, 1, CHAPO_EXAMPLE_MUSIQUE), body: { mode: 'article', photosMax: 0, headings: 'interdits', minWordsBetweenPhotos: null } },
     notes_md: 'À COMPLÉTER : aucune fiche fournie pour le Frenchie. Catégories de départ : celles d\'une chronique musique.',
   },
 ];

@@ -42,22 +42,31 @@ export function AgentRulesForm({ cfg, onChange, meta, categoryNames }: Props) {
           columns={[{ key: 'label', label: 'Cas', width: '25%' }, { key: 'template', label: 'Modèle' }]} />
       </Section>
 
-      <Section title="Chapô" hint="Repris tel quel s'il est fourni par le journaliste.">
+      <Section title="Chapô" hint="Repris tel quel s'il est fourni par le journaliste. Sinon, chapô neutre généré tant que l'interrupteur « Chapô obligatoire » (Réglages) est coupé.">
         <div className="grid sm:grid-cols-3 gap-3">
           <Field label="Si le chapô manque">
             <select className={inputCls} value={cfg.chapo.ifMissing}
               onChange={(e) => set('chapo', { ...cfg.chapo, ifMissing: e.target.value as 'none' | 'generate' })}>
+              <option value="generate">Chapô neutre généré</option>
               <option value="none">Aucun chapô + alerte</option>
-              <option value="generate">Phrase neutre générée</option>
             </select>
           </Field>
           <Field label="Mots max (alerte)"><NumberInput value={cfg.chapo.maxWords} min={5} placeholder="—" onChange={(v) => set('chapo', { ...cfg.chapo, maxWords: v })} /></Field>
           <Field label="Phrases max (alerte)"><NumberInput value={cfg.chapo.maxSentences} min={1} placeholder="—" onChange={(v) => set('chapo', { ...cfg.chapo, maxSentences: v })} /></Field>
         </div>
         {cfg.chapo.ifMissing === 'generate' && (
-          <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            Attention : un chapô généré est du texte qui n'a pas été écrit par le journaliste.
-          </p>
+          <>
+            <div className="mt-3">
+              <Field label="Exemple de chapô (ton à imiter)" hint="Les noms, titres et chiffres du chapô généré doivent figurer dans la livraison, sinon il est écarté.">
+                <textarea rows={2} className={inputCls} value={cfg.chapo.example ?? ''}
+                  onChange={(e) => set('chapo', { ...cfg.chapo, example: e.target.value })} />
+              </Field>
+            </div>
+            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Un chapô généré n'est pas écrit par le journaliste : il n'apparaît que sur le web, jamais dans le docx Dropbox,
+              et la génération s'arrête dès que l'interrupteur « Chapô obligatoire » est allumé.
+            </p>
+          </>
         )}
       </Section>
 

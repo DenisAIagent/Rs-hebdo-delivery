@@ -125,7 +125,7 @@ export type HeadingRule = 'interdits' | 'journaliste' | 'questions_h4' | 'elemen
 export interface AgentConfig {
   categories: number[];
   titleTemplates: { label: string; template: string }[];
-  chapo: { ifMissing: 'none' | 'generate'; maxWords: number | null; maxSentences: number | null };
+  chapo: { ifMissing: 'none' | 'generate'; maxWords: number | null; maxSentences: number | null; example?: string };
   body: { mode: 'article' | 'groupe_hebdo'; photosMax: number; headings: HeadingRule; minWordsBetweenPhotos: number | null };
   featuredImage: { format: '1280x853' | '1000x1000'; source: string; crop: 'recadrage_centre' | 'entiere'; caption: string };
   endBlocks: EndBlock[];

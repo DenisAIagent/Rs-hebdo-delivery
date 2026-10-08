@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink, firstSentence, splitChapoFromBody } from './wordpressPublisher';
+import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink } from './wordpressPublisher';
 
 const body = `Alors, comme ça, le rock serait mort ! Passé par pertes et profits.
 
@@ -83,21 +83,4 @@ test('pickInternalLink : choix IA > titre citant l’artiste > rubrique, jamais 
   assert.deepEqual(await pickInternalLink({ candidates, aiChoice: '', artiste: 'Mastodon', categories: [5], loadCategory: cat }),
     { url: 'https://www.rollingstone.fr/chroniques/', title: 'Tous nos articles Chroniques' });
   assert.equal(await pickInternalLink({ candidates, artiste: 'Mastodon', categories: [], loadCategory: cat }), undefined);
-});
-
-test('firstSentence : premiere phrase du texte livre, guillemets et points de suspension compris', () => {
-  assert.equal(firstSentence('Alors, comme ça, le rock serait mort ! Passé par pertes et profits.'), 'Alors, comme ça, le rock serait mort !');
-  assert.equal(firstSentence('« Forer, forer, forer », vociférait Donald Trump lors de sa campagne. Digger ne l’a pas attendu.'), '« Forer, forer, forer », vociférait Donald Trump lors de sa campagne.');
-  assert.equal(firstSentence('Un point final… du moins pour le moment. Suite.'), 'Un point final… du moins pour le moment.');
-  assert.equal(firstSentence('Sans ponctuation finale'), 'Sans ponctuation finale');
-  assert.equal(firstSentence('Dargaud\n\nEn 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente l’expérience de vivre à l’écart de la société. Suite.'), 'En 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente l’expérience de vivre à l’écart de la société.');
-  assert.equal(firstSentence('Il a dit « ça suffit. » Puis il est parti.'), 'Il a dit « ça suffit. »');
-});
-
-test('splitChapoFromBody : la premiere phrase devient le chapo et disparait du corps, les mentions restent', () => {
-  const r = splitChapoFromBody('Dargaud\n\nEn 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente une expérience de vie à l’écart. Il construit une cabane.\n\nSuite du texte.');
-  assert.equal(r.chapo, 'En 1845, dans le Massachusetts, le philosophe Henry David Thoreau tente une expérience de vie à l’écart.');
-  assert.equal(r.body, 'Dargaud\n\nIl construit une cabane.\n\nSuite du texte.');
-  const one = splitChapoFromBody('Une seule phrase assez longue pour servir de chapô, avec ses quatre-vingts signes et plus.\n\nDeuxième paragraphe.');
-  assert.equal(one.body, 'Deuxième paragraphe.');
 });

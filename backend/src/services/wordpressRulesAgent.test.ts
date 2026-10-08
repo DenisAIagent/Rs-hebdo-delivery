@@ -16,3 +16,10 @@ test('avec agent : ses regles sont ajoutees et priment', () => {
   // la consigne de reponse reste la derniere ligne
   assert.match(p.trim(), /submit_wp_article\.$/);
 });
+
+test('consigne de chapo : injectee dans le prompt, sans ancienne consigne de resume', () => {
+  const p = buildWpSystemPrompt('', 'CHAPO (champ excerpt) : aucun chapo pour cet article ; excerpt = chaine vide.');
+  assert.match(p, /aucun chapo pour cet article/);
+  assert.doesNotMatch(p, /resume le papier/);
+  assert.match(buildWpSystemPrompt(), /CHAPO \(champ excerpt\)/);
+});

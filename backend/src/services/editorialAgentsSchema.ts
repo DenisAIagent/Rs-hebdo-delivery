@@ -40,11 +40,13 @@ export const agentConfigSchema = z.object({
   categories: z.array(z.number().int().positive()).max(10),
   titleTemplates: z.array(z.object({ label: text.max(40), template: nonEmpty.max(200) })).min(1).max(5),
   chapo: z.object({
-    // Decision du 08/10/2026 : le chapo n'est repris que s'il est fourni. `generate`
-    // reste possible depuis l'admin, mais n'est jamais la valeur par defaut.
+    // Consigne du 08/10/2026 : chapo du journaliste, sinon chapo neutre genere
+    // (`generate`) tant que l'interrupteur « chapo obligatoire » est coupe.
     ifMissing: z.enum(['none', 'generate']),
     maxWords: z.number().int().min(5).max(120).nullable(),
     maxSentences: z.number().int().min(1).max(5).nullable(),
+    /** Exemple du ton attendu pour un chapo genere (facultatif). */
+    example: text.max(400).optional(),
   }),
   body: z.object({
     mode: z.enum(['article', 'groupe_hebdo']),

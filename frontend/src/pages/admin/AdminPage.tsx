@@ -6,7 +6,8 @@ import { DeliveriesTab } from './DeliveriesTab.tsx';
 import { PromptTab } from './PromptTab.tsx';
 import { LogsTab } from './LogsTab.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
-import { FileText, Hash, Users, Send, Bot, Activity, Settings } from 'lucide-react';
+import { AgentsTab } from './AgentsTab.tsx';
+import { FileText, Hash, Users, Send, Bot, Activity, Settings, Sparkles } from 'lucide-react';
 
 type Tab =
   | 'paper-types'
@@ -14,6 +15,7 @@ type Tab =
   | 'journalists'
   | 'deliveries'
   | 'prompt'
+  | 'agents'
   | 'logs'
   | 'settings';
 
@@ -26,6 +28,7 @@ export function AdminPage() {
     { key: 'journalists', label: 'Journalistes', icon: <Users size={16} /> },
     { key: 'deliveries', label: 'Livraisons', icon: <Send size={16} /> },
     { key: 'prompt', label: 'Prompt IA', icon: <Bot size={16} /> },
+    { key: 'agents', label: 'Agents IA', icon: <Sparkles size={16} /> },
     { key: 'logs', label: 'Logs', icon: <Activity size={16} /> },
     { key: 'settings', label: 'Réglages', icon: <Settings size={16} /> },
   ];
@@ -92,6 +95,7 @@ export function AdminPage() {
       {tab === 'journalists' && <JournalistsTab />}
       {tab === 'deliveries' && <DeliveriesTab />}
       {tab === 'prompt' && <PromptTab />}
+      {tab === 'agents' && <AgentsTab />}
       {tab === 'logs' && <LogsTab />}
       {tab === 'settings' && <SettingsTab />}
     </div>

@@ -117,3 +117,56 @@ export interface DeliveryLog {
   title: string | null;
   created_at: string;
 }
+
+// ========== Agents IA (agents web WordPress) ==========
+export type EndBlock = 'site_officiel' | 'video' | 'a_lire_aussi' | 'note' | 'tracklist' | 'setlist' | 'infos_pratiques' | 'signature';
+export type HeadingRule = 'interdits' | 'journaliste' | 'questions_h4' | 'element_h4';
+
+export interface AgentConfig {
+  categories: number[];
+  titleTemplates: { label: string; template: string }[];
+  chapo: { ifMissing: 'none' | 'generate'; maxWords: number | null; maxSentences: number | null };
+  body: { mode: 'article' | 'groupe_hebdo'; photosMax: number; headings: HeadingRule; minWordsBetweenPhotos: number | null };
+  featuredImage: { format: '1280x853' | '1000x1000'; source: string; crop: 'recadrage_centre' | 'entiere'; caption: string };
+  endBlocks: EndBlock[];
+  signature: string;
+  checks: string[];
+}
+
+export interface LeadConfig {
+  wpStatus: 'pending' | 'draft';
+  editor: 'classique';
+  forbidden: string[];
+  authors: { name: string; wpId: number | null }[];
+  categoryIds: { name: string; id: number }[];
+  htmlFormats: { element: string; format: string }[];
+  finalChecks: string[];
+  reportFormat: string;
+}
+
+export interface EditorialAgent {
+  id: string;
+  slug: string;
+  name: string;
+  role: string;
+  is_lead: boolean;
+  paper_types: string[];
+  subtype: string | null;
+  is_active: boolean;
+  config: AgentConfig | LeadConfig;
+  notes_md: string;
+  version: number;
+  updated_at: string;
+}
+
+export interface AgentsResponse {
+  agents: EditorialAgent[];
+  meta: { endBlocks: Record<EndBlock, string>; headings: Record<HeadingRule, string> };
+}
+
+export interface AgentVersion {
+  version: number;
+  name: string;
+  created_at: string;
+  created_by: string | null;
+}

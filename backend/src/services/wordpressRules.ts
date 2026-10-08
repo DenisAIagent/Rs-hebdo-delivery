@@ -95,7 +95,12 @@ Alternatif/Indie, Blues, Classique, Country, Electronique, Folk, Funk, Hip Hop/R
  * System prompt: turns a delivered paper into a WordPress-ready payload
  * following the rollingstone.fr editorial conventions.
  */
-export function buildWpSystemPrompt(): string {
+export function buildWpSystemPrompt(agentRules?: string): string {
+  // Regles de l'agent du type de papier (onglet admin « Agents IA ») : elles
+  // priment sur les formats generiques ci-dessus, jamais sur le texte mot pour mot.
+  const agentBlock = agentRules?.trim()
+    ? `\n\nREGLES DE L'AGENT WEB (elles priment sur les formats generiques ci-dessus ; le corps reste le texte livre, mot pour mot) :\n${agentRules.trim()}\n`
+    : '';
   return `Tu es le secretaire de redaction digital de Rolling Stone France. Tu transformes un papier livre par un journaliste en article pret pour WordPress (rollingstone.fr), en respectant STRICTEMENT les conventions editoriales suivantes.
 
 CONTENU DE L'ARTICLE :
@@ -129,7 +134,7 @@ FORMATS PAR TYPE DE PAPIER :
 - Interview : categories [3627, 6708] (musique) ou [3619, 6709] (culture).
 - Sujet de couv / grand format : [3627, 6713] (musique) ou [3619, 6712] (culture).
 
-EXCERPT : le chapo leger en texte brut (sans balises), 1 a 2 phrases, fidele au papier.
+EXCERPT : le chapo leger en texte brut (sans balises), 1 a 2 phrases, fidele au papier.${agentBlock}
 
 Tu reponds UNIQUEMENT via l'outil submit_wp_article.`;
 }

@@ -17,6 +17,8 @@ import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
 import { testWpConnection, readWpPostMeta, writeWpPostMeta, listWpRevisions, listWpUsers } from '../services/wordpress';
 import { republishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { collectMonthlyRecap, buildRecapPdf, sendMonthlyRecap, parseMonthKey, recapFilename, sampleRecap } from '../services/monthlyRecap';
+import { ensureDefaultAgents, listAgents, updateAgent, listVersions, restoreVersion } from '../services/editorialAgents';
+import { agentUpdateSchema, END_BLOCK_LABELS, HEADING_LABELS } from '../services/editorialAgentsSchema';
 
 const router = Router();
 
@@ -750,6 +752,61 @@ router.delete('/logs', async (_req: AuthRequest, res: Response) => {
     return res.json({ message: 'Logs de plus de 30 jours supprimes' });
   } catch {
     return res.status(500).json({ error: 'Erreur nettoyage logs' });
+  }
+});
+
+// ========== AGENTS IA (agents web WordPress) ==========
+
+// GET /api/admin/agents - Equipe d'agents (cree l'equipe de depart si vide) + libelles du formulaire
+router.get('/agents', async (_req: AuthRequest, res: Response) => {
+  try {
+    await ensureDefaultAgents();
+    const agents = await listAgents();
+    return res.json({ agents, meta: { endBlocks: END_BLOCK_LABELS, headings: HEADING_LABELS } });
+  } catch (error: any) {
+    console.error('Get agents error:', error?.message || error);
+    const missing = /editorial_agents/.test(String(error?.message));
+    return res.status(500).json({ error: missing ? 'Table des agents absente : appliquer la migration 20261008000000_editorial_agents.sql' : 'Erreur chargement des agents' });
+  }
+});
+
+// PUT /api/admin/agents/:id - Modifier un agent (nouvelle version, l'ancienne est archivee)
+router.put('/agents/:id', async (req: AuthRequest, res: Response) => {
+  const parsed = agentUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return res.status(400).json({ error: `Champ invalide (${issue.path.join('.')}) : ${issue.message}` });
+  }
+  try {
+    const agent = await updateAgent(String(req.params.id), parsed.data, req.userId || null);
+    return res.json(agent);
+  } catch (error: any) {
+    const msg = String(error?.message || error);
+    const userError = /^(Règle invalide|Agent introuvable)/.test(msg);
+    if (!userError) console.error('Update agent error:', msg);
+    return res.status(userError ? 400 : 500).json({ error: userError ? msg : 'Erreur enregistrement de l\'agent' });
+  }
+});
+
+// GET /api/admin/agents/:id/versions - Historique des versions d'un agent
+router.get('/agents/:id/versions', async (req: AuthRequest, res: Response) => {
+  try {
+    return res.json(await listVersions(String(req.params.id)));
+  } catch (error: any) {
+    console.error('Agent versions error:', error?.message || error);
+    return res.status(500).json({ error: 'Erreur chargement de l\'historique' });
+  }
+});
+
+// POST /api/admin/agents/:id/restore/:version - Restaurer une version (cree une nouvelle version)
+router.post('/agents/:id/restore/:version', async (req: AuthRequest, res: Response) => {
+  const version = Number(req.params.version);
+  if (!Number.isInteger(version) || version < 1) return res.status(400).json({ error: 'Version invalide' });
+  try {
+    return res.json(await restoreVersion(String(req.params.id), version, req.userId || null));
+  } catch (error: any) {
+    const msg = String(error?.message || error);
+    return res.status(msg === 'Version introuvable' ? 404 : 500).json({ error: msg === 'Version introuvable' ? msg : 'Erreur restauration' });
   }
 });
 

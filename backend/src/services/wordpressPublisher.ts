@@ -31,6 +31,7 @@ import { hasReviewBox, hasScalarMeta, missingEditorialMeta, WP_META_MAIN_ARTIST,
 import { fetchDeliveryImages, type ImageFile } from './dropbox';
 import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SIDE } from './imageResize';
 import { boldToHtml } from './inlineBold';
+import { loadAgentRulesForPaperType } from './editorialAgents';
 
 export interface WpPublishInput {
   deliveryId: string;
@@ -381,6 +382,8 @@ interface WpArticlePayload {
   photoCredit: string;
   /** URL d'un article rollingstone.fr choisi parmi les candidats fournis (ou vide). */
   internalLinkUrl?: string;
+  /** Agent web applique (onglet « Agents IA »), trace dans wp_payload. */
+  agent?: { name: string; version: number; alerts: string[] } | null;
 }
 
 const WP_ARTICLE_TOOL = {
@@ -433,20 +436,28 @@ ${input.bodyText}
 ${candidatesBlock}
 </liens_internes_candidats>`;
 
+  // Agent web du type de papier (onglet « Agents IA ») ; absent = prompt historique.
+  const subtype = typeof input.metadata?.sous_type === 'string' ? input.metadata.sous_type : null;
+  const agentInfo = await loadAgentRulesForPaperType(input.paperTypeName, subtype);
+  if (!agentInfo.agent) console.warn(`[agents] aucun agent actif pour « ${input.paperTypeName} » : regles generiques`);
+  const agentMeta = agentInfo.agent
+    ? { name: agentInfo.agent.name, version: agentInfo.agent.version, alerts: agentInfo.alerts }
+    : null;
+
   let lastErr: unknown = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await anthropic.messages.create({
         model,
         max_tokens: 16384,
-        system: buildWpSystemPrompt(),
+        system: buildWpSystemPrompt(agentInfo.rules),
         tools: [WP_ARTICLE_TOOL],
         tool_choice: { type: 'tool', name: 'submit_wp_article' },
         messages: [{ role: 'user', content: userContent }],
       });
 
       const toolUse = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
-      if (toolUse) return toolUse.input as WpArticlePayload;
+      if (toolUse) return { ...(toolUse.input as WpArticlePayload), agent: agentMeta };
 
       lastErr = new Error(`stop_reason=${response.stop_reason}`);
     } catch (e: any) {

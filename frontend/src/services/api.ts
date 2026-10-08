@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase.ts';
-import type { PaperType, HebdoConfig, Delivery, CorrectionResult, Profile, CorrectionPrompt, DeliveryLog, AppSetting } from '../types/index.ts';
+import type { PaperType, HebdoConfig, Delivery, CorrectionResult, Profile, CorrectionPrompt, DeliveryLog, AppSetting, AgentsResponse, EditorialAgent, AgentVersion } from '../types/index.ts';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -114,6 +114,27 @@ export async function adminUpdatePaperType(id: string, pt: Partial<PaperType>): 
 
 export async function adminDeletePaperType(id: string): Promise<void> {
   await api.delete(`/api/admin/paper-types/${id}`);
+}
+
+// ========== AGENTS IA ==========
+export async function adminGetAgents(): Promise<AgentsResponse> {
+  const { data } = await api.get('/api/admin/agents');
+  return data;
+}
+
+export async function adminUpdateAgent(id: string, patch: Partial<EditorialAgent>): Promise<EditorialAgent> {
+  const { data } = await api.put(`/api/admin/agents/${id}`, patch);
+  return data;
+}
+
+export async function adminGetAgentVersions(id: string): Promise<AgentVersion[]> {
+  const { data } = await api.get(`/api/admin/agents/${id}/versions`);
+  return data;
+}
+
+export async function adminRestoreAgentVersion(id: string, version: number): Promise<EditorialAgent> {
+  const { data } = await api.post(`/api/admin/agents/${id}/restore/${version}`);
+  return data;
 }
 
 export async function adminGetHebdos(): Promise<HebdoConfig[]> {

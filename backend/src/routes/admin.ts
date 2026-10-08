@@ -1099,6 +1099,8 @@ const NON_SECRET_KEYS = new Set([
   'REQUIRE_MFA',
   // Interrupteur « chapo, clip et lien d'achat obligatoires » (fieldPolicy).
   'STRICT_EDITORIAL_FIELDS',
+  // Interrupteur « notifications de livraison » (notificationPolicy).
+  'DELIVERY_NOTIFICATIONS',
   'AI_PROVIDER',
   'CLAUDE_MODEL',
   // Identifiant de workspace Anthropic : un identifiant, pas un secret.

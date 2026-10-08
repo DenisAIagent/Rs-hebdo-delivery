@@ -8,7 +8,7 @@ import {
   type ClaudeModelInfo,
 } from '../../services/api.ts';
 import type { AppSetting } from '../../types/index.ts';
-import { Key, Eye, EyeOff, Save, AlertCircle, Loader2, Sparkles, Cpu, RefreshCw, Globe, PlugZap, ShieldCheck, ListChecks } from 'lucide-react';
+import { Key, Eye, EyeOff, Save, AlertCircle, Loader2, Sparkles, Cpu, RefreshCw, Globe, PlugZap, ShieldCheck, ListChecks, BellOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CanaryPanel } from './CanaryPanel.tsx';
 
@@ -156,6 +156,27 @@ export function SettingsTab() {
   const [mfaSaving, setMfaSaving] = useState(false);
   const [strictFields, setStrictFields] = useState(true);
   const [strictSaving, setStrictSaving] = useState(false);
+  const [notifyOn, setNotifyOn] = useState(true);
+  const [notifySaving, setNotifySaving] = useState(false);
+
+  const handleToggleNotify = async () => {
+    const next = !notifyOn;
+    setNotifySaving(true);
+    try {
+      const { failures } = await adminUpdateSettings([{ key: 'DELIVERY_NOTIFICATIONS', value: next ? 'true' : 'false' }]);
+      if (failures.length > 0) {
+        toast.error(`Erreur : ${failures[0].reason}`);
+      } else {
+        setNotifyOn(next);
+        toast.success(next ? 'Notifications de livraison activées' : 'Notifications de livraison coupées');
+      }
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(`Erreur : ${e.response?.data?.error || e.message || 'Erreur inconnue'}`);
+    } finally {
+      setNotifySaving(false);
+    }
+  };
 
   const handleToggleStrictFields = async () => {
     const next = !strictFields;
@@ -211,6 +232,7 @@ export function SettingsTab() {
       if (m) { setModel(m); setModelDirty(false); }
       setMfaRequired(data.find((s) => s.key === 'REQUIRE_MFA')?.value === 'true');
       setStrictFields(data.find((s) => s.key === 'STRICT_EDITORIAL_FIELDS')?.value?.trim().toLowerCase() !== 'false');
+      setNotifyOn(data.find((s) => s.key === 'DELIVERY_NOTIFICATIONS')?.value?.trim().toLowerCase() !== 'false');
       setWpEnabled(data.find((s) => s.key === 'WORDPRESS_ENABLED')?.value === 'true');
       setWpUrl(data.find((s) => s.key === 'WORDPRESS_URL')?.value || '');
       setWpUser(data.find((s) => s.key === 'WORDPRESS_USERNAME')?.value || '');
@@ -620,6 +642,39 @@ export function SettingsTab() {
             Activé, chaque livraison doit avoir un chapô et, pour les chroniques musique, un clip YouTube et un lien
             Bandcamp ou site officiel. Désactivé, ces trois champs deviennent facultatifs dans le formulaire et côté
             serveur ; un lien saisi reste vérifié. La configuration des types de papier n'est pas modifiée.
+          </p>
+        </div>
+      </div>
+
+      {/* Notifications de livraison */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+          <div className="flex items-center gap-3">
+            <BellOff size={18} className="text-rs-red" />
+            <h3 className="font-semibold text-rs-black">Notifications de livraison</h3>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <span className={`text-xs font-medium ${notifyOn ? 'text-green-700' : 'text-gray-400'}`}>
+              {notifySaving ? 'Enregistrement…' : notifyOn ? 'Activées' : 'Coupées'}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notifyOn}
+              disabled={notifySaving}
+              onClick={handleToggleNotify}
+              className={`relative w-10 h-6 rounded-full transition-colors disabled:opacity-60 ${notifyOn ? 'bg-green-600' : 'bg-gray-300'}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${notifyOn ? 'translate-x-4' : ''}`}
+              />
+            </button>
+          </label>
+        </div>
+        <div className="px-5 py-4">
+          <p className="text-xs text-gray-500">
+            Activées, chaque livraison envoie un email « nouveau papier livré » à la rédaction. Coupées, aucun email de
+            livraison n'est envoyé (utile pour une relivraison complète). Les alertes d'erreur restent actives.
           </p>
         </div>
       </div>

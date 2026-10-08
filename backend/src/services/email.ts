@@ -5,6 +5,7 @@
 
 import { supabaseAdmin } from '../utils/supabase';
 import { ADMIN_ROLES } from '../utils/roles';
+import { isDeliveryNotificationEnabled } from './notificationPolicy';
 
 /** Escape HTML special characters to prevent injection in email templates */
 function escapeHtml(str: string): string {
@@ -66,6 +67,10 @@ export interface NotifyParams {
 }
 
 export async function notifyDelivery(params: NotifyParams) {
+  if (!(await isDeliveryNotificationEnabled())) {
+    console.log(`[notify] notifications de livraison coupees (admin) — pas d'email pour « ${params.title} »`);
+    return;
+  }
   const cfg = await getEmailConfig();
   const RESEND_API_KEY = cfg.apiKey;
   const FROM_EMAIL = cfg.from;

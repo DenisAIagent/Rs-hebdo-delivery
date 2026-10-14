@@ -369,7 +369,7 @@ interface WpArticlePayload {
   /** Agent web applique (onglet « Agents IA »), trace dans wp_payload. */
   agent?: { name: string; version: number; alerts: string[] } | null;
   /** Origine du chapo decidee avant l'appel IA (journaliste, genere, aucun). */
-  chapoPlan?: { mode: ChapoMode; maxWords: number | null };
+  chapoPlan?: { mode: ChapoMode; maxWords: number | null; example?: string };
 }
 
 /** Chapo du journaliste saisi dans le formulaire (champ chapo, sinon accroche). */
@@ -441,7 +441,7 @@ ${candidatesBlock}
     strict: strictChapo,
     agentIfMissing: agentChapo?.ifMissing ?? 'generate',
   });
-  const chapoPlan = { mode: chapoMode, maxWords: agentChapo?.maxWords ?? null };
+  const chapoPlan = { mode: chapoMode, maxWords: agentChapo?.maxWords ?? null, example: agentChapo?.example || undefined };
   const chapoInstruction = chapoPromptInstruction(chapoMode, { maxWords: chapoPlan.maxWords, example: agentChapo?.example });
 
   let lastErr: unknown = null;
@@ -585,6 +585,7 @@ export async function publishDeliveryToWordpress(
         verified = await buildVerifiedEditorial(identity, input.bodyText, {
           wantChapo: chapoPlan.mode === 'generer',
           chapoMaxWords: chapoPlan.maxWords ?? DEFAULT_CHAPO_MAX_WORDS,
+          chapoExample: chapoPlan.example,
           focusKeyword: payload.focusKeyword,
         }, needSeo ? payload.title : '');
         await logDelivery('info', 'wp-facts', `${verified.sheet.facts.length} fait(s) vérifié(s) sur le web`, ctx,

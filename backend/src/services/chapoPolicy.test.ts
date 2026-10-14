@@ -68,3 +68,10 @@ test('consigne IA : generer = exemple, interdits ; aucun = excerpt vide ; journa
   assert.match(chapoPromptInstruction('aucun', {}), /chaine vide/);
   assert.match(chapoPromptInstruction('journaliste', {}), /tel quel/);
 });
+
+test('noms et chiffres verifies sur le web acceptes, la copie reste controlee sur le texte seul', () => {
+  const body = 'Les guerriers écossais continuent de défendre leur power metal futuriste.';
+  const chapo = 'Gloryhammer publie Space 1993 chez Napalm Records, cinquième album du groupe.';
+  assert.equal(checkGeneratedChapo(chapo, `Gloryhammer\nSpace 1993\n${body}`, 45).ok, false);
+  assert.equal(checkGeneratedChapo(chapo, `Gloryhammer\nSpace 1993\n${body}`, 45, 'Label Napalm Records ; cinquième album').ok, true);
+});

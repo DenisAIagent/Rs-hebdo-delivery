@@ -11,7 +11,8 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '../utils/supabase';
-import { logInfo, logError, logWarn, type LogContext } from './deliveryLogger';
+import { logInfo, logError, logWarn, logDelivery, type LogContext } from './deliveryLogger';
+import { buildVerifiedEditorial, applyDisplayName, factsSource, fallbackSeo, fallbackTitle, type PaperIdentity, type VerifiedEditorial } from './editorialFacts';
 import { notifyWordpressError } from './email';
 import { getAnthropicClient, getClaudeModel, DEFAULT_CLAUDE_MODEL } from './claude';
 import {
@@ -20,6 +21,7 @@ import {
   findOrCreateWpTag,
   uploadWpMedia,
   createWpDraftPost,
+  getWpPostFeaturedMedia,
   findWpMediaByKeywords,
   setWpMediaMeta,
   getWpCategory,
@@ -27,7 +29,7 @@ import {
   writeWpPostMeta,
   type WpPostCandidate, findWpUserByName } from './wordpress';
 import { buildWpSystemPrompt, normalizeWpCategories, WP_STYLE_MUSIC } from './wordpressRules';
-import { decideChapoMode, checkGeneratedChapo, chapoPromptInstruction, type ChapoMode } from './chapoPolicy';
+import { decideChapoMode, checkGeneratedChapo, chapoPromptInstruction, DEFAULT_CHAPO_MAX_WORDS, type ChapoMode } from './chapoPolicy';
 import { isStrictEditorialFields } from './fieldPolicy';
 import { hasReviewBox, hasScalarMeta, missingEditorialMeta, WP_META_MAIN_ARTIST, WP_META_REVIEWS, WP_META_STYLE_MUSIC, type ReviewBoxInput } from './wordpressReviewBox';
 import { fetchDeliveryImages, type ImageFile } from './dropbox';
@@ -567,6 +569,48 @@ export async function publishDeliveryToWordpress(
     if (prev && prev.title) {
       await logInfo('wp-format', 'Renvoi : titre, SEO, categories, tags et metaboxes du brouillon existant conserves', ctx);
     }
+
+    // 2b. Faits verifies sur le web (regle du 14/10/2026 : rien d'invente).
+    // Chapo genere (si demande) et titre / SEO d'un nouveau brouillon ne
+    // contiennent que des faits sources ; le reste est retire.
+    const chapoPlan = fresh.chapoPlan ?? { mode: 'aucun' as ChapoMode, maxWords: null };
+    const needSeo = !(prev && prev.title);
+    const identity: PaperIdentity = {
+      paperTypeName: input.paperTypeName, artist: artisteIn, work: albumIn, title: input.title,
+      label: String(metaIn.label || '').trim() || undefined,
+    };
+    let verified: VerifiedEditorial | null = null;
+    if (chapoPlan.mode === 'generer' || needSeo) {
+      try {
+        verified = await buildVerifiedEditorial(identity, input.bodyText, {
+          wantChapo: chapoPlan.mode === 'generer',
+          chapoMaxWords: chapoPlan.maxWords ?? DEFAULT_CHAPO_MAX_WORDS,
+          focusKeyword: payload.focusKeyword,
+        }, needSeo ? payload.title : '');
+        await logDelivery('info', 'wp-facts', `${verified.sheet.facts.length} fait(s) vérifié(s) sur le web`, ctx,
+          verified.sheet.facts.map((f) => `${f.fact} — ${f.source}`).join('\n'));
+        if (verified.sheet.contradictions.length > 0) {
+          await logWarn('wp-facts', `Texte du journaliste : ${verified.sheet.contradictions.length} point(s) contredit(s) par les sources (texte non modifié)`, ctx,
+            verified.sheet.contradictions.join('\n'));
+        }
+        if (verified.dropped.length > 0) {
+          await logWarn('wp-facts', `Retiré faute de source : ${verified.dropped.map((d) => `${d.field} « ${d.claim} »`).join(' ; ')}`, ctx);
+        }
+      } catch (err: any) {
+        await logWarn('wp-facts', `Vérification web impossible (${err?.message || err}) : aucun chapô généré, titre et SEO limités à l'identité du papier`, ctx);
+      }
+    }
+    if (needSeo) {
+      const repli = fallbackSeo(identity);
+      const display = verified?.sheet.displayName ?? null;
+      const named = (t: string) => applyDisplayName(t, artisteIn, display);
+      payload.title = named(verified?.copy.title || fallbackTitle(identity));
+      payload.seoTitle = named(verified?.copy.seoTitle || repli.seoTitle);
+      payload.metaDescription = named(verified?.copy.metaDescription || repli.metaDescription);
+      payload.focusKeyword = named(payload.focusKeyword || '');
+      payload.tags = (payload.tags || []).map(named);
+      if (payload.mainArtist) payload.mainArtist = named(payload.mainArtist);
+    }
     const categories = normalizeWpCategories(payload.categories);
     if (categories.length === 0) {
       await logWarn('wp-format', 'Aucune categorie valide proposee par l\'IA — article envoye sans categorie', ctx);
@@ -682,16 +726,18 @@ export async function publishDeliveryToWordpress(
     // Chapo (consigne du 08/10/2026) : celui du journaliste ; sinon un chapo
     // neutre genere, verifie mecaniquement, tant que l'interrupteur « chapo
     // obligatoire » est coupe. Jamais une phrase du journaliste : le corps reste entier.
-    const chapoPlan = fresh.chapoPlan ?? { mode: 'aucun' as ChapoMode, maxWords: null };
     let chapo = '';
     if (chapoPlan.mode === 'journaliste') {
       chapo = providedChapo(meta);
     } else if (chapoPlan.mode === 'generer') {
       const source = [input.title, input.bodyText, ...Object.values(meta).filter((v): v is string => typeof v === 'string')].join('\n');
-      const check = checkGeneratedChapo(fresh.excerpt || '', source, chapoPlan.maxWords);
+      const generated = verified?.copy.chapo || '';
+      const check = generated
+        ? checkGeneratedChapo(generated, source, chapoPlan.maxWords, `${factsSource(verified!.sheet.facts)}\n${verified!.sheet.displayName || ''}`)
+        : { ok: false as const, reason: 'aucun chapô vérifiable' };
       if (check.ok) {
-        chapo = check.chapo;
-        await logInfo('wp-format', `Chapô généré (non fourni par le journaliste) : « ${chapo} »`, ctx);
+        chapo = applyDisplayName(check.chapo, artisteIn, verified?.sheet.displayName ?? null);
+        await logInfo('wp-format', `Chapô généré à partir de faits vérifiés : « ${chapo} »`, ctx);
       } else {
         await logWarn('wp-format', `Chapô généré rejeté (${check.reason}) : article sans chapô`, ctx);
       }
@@ -740,9 +786,22 @@ export async function publishDeliveryToWordpress(
     const authorId = await findWpUserByName(input.journalistName);
     if (authorId) await logInfo('wp-format', `Auteur WordPress trouve pour ${input.journalistName} (#${authorId})`, ctx);
 
+    // Renvoi : l'image a la une n'est remplacee que si c'est encore celle posee
+    // par l'app (jamais une image choisie par la redaction dans WordPress).
+    const prevFeatured = (prev as { featuredMediaId?: number | null } | undefined)?.featuredMediaId ?? null;
+    let replaceFeatured = false;
+    if (input.contentOnly && input.existingPostId && featuredMediaId && prevFeatured && featuredMediaId !== prevFeatured) {
+      const current = await getWpPostFeaturedMedia(input.existingPostId).catch(() => null);
+      replaceFeatured = current === prevFeatured;
+      await logInfo('wp-media', replaceFeatured
+        ? `Renvoi : image a la une remplacee (media #${prevFeatured} -> #${featuredMediaId})`
+        : 'Renvoi : image a la une modifiee par la redaction dans WordPress, conservee', ctx);
+    }
+
     const post = await createWpDraftPost({
       existingPostId: input.existingPostId,
       contentOnly: input.contentOnly && !!input.existingPostId,
+      replaceFeatured,
       authorId: authorId ?? undefined,
       title: `${payload.title || input.title} [EN ATTENTE DE RELECTURE]`,
       contentHtml,
@@ -799,6 +858,8 @@ export async function publishDeliveryToWordpress(
         categories,
         featuredMediaId: featuredMediaId ?? null,
         bodyMediaIds: bodyMedia.map((m) => m.id),
+        // Faits sources (recherche web) ayant servi au chapo et au SEO, pour relecture.
+        verifiedFacts: verified ? verified.sheet.facts : ((prev as { verifiedFacts?: unknown } | undefined)?.verifiedFacts ?? []),
         reviewScore,
         styleMusicValue,
         metaRejected: post.metaRejected,

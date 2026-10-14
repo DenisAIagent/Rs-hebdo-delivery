@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { AuthRequest } from '../middleware/auth';
 import { correctText } from '../services/correction';
+import { guardCorrection, filterCorrections } from '../services/correctionGuard';
 
 const router = Router();
 
@@ -30,7 +31,19 @@ router.post('/', correctionLimiter, (req, _res, next) => { req.setTimeout(300_00
 
   try {
     const result = await correctText(text);
-    return res.json(result);
+    // Texte du journaliste mot pour mot : aucune correction qui ajoute ou retire
+    // un mot, ni qui change un chiffre (quel que soit le moteur IA).
+    const guarded = guardCorrection(text, result.correctedText);
+    if (guarded.rejected.length > 0) {
+      console.warn(`[correction] ${guarded.rejected.length} modification(s) IA refusee(s) : ${guarded.rejected.slice(0, 5).join(' | ')}`);
+    }
+    return res.json({
+      ...result,
+      correctedText: guarded.text,
+      corrections: filterCorrections(result.corrections),
+      rejectedChanges: guarded.rejected,
+      signCount: guarded.text.length,
+    });
   } catch (error: any) {
     console.error('Correction error:', error);
     const status = typeof error?.status === 'number' ? error.status : 500;

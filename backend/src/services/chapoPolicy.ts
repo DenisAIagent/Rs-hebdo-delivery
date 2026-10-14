@@ -66,9 +66,10 @@ export type ChapoCheck = { ok: true; chapo: string } | { ok: false; reason: stri
 
 /**
  * Garde-fou mecanique sur un chapo genere : longueur, aucune copie du texte du
- * journaliste, aucun nom propre ni chiffre absent de la livraison.
+ * journaliste, aucun nom propre ni chiffre absent de la livraison ou des faits
+ * verifies (`referenceText`, qui ne compte pas pour la detection de copie).
  */
-export function checkGeneratedChapo(raw: string, sourceText: string, maxWords: number | null): ChapoCheck {
+export function checkGeneratedChapo(raw: string, sourceText: string, maxWords: number | null, referenceText = ''): ChapoCheck {
   const chapo = cleanGeneratedChapo(raw);
   const chapoWords = words(chapo);
   if (chapoWords.length === 0) return { ok: false, reason: 'chapô vide' };
@@ -76,9 +77,10 @@ export function checkGeneratedChapo(raw: string, sourceText: string, maxWords: n
   if (chapoWords.length > limit) return { ok: false, reason: `chapô trop long (${chapoWords.length} mots, maximum ${limit})` };
   if (copiesSource(chapoWords, sourceText)) return { ok: false, reason: 'le chapô reprend une phrase du texte du journaliste' };
 
-  const sourceWords = new Set(words(sourceText));
+  const known = `${sourceText}\n${referenceText}`;
+  const sourceWords = new Set(words(known));
   const missingNames = properNouns(chapo).filter((w) => !sourceWords.has(normalize(w)));
-  const sourceNumbers = new Set(sourceText.match(/\d+/g) || []);
+  const sourceNumbers = new Set(known.match(/\d+/g) || []);
   const missingNumbers = (chapo.match(/\d+/g) || []).filter((n) => !sourceNumbers.has(n));
   const missing = [...new Set([...missingNames, ...missingNumbers])];
   if (missing.length) return { ok: false, reason: `élément absent de la livraison : ${missing.join(', ')}` };

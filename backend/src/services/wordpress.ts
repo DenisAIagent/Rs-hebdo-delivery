@@ -320,6 +320,8 @@ export interface WpCreatePostInput {
    * laisses intacts (consigne redaction du 01/10/2026).
    */
   contentOnly?: boolean;
+  /** Renvoi (contentOnly) : remplacer aussi l'image a la une. */
+  replaceFeatured?: boolean;
 }
 
 export interface WpCreatePostResult {
@@ -359,6 +361,13 @@ export async function findWpUserByName(fullName: string): Promise<number | null>
   }
 }
 
+/** Image a la une actuelle d'un article (null si aucune). */
+export async function getWpPostFeaturedMedia(postId: number): Promise<number | null> {
+  const config = await getWpConfig();
+  const { data } = await wpClient(config).get(`/posts/${postId}`, { params: { context: 'edit', _fields: 'featured_media' } });
+  return data?.featured_media || null;
+}
+
 /** Create (or update) a DRAFT post. Returns the post ID and its edit URL. */
 export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCreatePostResult> {
   const config = await getWpConfig();
@@ -375,7 +384,7 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
         categories: input.categories,
         tags: input.tagIds,
       };
-  if (input.featuredMediaId && !input.contentOnly) body.featured_media = input.featuredMediaId;
+  if (input.featuredMediaId && (!input.contentOnly || input.replaceFeatured)) body.featured_media = input.featuredMediaId;
   if (input.authorId) body.author = input.authorId;
   // POST /posts/{id} met a jour un article existant (meme contrat que la creation).
   const endpoint = input.existingPostId ? `/posts/${input.existingPostId}` : '/posts';

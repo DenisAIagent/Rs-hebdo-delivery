@@ -1577,6 +1577,20 @@ Service de stockage remplaçant l'ancienne intégration Google Drive. Utilise l'
 
 Source de vérité pour : la taxonomie complète des catégories rollingstone.fr (IDs parents `Musique 3627`, `Culture 3619`, `Actualites 5870`, `Lifestyle 6718`, sous-catégories → parent, catégories autonomes), `normalizeWpCategories` (ne garde que les IDs connus et ajoute toujours le parent), la table `WP_STYLE_MUSIC` (libellé → valeur `1`..`27` du select du thème) et `buildWpSystemPrompt()` (chapô H3, intertitres H4, `<em>« »</em>`, ≥ 1 lien interne, ≥ 5 tags, Yoast, crédit traduction).
 
+### `services/editorialFacts.ts` — chapô et SEO vérifiés (règle Denis, 14/10/2026 : « on n'invente rien »)
+
+- Quand le journaliste n'a pas fourni de chapô et que l'interrupteur **« chapô obligatoire »** (Réglages) est **coupé**, le chapô est rédigé par l'IA ; le **titre** et le **SEO** (titre SEO, méta-description) d'un nouveau brouillon le sont toujours. Un chapô fourni par le journaliste est repris tel quel.
+- Étapes (`buildVerifiedEditorial`) : 1) **recherche web** (outil serveur Anthropic `web_search`, 6 recherches max) → fiche de faits, chacun avec l'URL de sa source (labels, sites officiels, CNC, festivals, éditeurs, musées, presse) et l'orthographe officielle du nom ; 2) **rédaction** à partir des seuls faits sourcés + identité du papier (exemple de ton de l'agent) ; 3) **audit** par une seconde passe : toute affirmation non confirmée est signalée, une réécriture, sinon **retrait** (pas de chapô ; titre et SEO de repli sans affirmation, `fallbackTitle` / `fallbackSeo`).
+- Le chapô passe ensuite le contrôle mécanique `checkGeneratedChapo` (copie du texte du journaliste interdite ; noms et chiffres admis seulement s'ils figurent dans la livraison ou les faits vérifiés).
+- Nom de l'artiste : orthographe officielle (« Paerish ») à la place des capitales du formulaire dans titre, SEO, tags, Main Artist.
+- Traçabilité : logs `wp-facts` (faits + sources, points du texte contredits par les sources — le texte n'est jamais modifié, éléments retirés) et `wp_payload.verifiedFacts`.
+- Appels Claude en `tool_choice: auto` (le modèle configuré refuse l'outil forcé), repli sur `DEFAULT_CLAUDE_MODEL`.
+- Agents : tous les types ont `chapo.ifMissing = generate` (cinéma basculé le 14/10/2026).
+
+### `services/correctionGuard.ts` — garde-fou de la correction IA
+
+Appliqué par `POST /api/correct` quel que soit le moteur : une correction n'est acceptée que si elle remplace un mot par un mot (frappe, accord, accent) ou touche la ponctuation. **Refusé** : mot ajouté ou retiré, **chiffre modifié** (ex. 2027 → 2025), structure des paragraphes changée. Apostrophes ’ et espaces insécables du journaliste conservées. Les modifications refusées sont renvoyées dans `rejectedChanges`.
+
 ### `services/imageResize.ts` — dérivés pour WordPress (lib `sharp`)
 
 - `toFeaturedJpeg(buffer, name, { focus? })` : image à la une **1280 × 853** (format du template Canva éditorial), orientation EXIF appliquée, JPEG qualité 90. **Règle de cadrage (Denis, 14/10/2026) — ne jamais couper un visuel :**
@@ -1584,7 +1598,7 @@ Source de vérité pour : la taxonomie complète des catégories rollingstone.fr
   - **Interview 3000 / Sujet de couv** (`prefersArtistPhoto`) : l'image à la une est la **photo de l'artiste** = première photo paysage livrée (`pickLandscapeIndex`), jamais la couverture du magazine ; les autres photos vont dans le corps. Si la photo retenue n'est pas horizontale, **cadrage sur les visages** : `services/faceFocus.ts` (Claude vision, `tool_choice: auto`) renvoie les boîtes des visages, la fenêtre 3:2 est centrée sur le groupe, visages à 40 % de la hauteur (`focusCropBox`), fichier `<nom>-cadre-1280x853.jpg`.
   - **Tous les autres cas** (affiches, pochettes, couvertures de livre, panoramas, ou aucun visage détecté) : **visuel entier** centré sur le même visuel agrandi, flouté et assombri (`containOnBlur`), fichier `<nom>-une-1280x853.jpg`.
   - Noms de fichiers distincts par mode : `uploadWpMedia` dédoublonne par préfixe de nom.
-  - Le mode retenu est loggé (`wp-media`). Attention : un **renvoi** depuis l'admin est `contentOnly` (corps + extrait) et ne remplace **pas** l'image à la une d'un brouillon existant.
+  - Le mode retenu est loggé (`wp-media`). Un **renvoi** depuis l'admin est `contentOnly` (corps + extrait) ; l'image à la une est remplacée seulement si c'est encore celle posée par l'app (jamais une image choisie par la rédaction).
 - `toWebJpeg(buffer, name)` : côté long ≤ **1600 px** sans agrandissement, JPEG qualité 85, fichier `<nom>-web.jpg`.
 - Lève sur une image indécodable : l'appelant envoie alors l'original et logge un warning `wp-media`. **Dropbox reçoit toujours les originaux intacts.**
 

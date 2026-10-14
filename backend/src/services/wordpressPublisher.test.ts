@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink } from './wordpressPublisher';
+import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink, prefersArtistPhoto } from './wordpressPublisher';
 
 const body = `Alors, comme ça, le rock serait mort ! Passé par pertes et profits.
 
@@ -83,4 +83,11 @@ test('pickInternalLink : choix IA > titre citant l’artiste > rubrique, jamais 
   assert.deepEqual(await pickInternalLink({ candidates, aiChoice: '', artiste: 'Mastodon', categories: [5], loadCategory: cat }),
     { url: 'https://www.rollingstone.fr/chroniques/', title: 'Tous nos articles Chroniques' });
   assert.equal(await pickInternalLink({ candidates, artiste: 'Mastodon', categories: [], loadCategory: cat }), undefined);
+});
+
+test('photo de l\'artiste en une pour les interviews et sujets de couv seulement', () => {
+  assert.equal(prefersArtistPhoto('Interview 3000'), true);
+  assert.equal(prefersArtistPhoto('Sujet de couv'), true);
+  assert.equal(prefersArtistPhoto('Chroniques'), false);
+  assert.equal(prefersArtistPhoto('Chronique Cinema'), false);
 });

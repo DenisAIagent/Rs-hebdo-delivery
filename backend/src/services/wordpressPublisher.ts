@@ -31,7 +31,8 @@ import { decideChapoMode, checkGeneratedChapo, chapoPromptInstruction, type Chap
 import { isStrictEditorialFields } from './fieldPolicy';
 import { hasReviewBox, hasScalarMeta, missingEditorialMeta, WP_META_MAIN_ARTIST, WP_META_REVIEWS, WP_META_STYLE_MUSIC, type ReviewBoxInput } from './wordpressReviewBox';
 import { fetchDeliveryImages, type ImageFile } from './dropbox';
-import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SIDE } from './imageResize';
+import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SIDE, pickLandscapeIndex, uprightSize, featuredMode, type FocusPoint } from './imageResize';
+import { detectFaceFocus } from './faceFocus';
 import { boldToHtml } from './inlineBold';
 import { loadAgentRulesForPaperType } from './editorialAgents';
 
@@ -149,6 +150,15 @@ const REVIEW_RECAP_SHORTCODE = '[rwp-review-recap id="0"]';
 export function isChroniqueType(paperTypeName: string): boolean {
   const n = paperTypeName.toLowerCase();
   return n.includes('chronique') || n.includes('disque de la semaine');
+}
+
+/**
+ * Interviews et sujets de couv : l'image a la une est une photo de l'artiste
+ * (premiere photo paysage), jamais la couverture du magazine ni un portrait vertical.
+ */
+export function prefersArtistPhoto(paperTypeName: string): boolean {
+  const n = paperTypeName.toLowerCase();
+  return n.includes('interview') || n.includes('couv');
 }
 
 /**
@@ -579,7 +589,28 @@ export async function publishDeliveryToWordpress(
     let featuredMediaId: number | undefined;
     let featuredMediaUrl: string | undefined;
     const bodyMedia: Array<{ id: number; url: string }> = [];
-    const images = input.images || [];
+    const delivered = input.images || [];
+    let images = delivered;
+    if (prefersArtistPhoto(input.paperTypeName) && delivered.length > 1) {
+      const pick = pickLandscapeIndex(await Promise.all(delivered.map((img) => uprightSize(img.buffer))));
+      images = [delivered[pick], ...delivered.filter((_, i) => i !== pick)];
+      await logInfo('wp-media', pick > 0
+        ? `Image a la une : photo paysage « ${delivered[pick].originalname} » (et non « ${delivered[0].originalname} »)`
+        : `Image a la une : « ${delivered[0].originalname} »${delivered.length > 1 ? ' (aucune autre photo paysage)' : ''}`, ctx);
+    }
+    // Photo d'artiste non horizontale : cadrage sur les visages, pas de fond flouté.
+    let artistFocus: FocusPoint | undefined;
+    const lead = images[0];
+    const leadSize = lead && prefersArtistPhoto(input.paperTypeName) ? await uprightSize(lead.buffer) : null;
+    if (lead && leadSize && featuredMode(leadSize.width, leadSize.height) !== 'cover') {
+      try {
+        artistFocus = (await detectFaceFocus(lead.buffer)) ?? undefined;
+        if (artistFocus) await logInfo('wp-media', `Image a la une cadree sur les visages (« ${lead.originalname} »)`, ctx);
+        else await logWarn('wp-media', `Aucun visage repere sur « ${lead.originalname} » : visuel entier sur fond flouté`, ctx);
+      } catch (err: any) {
+        await logWarn('wp-media', `Detection des visages impossible (${err?.message || err}) : visuel entier sur fond flouté`, ctx);
+      }
+    }
     // Texte alternatif des images (Yoast) : « Artiste – Album », sinon le titre.
     const imageAlt = artisteIn && albumIn ? `${artisteIn} – ${albumIn}` : artisteIn || payload.title || input.title;
     if (images.length === 0) {
@@ -610,10 +641,11 @@ export async function publishDeliveryToWordpress(
         try {
           // Body images: web derivative (long side <= 1600 px, JPEG q85).
           const resized = index === 0
-            ? await toFeaturedJpeg(image.buffer, image.originalname)
+            ? await toFeaturedJpeg(image.buffer, image.originalname, { focus: artistFocus })
             : await toWebJpeg(image.buffer, image.originalname);
           upload = { buffer: resized.buffer, filename: resized.filename, mimetype: resized.mimetype };
           if (resized.mode === 'contain') featuredNote = ' — visuel entier sur fond flouté (affiche/pochette, pas de recadrage)';
+          else if (resized.mode === 'focus') featuredNote = ' — cadrée sur les visages';
           else if (resized.mode === 'cover') featuredNote = ` — recadrée ${FEATURED_WIDTH}x${FEATURED_HEIGHT}`;
         } catch (err: any) {
           const target = index === 0 ? `${FEATURED_WIDTH}x${FEATURED_HEIGHT}` : `web ${BODY_MAX_SIDE}px`;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import {
   featuredFilename, featuredContainFilename, webFilename, safeMediaBase,
-  featuredMode, toFeaturedJpeg, FEATURED_WIDTH, FEATURED_HEIGHT,
+  featuredMode, toFeaturedJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, pickLandscapeIndex, uprightSize, focusCropBox,
 } from './imageResize';
 
 test('noms de fichiers medias en ASCII sur, tirets longs et accents compris', () => {
@@ -66,4 +66,43 @@ test('photo paysage 3:2 : recadrage habituel', async () => {
   assert.equal(out.filename, 'photo-1280x853.jpg');
   assert.equal(out.width, FEATURED_WIDTH);
   assert.equal(out.height, FEATURED_HEIGHT);
+});
+
+test('interviews et couv : premiere photo paysage en image a la une', () => {
+  const portrait = { width: 2680, height: 4020 };
+  const couvMag = { width: 2717, height: 3543 };
+  const paysage = { width: 4164, height: 2781 };
+  assert.equal(pickLandscapeIndex([portrait, couvMag, paysage, { width: 1280, height: 855 }]), 2);
+  assert.equal(pickLandscapeIndex([paysage, portrait]), 0);
+  assert.equal(pickLandscapeIndex([portrait, null, couvMag]), 0); // aucune paysage : premier visuel
+  assert.equal(pickLandscapeIndex([]), 0);
+});
+
+test('dimensions lues dans le bon sens (orientation EXIF)', async () => {
+  const buf = await sharp({ create: { width: 300, height: 200, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+    .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+  assert.deepEqual(await uprightSize(buf), { width: 200, height: 300 });
+  assert.equal(await uprightSize(Buffer.from('pas une image')), null);
+});
+
+test('fenetre 3:2 cadree sur les visages, visages un peu au-dessus du centre, bornee a l\'image', () => {
+  const box = focusCropBox(2680, 4020, { x: 0.5, y: 0.3 });
+  assert.equal(box.width, 2680);
+  assert.equal(box.height, Math.round(2680 / (FEATURED_WIDTH / FEATURED_HEIGHT)));
+  const faceY = 0.3 * 4020;
+  assert.ok(faceY - box.top > box.height * 0.3 && faceY - box.top < box.height * 0.5);
+  const top = focusCropBox(2680, 4020, { x: 0.5, y: 0.01 });
+  assert.equal(top.top, 0);
+  const bottom = focusCropBox(2680, 4020, { x: 0.5, y: 0.99 });
+  assert.equal(bottom.top + bottom.height, 4020);
+});
+
+test('photo verticale cadree sur les visages : 1280x853, nom distinct', async () => {
+  const out = await toFeaturedJpeg(await posterWithTopBand(800, 1200), 'portrait.jpg', { focus: { x: 0.5, y: 0.04 } });
+  assert.equal(out.mode, 'focus');
+  assert.equal(out.filename, 'portrait-cadre-1280x853.jpg');
+  assert.equal(out.width, FEATURED_WIDTH);
+  assert.equal(out.height, FEATURED_HEIGHT);
+  const top = await pixel(out.buffer, FEATURED_WIDTH / 2, 10);
+  assert.ok(top.r > 200 && top.b < 60, `haut de la photo (visages) perdu : ${JSON.stringify(top)}`);
 });

@@ -606,12 +606,15 @@ export async function publishDeliveryToWordpress(
       try {
         // Featured image: rollingstone.fr format (1280 x 853, JPEG q90). Originals stay in Dropbox.
         let upload = { buffer: image.buffer, filename: image.originalname, mimetype: image.mimetype };
+        let featuredNote = '';
         try {
           // Body images: web derivative (long side <= 1600 px, JPEG q85).
           const resized = index === 0
             ? await toFeaturedJpeg(image.buffer, image.originalname)
             : await toWebJpeg(image.buffer, image.originalname);
           upload = { buffer: resized.buffer, filename: resized.filename, mimetype: resized.mimetype };
+          if (resized.mode === 'contain') featuredNote = ' — visuel entier sur fond flouté (affiche/pochette, pas de recadrage)';
+          else if (resized.mode === 'cover') featuredNote = ` — recadrée ${FEATURED_WIDTH}x${FEATURED_HEIGHT}`;
         } catch (err: any) {
           const target = index === 0 ? `${FEATURED_WIDTH}x${FEATURED_HEIGHT}` : `web ${BODY_MAX_SIDE}px`;
           await logWarn('wp-media', `Redimensionnement ${target} impossible pour "${image.originalname}" (${err?.message || err}) — original envoye`, ctx);
@@ -624,7 +627,7 @@ export async function publishDeliveryToWordpress(
         if (index === 0) {
           featuredMediaId = media.id;
           featuredMediaUrl = media.url;
-          await logInfo('wp-media', `Image a la une prete (media #${media.id}, ${upload.filename})`, ctx);
+          await logInfo('wp-media', `Image a la une prete (media #${media.id}, ${upload.filename})${featuredNote}`, ctx);
         } else if (media.id === featuredMediaId || bodyMedia.some((m) => m.id === media.id)) {
           // Meme fichier livre plusieurs fois (ex. doublon pour atteindre le
           // minimum de photos) : la mediatheque dedoublonne par nom, inutile de

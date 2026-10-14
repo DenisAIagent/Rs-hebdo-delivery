@@ -124,7 +124,7 @@ Les dossiers `HEBDO<numéro>/` (papiers et visuels de la semaine) et `macos/` (a
 
 ## Module WordPress
 
-Activable depuis l'admin (Paramètres → WordPress). Chaque livraison crée un **brouillon** sur rollingstone.fr : mise en forme par Claude selon `wordpressRules.ts`, image à la une normalisée 1280 × 853, photos insérées dans le corps, catégories, tags, Yoast. Ce que WordPress refuse d'enregistrer est listé dans `wp_payload.editorTodo` et affiché en pastille ambre dans l'onglet Livraisons. Un échec ne bloque jamais la livraison : email d'alerte aux admins, renvoi en un clic (icône globe).
+Activable depuis l'admin (Paramètres → WordPress). Chaque livraison crée un **brouillon** sur rollingstone.fr : mise en forme par Claude selon `wordpressRules.ts`, image à la une 1280 × 853 sans visuel coupé (affiches et pochettes entières sur fond flouté, photo de l'artiste cadrée sur les visages pour les interviews et couv), photos insérées dans le corps, catégories, tags, Yoast. Ce que WordPress refuse d'enregistrer est listé dans `wp_payload.editorTodo` et affiché en pastille ambre dans l'onglet Livraisons. Un échec ne bloque jamais la livraison : email d'alerte aux admins, renvoi en un clic (icône globe).
 
 Côté site, le mu-plugin `scripts/wp/rs-delivery-rest-meta.php` expose les métas Yoast en REST et les routes `rs-delivery/v1/post-meta/{id}`. **Il est installé sur rollingstone.fr** (vérifié le 30/09/2026). Reste à renseigner le réglage `WP_META_MAP` (clés Style Music, Main Music Artist, Reviewer) pour que ces trois champs partent aussi — voir `DOCUMENTATION.md` §7 étape 10.
 

@@ -14,7 +14,7 @@ import { AuthRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../utils/supabase';
 import { todayString, nextFridayString } from '../utils/dates';
 import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
-import { testWpConnection, readWpPostMeta, writeWpPostMeta, listWpRevisions, listWpUsers } from '../services/wordpress';
+import { testWpConnection, readWpPostMeta, writeWpPostMeta, listWpRevisions, listWpUsers, markWpPostPending } from '../services/wordpress';
 import { republishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { collectMonthlyRecap, buildRecapPdf, sendMonthlyRecap, parseMonthKey, recapFilename, sampleRecap } from '../services/monthlyRecap';
 import { ensureDefaultAgents, listAgents, updateAgent, listVersions, restoreVersion } from '../services/editorialAgents';
@@ -1058,6 +1058,33 @@ router.post('/deliveries/:id/wordpress', (req, _res, next) => { req.setTimeout(3
   } catch (error: any) {
     console.error('Admin send to WordPress error:', error?.response?.data || error?.message || String(error));
     return res.status(500).json({ error: error?.message || 'Erreur envoi WordPress' });
+  }
+});
+
+// POST /api/admin/wordpress/pending/:numero - Passe tous les articles WordPress
+// d'un numero en « En attente de relecture » et retire le suffixe historique
+// du titre. Jamais de publication (un article publie n'est pas touche).
+router.post('/wordpress/pending/:numero', async (req: AuthRequest, res: Response) => {
+  try {
+    const numero = parseInt(String(req.params.numero), 10);
+    if (!Number.isFinite(numero)) return res.status(400).json({ error: 'Numero invalide' });
+    const { data: hebdos } = await supabaseAdmin.from('hebdo_config').select('id').eq('numero', numero);
+    const hebdoIds = (hebdos || []).map((h) => h.id);
+    if (hebdoIds.length === 0) return res.status(404).json({ error: `Hebdo ${numero} introuvable` });
+    const { data: rows } = await supabaseAdmin
+      .from('deliveries').select('id, title, wp_post_id').in('hebdo_id', hebdoIds).not('wp_post_id', 'is', null);
+    const results: Array<{ delivery: string; title: string; wp_post_id: number; status: string; changed: boolean; error?: string }> = [];
+    for (const row of rows || []) {
+      try {
+        const r = await markWpPostPending(Number(row.wp_post_id));
+        results.push({ delivery: row.id, title: row.title, wp_post_id: Number(row.wp_post_id), status: r.status, changed: r.changed });
+      } catch (error: any) {
+        results.push({ delivery: row.id, title: row.title, wp_post_id: Number(row.wp_post_id), status: 'error', changed: false, error: error?.response?.data?.message || error?.message || String(error) });
+      }
+    }
+    return res.json({ numero, count: results.length, changed: results.filter((r) => r.changed).length, results });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Erreur' });
   }
 });
 

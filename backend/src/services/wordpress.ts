@@ -575,3 +575,33 @@ export async function getWpMetaMap(): Promise<Partial<Record<'styleMusic' | 'mai
     return {};
   }
 }
+
+/** Suffixe historique du titre, remplace par le statut « En attente de relecture » (04/11/2026). */
+export const LEGACY_REVIEW_SUFFIX = '[EN ATTENTE DE RELECTURE]';
+
+/** Titre sans le suffixe historique (espaces de fin retires) ; inchange s'il n'y est pas. */
+export function stripLegacyReviewSuffix(title: string): string {
+  const t = title.trimEnd();
+  return t.endsWith(LEGACY_REVIEW_SUFFIX) ? t.slice(0, -LEGACY_REVIEW_SUFFIX.length).trimEnd() : title;
+}
+
+/**
+ * Passe un article en statut « En attente de relecture » (pending) et retire
+ * le suffixe historique de son titre. Ne touche jamais un article publie
+ * (status publish) ni son contenu. Renvoie ce qui a ete modifie.
+ */
+export async function markWpPostPending(postId: number): Promise<{ status: string; title: string; changed: boolean }> {
+  const config = await getWpConfig();
+  const client = wpClient(config);
+  const { data } = await client.get(`/posts/${postId}`, { params: { context: 'edit', _fields: 'status,title' } });
+  const status = String(data?.status || '');
+  const title = String(data?.title?.raw ?? data?.title?.rendered ?? '');
+  const newTitle = stripLegacyReviewSuffix(title);
+  if (status === 'publish' || status === 'future') return { status, title, changed: false };
+  const body: Record<string, unknown> = {};
+  if (status !== 'pending') body.status = 'pending';
+  if (newTitle !== title) body.title = newTitle;
+  if (Object.keys(body).length === 0) return { status, title, changed: false };
+  await client.post(`/posts/${postId}`, body);
+  return { status: 'pending', title: newTitle, changed: true };
+}

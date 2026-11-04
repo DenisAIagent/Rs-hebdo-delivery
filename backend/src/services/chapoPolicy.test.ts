@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decideChapoMode, checkGeneratedChapo, chapoPromptInstruction } from './chapoPolicy';
+import { decideChapoMode, checkGeneratedChapo, chapoPromptInstruction, accrocheCountsAsChapo, providedChapo, bodyWithAccroche } from './chapoPolicy';
 
 const SOURCE = `Greta Van Fleet
 Palace For The People
@@ -74,4 +74,32 @@ test('noms et chiffres verifies sur le web acceptes, la copie reste controlee su
   const chapo = 'Gloryhammer publie Space 1993 chez Napalm Records, cinquième album du groupe.';
   assert.equal(checkGeneratedChapo(chapo, `Gloryhammer\nSpace 1993\n${body}`, 45).ok, false);
   assert.equal(checkGeneratedChapo(chapo, `Gloryhammer\nSpace 1993\n${body}`, 45, 'Label Napalm Records ; cinquième album').ok, true);
+});
+
+test('accroche = chapo pour les chroniques, interviews et livres', () => {
+  assert.equal(accrocheCountsAsChapo('Chroniques'), true);
+  assert.equal(accrocheCountsAsChapo('Interview 3000'), true);
+  assert.equal(accrocheCountsAsChapo('Livres et Expo'), true);
+});
+
+test('accroche gardee dans le corps, chapo genere : disque de la semaine, coup de coeur, frenchie', () => {
+  assert.equal(accrocheCountsAsChapo('Disque de la semaine'), false);
+  assert.equal(accrocheCountsAsChapo('Chronique Coup de Coeur'), false);
+  assert.equal(accrocheCountsAsChapo('Chronique coup de cœur'), false);
+  assert.equal(accrocheCountsAsChapo('Frenchie'), false);
+});
+
+test('providedChapo : l\'accroche seule ne vaut pas chapo sur un disque de la semaine', () => {
+  const meta = { accroche: 'Pourquoi écouter cet album.', corps: 'texte' };
+  assert.equal(providedChapo(meta, 'Chroniques'), 'Pourquoi écouter cet album.');
+  assert.equal(providedChapo(meta, 'Disque de la semaine'), '');
+  assert.equal(providedChapo({ ...meta, chapo: 'Un chapô.' }, 'Disque de la semaine'), 'Un chapô.');
+  assert.equal(decideChapoMode({ provided: providedChapo(meta, 'Frenchie'), strict: false, agentIfMissing: 'generate' }), 'generer');
+});
+
+test('bodyWithAccroche : accroche absente du corps → premier paragraphe ; deja contenue → rien', () => {
+  const corps = 'Premier paragraphe.\n\nEt vlan ! Coup de cœur.';
+  assert.equal(bodyWithAccroche(corps, 'Pourquoi écouter cet album.'), 'Pourquoi écouter cet album.\n\nPremier paragraphe.\n\nEt vlan ! Coup de cœur.');
+  assert.equal(bodyWithAccroche(corps, 'et vlan !  coup de cœur.'), corps);
+  assert.equal(bodyWithAccroche(corps, '  '), corps);
 });

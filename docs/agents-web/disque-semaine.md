@@ -49,7 +49,10 @@ Sur 12 disques de la semaine relus, 11 sont publiés par Mathieu et 12 ont une t
 - `{Artiste} – {Album}`, sans préfixe ni suffixe.
 
 ### Chapô
-- Mêmes règles que chronique.md (journaliste en priorité, sinon modèle neutre).
+- Seul le champ `chapo` du formulaire vaut chapô journaliste. L'**accroche** n'est pas un chapô
+  (04/11/2026) : elle reste dans le corps, mot pour mot, en premier paragraphe si le texte ne la
+  contient pas déjà. Même règle pour Coup de cœur et Frenchie.
+- Sans champ `chapo` : chapô généré sur faits vérifiés (web), comme pour chronique.md.
 - Modèle : `{Artiste} sort {Album}, son {n}e album, le {date de sortie}.`
 - Maximum 30 mots (les chapôs du site font environ 20 mots).
 - Jamais un extrait du texte du journaliste.

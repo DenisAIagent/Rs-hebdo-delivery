@@ -29,7 +29,7 @@ import {
   writeWpPostMeta,
   type WpPostCandidate, findWpUserByName } from './wordpress';
 import { buildWpSystemPrompt, normalizeWpCategories, WP_STYLE_MUSIC } from './wordpressRules';
-import { decideChapoMode, checkGeneratedChapo, chapoPromptInstruction, DEFAULT_CHAPO_MAX_WORDS, type ChapoMode } from './chapoPolicy';
+import { decideChapoMode, checkGeneratedChapo, chapoPromptInstruction, providedChapo, accrocheCountsAsChapo, bodyWithAccroche, DEFAULT_CHAPO_MAX_WORDS, type ChapoMode } from './chapoPolicy';
 import { isStrictEditorialFields } from './fieldPolicy';
 import { hasReviewBox, hasScalarMeta, missingEditorialMeta, WP_META_MAIN_ARTIST, WP_META_REVIEWS, WP_META_STYLE_MUSIC, type ReviewBoxInput } from './wordpressReviewBox';
 import { fetchDeliveryImages, type ImageFile } from './dropbox';
@@ -64,7 +64,8 @@ function escapeHtmlText(s: string): string {
 
 /**
  * Assemble le HTML de l'article a partir du texte livre, MOT POUR MOT :
- * - H3 = chapo leger (accroche/chapo du formulaire, sinon excerpt propose), optionnel ;
+ * - H3 = chapo leger (chapo du formulaire, sinon chapo genere sur faits verifies), optionnel ;
+ *   sur Disque de la semaine / Coup de coeur / Frenchie, l'accroche reste dans le corps ;
  * - un <p> par paragraphe du texte, citations « » en <em> (mise en forme seulement) ;
  * - signature « Par Prenom Nom » en fin d'article.
  * Aucune phrase n'est ajoutee ni reformulee : c'est la garantie demandee par la redaction.
@@ -149,9 +150,49 @@ function escapeHtmlAttr(s: string): string {
 /** Chronique types get the Reviewer box recap shortcode (rollingstone.fr convention). */
 const REVIEW_RECAP_SHORTCODE = '[rwp-review-recap id="0"]';
 
-export function isChroniqueType(paperTypeName: string): boolean {
-  const n = paperTypeName.toLowerCase();
-  return n.includes('chronique') || n.includes('disque de la semaine');
+const normalizeTypeName = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/**
+ * Types qui portent une note (etoiles) et donc une Reviews Box : chroniques
+ * (musique, cinema, coup de coeur), disque de la semaine, frenchie, livres et
+ * expositions (04/11/2026 : template Music partout sauf cinema, le site n'a que
+ * Music et Cinema).
+ */
+export function isReviewedType(paperTypeName: string): boolean {
+  const n = normalizeTypeName(paperTypeName);
+  return ['chronique', 'disque de la semaine', 'frenchie', 'livre', 'expo'].some((t) => n.includes(t));
+}
+
+/** @deprecated alias de isReviewedType, conserve pour compatibilite. */
+export const isChroniqueType = isReviewedType;
+
+/** Famille du papier pour les libelles et le template Reviewer (accents ignores). */
+export function paperKindOf(paperTypeName: string): PaperKind {
+  const n = normalizeTypeName(paperTypeName);
+  if (n.includes('cinema')) return 'cinema';
+  if (n.includes('livre') || n.includes('expo')) return 'livres';
+  return 'musique';
+}
+
+/** Sujet de couv : corps web limite a la page de couv + 2 photos, le reste sur Dropbox. */
+export function isCouvType(paperTypeName: string): boolean {
+  return normalizeTypeName(paperTypeName).includes('couv');
+}
+
+export const COUV_BODY_PHOTOS_MAX = 2;
+
+/**
+ * Photos du corps d'un sujet de couv : la page de couv (premiere image livree,
+ * convention des livraisons) puis les `max` premieres photos suivantes, dans
+ * l'ordre livre, hors image a la une. Les autres restent sur Dropbox.
+ */
+export function selectCouvBodyImages<T>(delivered: T[], featuredIndex: number, max = COUV_BODY_PHOTOS_MAX): T[] {
+  const out: T[] = [];
+  if (delivered.length > 0 && featuredIndex !== 0) out.push(delivered[0]);
+  for (let i = 1; i < delivered.length && out.length < (featuredIndex === 0 ? max : max + 1); i++) {
+    if (i !== featuredIndex) out.push(delivered[i]);
+  }
+  return out;
 }
 
 /**
@@ -213,7 +254,7 @@ export function buildEditorTodo(p: {
   }
   if (p.chronique && !p.editorialPresent.reviewBox) {
     todo.push(
-      `Reviews Box : template Review Chronique, critere "L'avis de la redaction", note ${p.reviewScore ?? 'a reporter'}/5, image = image a la une.`,
+      `Reviews Box : template Music (ou Cinema pour un film), critere "L'avis de la redaction", note ${p.reviewScore ?? 'a reporter'}/5, image = image a la une.`,
     );
   }
   return todo;
@@ -372,9 +413,6 @@ interface WpArticlePayload {
   chapoPlan?: { mode: ChapoMode; maxWords: number | null; example?: string };
 }
 
-/** Chapo du journaliste saisi dans le formulaire (champ chapo, sinon accroche). */
-const providedChapo = (metadata: Record<string, unknown>) => String(metadata?.chapo || metadata?.accroche || '').trim();
-
 const WP_ARTICLE_TOOL = {
   name: 'submit_wp_article',
   description: 'Renvoie le payload WordPress complet, conforme aux conventions editoriales rollingstone.fr.',
@@ -437,7 +475,7 @@ ${candidatesBlock}
   // Chapo : journaliste, sinon genere tant que l'interrupteur « chapo obligatoire » est coupe.
   const agentChapo = (agentInfo.agent?.config as { chapo?: { ifMissing: 'none' | 'generate'; maxWords: number | null; example?: string } } | undefined)?.chapo;
   const chapoMode = decideChapoMode({
-    provided: providedChapo(input.metadata as Record<string, unknown>),
+    provided: providedChapo(input.metadata as Record<string, unknown>, input.paperTypeName),
     strict: strictChapo,
     agentIfMissing: agentChapo?.ifMissing ?? 'generate',
   });
@@ -639,6 +677,13 @@ export async function publishDeliveryToWordpress(
     if (prefersArtistPhoto(input.paperTypeName) && delivered.length > 1) {
       const pick = pickLandscapeIndex(await Promise.all(delivered.map((img) => uprightSize(img.buffer))));
       images = [delivered[pick], ...delivered.filter((_, i) => i !== pick)];
+      if (isCouvType(input.paperTypeName)) {
+        // Couv (04/11/2026) : page de couv + 2 photos dans le corps, le reste n'existe que sur Dropbox.
+        const body = selectCouvBodyImages(delivered, pick);
+        images = [delivered[pick], ...body];
+        const dropped = delivered.length - images.length;
+        if (dropped > 0) await logInfo('wp-media', `Couv : ${dropped} photo(s) ecartee(s) du corps (Dropbox seulement) ; corps = ${body.map((b) => b.originalname).join(', ')}`, ctx);
+      }
       await logInfo('wp-media', pick > 0
         ? `Image a la une : photo paysage « ${delivered[pick].originalname} » (et non « ${delivered[0].originalname} »)`
         : `Image a la une : « ${delivered[0].originalname} »${delivered.length > 1 ? ' (aucune autre photo paysage)' : ''}`, ctx);
@@ -727,11 +772,21 @@ export async function publishDeliveryToWordpress(
     // Chapo (consigne du 08/10/2026) : celui du journaliste ; sinon un chapo
     // neutre genere, verifie mecaniquement, tant que l'interrupteur « chapo
     // obligatoire » est coupe. Jamais une phrase du journaliste : le corps reste entier.
+    // Accroche conservee dans le corps (disque de la semaine, coup de coeur,
+    // frenchie) : premier paragraphe si elle n'y est pas deja, jamais en chapo.
+    let bodyForWp = input.bodyText;
+    const accrocheIn = String(meta.accroche || '').trim();
+    if (accrocheIn && !accrocheCountsAsChapo(input.paperTypeName)) {
+      bodyForWp = bodyWithAccroche(input.bodyText, accrocheIn);
+      await logInfo('wp-format', bodyForWp === input.bodyText
+        ? 'Accroche deja contenue dans le texte : conservee telle quelle dans le corps, pas de chapo journaliste'
+        : 'Accroche placee en premier paragraphe du corps (mot pour mot), chapo genere separement', ctx);
+    }
     let chapo = '';
     if (chapoPlan.mode === 'journaliste') {
-      chapo = providedChapo(meta);
+      chapo = providedChapo(meta, input.paperTypeName);
     } else if (chapoPlan.mode === 'generer') {
-      const source = [input.title, input.bodyText, ...Object.values(meta).filter((v): v is string => typeof v === 'string')].join('\n');
+      const source = [input.title, bodyForWp, ...Object.values(meta).filter((v): v is string => typeof v === 'string')].join('\n');
       const generated = verified?.copy.chapo || '';
       const check = generated
         ? checkGeneratedChapo(generated, source, chapoPlan.maxWords, `${factsSource(verified!.sheet.facts)}\n${verified!.sheet.displayName || ''}`)
@@ -745,10 +800,9 @@ export async function publishDeliveryToWordpress(
     } else {
       await logInfo('wp-format', strictChapo ? 'Chapô non fourni ; interrupteur « chapô obligatoire » allumé : aucun chapô généré' : 'Chapô non fourni ; agent réglé sur « aucun chapô »', ctx);
     }
-    const bodyForWp = input.bodyText;
     payload.excerpt = chapo;
     const links = splitLinks(String(meta.lien || ''), String(meta.lien_achat || ''));
-    const kind: PaperKind = /cinema/i.test(input.paperTypeName) ? 'cinema' : /livre/i.test(input.paperTypeName) ? 'livres' : 'musique';
+    const kind: PaperKind = paperKindOf(input.paperTypeName);
     // Lien interne : le choix explicite de l'IA parmi les candidats, sinon un
     // candidat dont le titre cite l'artiste, sinon la rubrique de l'article
     // (Yoast exige au moins un lien interne). Jamais le premier resultat de
@@ -766,13 +820,14 @@ export async function publishDeliveryToWordpress(
     else await logWarn('wp-format', "Aucun lien sortant (site officiel / Bandcamp / editeur) : renseigner « Lien d'achat » sur la livraison pour Yoast", ctx);
     if (readAlso) await logInfo('wp-format', `Lien interne « A lire aussi » : ${readAlso.title}`, ctx);
     else await logWarn('wp-format', 'Aucun lien interne possible (ni article lie, ni rubrique)', ctx);
-    await logInfo('wp-format', `Corps = texte livre mot pour mot (${input.bodyText.length} signes), chapo ${chapo ? 'present' : 'absent'}, signature « Par ${input.journalistName} »`, ctx);
+    await logInfo('wp-format', `Corps = texte livre mot pour mot (${bodyForWp.length} signes), chapo ${chapo ? 'present' : 'absent'}, signature « Par ${input.journalistName} »`, ctx);
     let contentHtml = insertImagesIntoBody(payload.contentHtml, bodyMedia, imageAlt);
-    const chronique = isChroniqueType(input.paperTypeName);
+    const chronique = isReviewedType(input.paperTypeName);
     const reviewScore = chronique ? reviewScoreFromMetadata(input.metadata) : null;
     if (chronique) {
       contentHtml = appendReviewRecap(contentHtml);
-      await logInfo('wp-format', `Chronique : shortcode review box ajoute (note ${reviewScore ?? 'n/a'}/5 a reporter dans la Reviews Box)`, ctx);
+      if (reviewScore === null) await logWarn('wp-format', 'Shortcode review box ajoute mais aucune note (etoiles) sur la livraison : Reviews Box a remplir a la main', ctx);
+      else await logInfo('wp-format', `Shortcode review box ajoute (note ${reviewScore}/5, template ${kind === 'cinema' ? 'Cinema' : 'Music'})`, ctx);
     }
 
     // 5. Create the draft post — the title carries the review mention so the

@@ -6,6 +6,10 @@
  *   (app_settings.STRICT_EDITORIAL_FIELDS) est coupe ;
  * - interrupteur allume : plus aucun chapo genere.
  * Jamais une phrase du journaliste deplacee ou recopiee en chapo.
+ * Consigne du 04/11/2026 : sur Disque de la semaine, Coup de coeur et Frenchie,
+ * l'accroche du formulaire n'est PAS un chapo (elle reste dans le corps, mot
+ * pour mot) ; le chapo web est genere sur faits verifies comme pour les
+ * chroniques. Seul un champ `chapo` explicite vaut chapo journaliste.
  * Rien ici ne concerne Dropbox ni le docx imprime.
  */
 
@@ -21,6 +25,37 @@ export function decideChapoMode({ provided, strict, agentIfMissing }: ChapoDecis
   if (provided.trim()) return 'journaliste';
   if (strict || agentIfMissing === 'none') return 'aucun';
   return 'generer';
+}
+
+/** Types ou l'accroche reste dans le corps et ne vaut pas chapo (04/11/2026). */
+const ACCROCHE_IN_BODY_TYPES = ['disque de la semaine', 'coup de coeur', 'frenchie'];
+
+const normalizeType = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/œ/g, 'oe').toLowerCase();
+
+/** L'accroche du formulaire vaut-elle chapo web pour ce type de papier ? */
+export function accrocheCountsAsChapo(paperTypeName: string): boolean {
+  const n = normalizeType(paperTypeName);
+  return !ACCROCHE_IN_BODY_TYPES.some((t) => n.includes(t));
+}
+
+/** Chapo du journaliste saisi dans le formulaire : champ chapo, sinon accroche (selon le type). */
+export function providedChapo(metadata: Record<string, unknown>, paperTypeName: string): string {
+  const chapo = String(metadata?.chapo || '').trim();
+  if (chapo) return chapo;
+  return accrocheCountsAsChapo(paperTypeName) ? String(metadata?.accroche || '').trim() : '';
+}
+
+const sameText = (t: string) => normalizeType(t).replace(/\s+/g, ' ').trim();
+
+/**
+ * Corps web avec l'accroche conservee : si elle n'est pas deja dans le texte
+ * livre, elle devient le premier paragraphe ; sinon rien (pas de doublon).
+ */
+export function bodyWithAccroche(bodyText: string, accroche: string): string {
+  const a = accroche.replace(/\s+/g, ' ').trim();
+  if (!a) return bodyText;
+  if (sameText(bodyText).includes(sameText(a))) return bodyText;
+  return `${a}\n\n${bodyText}`;
 }
 
 export const DEFAULT_CHAPO_MAX_WORDS = 45;

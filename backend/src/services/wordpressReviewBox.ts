@@ -22,6 +22,10 @@ export const WP_META_STYLE_MUSIC = '_tsm_value';
 export const REVIEW_TEMPLATE_MUSIC = 'rwp_template_5c765e33791e9';
 export const REVIEW_TEMPLATE_CINEMA = 'rwp_template_5c765e419ddad';
 
+/**
+ * Famille de la Reviews Box. Le site n'a que deux templates : les livres et
+ * les expositions utilisent le template Music (decision du 04/11/2026).
+ */
 export type ReviewKind = 'musique' | 'cinema';
 
 export interface ReviewBoxInput {

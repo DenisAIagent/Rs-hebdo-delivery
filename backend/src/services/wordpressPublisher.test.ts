@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink, prefersArtistPhoto } from './wordpressPublisher';
+import { buildArticleHtml, splitLinks, outboundLinkLabel, pickInternalLink, prefersArtistPhoto, isCouvType, selectCouvBodyImages, isReviewedType, paperKindOf } from './wordpressPublisher';
 
 const body = `Alors, comme ça, le rock serait mort ! Passé par pertes et profits.
 
@@ -90,4 +90,41 @@ test('photo de l\'artiste en une pour les interviews et sujets de couv seulement
   assert.equal(prefersArtistPhoto('Sujet de couv'), true);
   assert.equal(prefersArtistPhoto('Chroniques'), false);
   assert.equal(prefersArtistPhoto('Chronique Cinema'), false);
+});
+
+test('isCouvType : seul le sujet de couv est concerne', () => {
+  assert.equal(isCouvType('Sujet de couv'), true);
+  assert.equal(isCouvType('Interview 3000'), false);
+  assert.equal(isCouvType('Chroniques'), false);
+});
+
+test('selectCouvBodyImages : page de couv + 2 premieres photos, hors image a la une', () => {
+  const imgs = ['couv', 'p1', 'p2', 'p3', 'p4', 'p5'];
+  // Image a la une = p2 (premiere paysage) : corps = couv, p1, p3.
+  assert.deepEqual(selectCouvBodyImages(imgs, 2), ['couv', 'p1', 'p3']);
+  // La couv elle-meme choisie en une : corps = 2 photos seulement.
+  assert.deepEqual(selectCouvBodyImages(imgs, 0), ['p1', 'p2']);
+  // Peu de photos : on prend ce qu'il y a.
+  assert.deepEqual(selectCouvBodyImages(['couv', 'p1'], 1), ['couv']);
+  assert.deepEqual(selectCouvBodyImages(['couv'], 0), []);
+  // 17 photos : 3 retenues au plus.
+  const many = Array.from({ length: 17 }, (_, i) => `i${i}`);
+  assert.equal(selectCouvBodyImages(many, 5).length, 3);
+});
+
+test('isReviewedType : chroniques, disque de la semaine, frenchie, livres et expo ont une Reviews Box', () => {
+  assert.equal(isReviewedType('Chroniques'), true);
+  assert.equal(isReviewedType('Chronique Cinéma'), true);
+  assert.equal(isReviewedType('Disque de la semaine'), true);
+  assert.equal(isReviewedType('Livres et Expo'), true);
+  assert.equal(isReviewedType('Frenchie'), true);
+  assert.equal(isReviewedType('Sujet de couv'), false);
+});
+
+test('paperKindOf : cinema avec ou sans accent, livres et expo → livres', () => {
+  assert.equal(paperKindOf('Chronique Cinema'), 'cinema');
+  assert.equal(paperKindOf('Chronique Cinéma'), 'cinema');
+  assert.equal(paperKindOf('Livres et Expo'), 'livres');
+  assert.equal(paperKindOf('Exposition'), 'livres');
+  assert.equal(paperKindOf('Disque de la semaine'), 'musique');
 });

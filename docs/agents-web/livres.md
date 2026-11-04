@@ -57,7 +57,7 @@ Référence sur le site : 156061 (BD « Billy the Kid », signée Loraine Adam),
 - Aucune photo dans le corps.
 
 ### Note
-- `[rwp-review]` uniquement si une note est fournie.
+- `[rwp-review-recap id="0"]` toujours présent ; Reviews Box écrite par l'app dès qu'une note (`etoiles`) est fournie, avec le **template Music** (le site n'a que Music et Cinema — décision du 04/11/2026). Vaut pour les livres comme pour les expositions.
 
 ### Signature
 - `<em>{Prénom Nom}</em>`, sans « Par » (format de la BD Billy the Kid, la plus récente).

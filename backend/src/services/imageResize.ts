@@ -71,11 +71,12 @@ export async function toWebJpeg(input: Buffer, originalname: string): Promise<Re
 }
 
 /**
- * Recadrage seulement pour les photos paysage proches du 3:2 (perte <= ~10 %).
+ * Recadrage seulement pour les photos paysage proches du 3:2, 4:3 compris
+ * (perte <= ~11 % : les photos presse 2160x1620 du n°245 en sont).
  * Affiches, pochettes et couvertures seraient coupees (titre, texte) : elles
  * sont placees entieres sur un fond flouté.
  */
-export const FEATURED_COVER_MIN_RATIO = 1.35;
+export const FEATURED_COVER_MIN_RATIO = 1.3;
 export const FEATURED_COVER_MAX_RATIO = 1.65;
 const CONTAIN_BLUR_SIGMA = 40;
 const CONTAIN_BACKGROUND_BRIGHTNESS = 0.6;

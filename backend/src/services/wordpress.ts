@@ -376,7 +376,9 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
   const body: Record<string, unknown> = input.contentOnly
     ? { content: input.contentHtml, excerpt: input.excerpt }
     : {
-        status: 'draft',
+        // « En attente de relecture » (pending) : visible dans le module de
+        // publication de WordPress, jamais « publish » (consigne Denis 04/11/2026).
+        status: 'pending',
         title: input.title,
         content: input.contentHtml,
         slug: input.slug,

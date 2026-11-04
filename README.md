@@ -11,7 +11,7 @@ RS Hebdo Delivery couvre l'intégralité du cycle de vie d'un papier journalisti
 3. **Génération DOCX** — Un fichier Word formaté est généré automatiquement
 4. **Dépôt Dropbox** — Le DOCX et les images (originaux) sont déposés dans l'arborescence Dropbox de la rédaction, organisée par hebdo et type de papier
 5. **Notification** — Un email est envoyé à la rédaction en chef avec un lien vers le dossier Dropbox
-6. **WordPress (optionnel)** — En parallèle, l'article est mis en forme selon les conventions de rollingstone.fr et créé en **brouillon** `[EN ATTENTE DE RELECTURE]` avec image à la une, photos, catégories, tags et Yoast
+6. **WordPress (optionnel)** — En parallèle, l'article est mis en forme selon les conventions de rollingstone.fr et créé en statut **« En attente de relecture »** (jamais publié) avec image à la une, photos, catégories, tags et Yoast
 
 L'interface admin permet de gérer les numéros hebdo, les types de papier, les comptes journalistes (dont la réinitialisation 2FA), de consulter les logs, de livrer ou réattribuer un papier au nom d'un journaliste, de renvoyer un papier vers WordPress, et de modifier le prompt IA, le moteur et le modèle IA, le module WordPress et les clés API sans redéployer.
 

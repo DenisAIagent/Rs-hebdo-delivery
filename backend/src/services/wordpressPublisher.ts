@@ -859,7 +859,7 @@ export async function publishDeliveryToWordpress(
       contentOnly: input.contentOnly && !!input.existingPostId,
       replaceFeatured,
       authorId: authorId ?? undefined,
-      title: `${payload.title || input.title} [EN ATTENTE DE RELECTURE]`,
+      title: payload.title || input.title,  // statut pending, plus de suffixe dans le titre (04/11/2026)
       contentHtml,
       slug: payload.slug,
       excerpt: payload.excerpt,

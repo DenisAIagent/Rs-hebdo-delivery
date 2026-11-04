@@ -707,8 +707,8 @@ export function SettingsTab() {
         </div>
         <div className="px-5 py-4 space-y-4">
           <p className="text-xs text-gray-500">
-            Quand le module est actif, chaque papier livre est aussi envoye sur WordPress en <strong>brouillon</strong>{' '}
-            avec la mention <code className="font-mono bg-gray-50 px-1 rounded">[EN ATTENTE DE RELECTURE]</code> dans le titre :
+            Quand le module est actif, chaque papier livre est aussi envoye sur WordPress avec le statut{' '}
+            <strong>En attente de relecture</strong> (jamais publie) :
             mise en forme editoriale (chapo H3, intertitres H4, citations), categories + sous-categories, tags et image a la une.
             L'authentification utilise un <strong>mot de passe application</strong> WordPress (profil utilisateur → Mots de passe d'application).
           </p>

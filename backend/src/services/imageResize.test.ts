@@ -21,6 +21,8 @@ test('visuel entier : nom distinct du recadrage (la mediatheque dedoublonne par 
 test('recadrage seulement pour les photos paysage proches du 3:2', () => {
   assert.equal(featuredMode(3000, 2000), 'cover');
   assert.equal(featuredMode(1280, 855), 'cover');
+  assert.equal(featuredMode(2160, 1620), 'cover');  // photo presse 4:3
+  assert.equal(featuredMode(1620, 2160), 'contain');
   assert.equal(featuredMode(4113, 2747), 'cover');
   assert.equal(featuredMode(648, 864), 'contain');   // affiche
   assert.equal(featuredMode(3000, 3000), 'contain'); // pochette

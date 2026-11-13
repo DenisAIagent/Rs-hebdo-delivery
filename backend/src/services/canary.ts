@@ -7,6 +7,7 @@ import {
   type CanaryState,
   type CanaryTransition,
 } from './canaryState';
+import { describeError } from '../utils/safeError';
 
 /**
  * Canari, cote serveur Railway : controle la base Supabase toutes les heures
@@ -88,7 +89,7 @@ export async function sendCanaryAlert(params: {
     console.log(`[canary] Alerte ${params.transition} (${params.component}) envoyée à ${to.length} CTO`);
     return { sent: true };
   } catch (err) {
-    console.error('[canary] Failed to send alert:', err);
+    console.error('[canary] Failed to send alert:', describeError(err));
     return { sent: false, reason: 'Envoi de l\'email impossible (réseau)' };
   }
 }
@@ -116,7 +117,7 @@ export async function runCanary(): Promise<CanaryState> {
     try {
       await refreshAlertTargets();
     } catch (err) {
-      console.error('[canary] Lecture des CTO impossible:', err);
+      console.error('[canary] Lecture des CTO impossible:', describeError(err));
     }
     await persistState('supabase', state);
   } else {

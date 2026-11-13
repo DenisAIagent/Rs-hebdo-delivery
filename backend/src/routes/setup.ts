@@ -1,7 +1,27 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
+import { isAllowedSettingKey, SETUP_KEYS, MAX_SETTING_LENGTH } from '../utils/settingKeys';
 import { supabaseAdmin } from '../utils/supabase';
+import { describeError } from '../utils/safeError';
 
 const router = Router();
+
+/** Comparaison a temps constant (les deux valeurs sont hachees : longueurs egales). */
+function tokensMatch(provided: string, expected: string): boolean {
+  const a = crypto.createHash('sha256').update(provided).digest();
+  const b = crypto.createHash('sha256').update(expected).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+// Le wizard est public : on plafonne les essais de jeton par adresse IP.
+const configureLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives de configuration. Reessayez plus tard.' },
+});
 
 const REQUIRED_KEYS = [
   'ANTHROPIC_API_KEY',
@@ -54,17 +74,22 @@ router.get('/status', async (_req: Request, res: Response) => {
 });
 
 // POST /api/setup/configure - Initial setup (requires SETUP_SECRET_TOKEN + app not yet configured)
-router.post('/configure', async (req: Request, res: Response) => {
+router.post('/configure', configureLimiter, async (req: Request, res: Response) => {
   try {
+    // Ferme par defaut : il faut l'ouvrir explicitement le temps de l'installation.
+    if (process.env.SETUP_ENABLED !== 'true') {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     // Require setup token to prevent unauthorized configuration
     const SETUP_TOKEN = process.env.SETUP_SECRET_TOKEN;
-    const providedToken = req.headers['x-setup-token'] as string;
+    const providedToken = req.headers['x-setup-token'];
 
     if (!SETUP_TOKEN) {
       return res.status(403).json({ error: 'SETUP_SECRET_TOKEN non configure sur le serveur. Setup desactive.' });
     }
 
-    if (!providedToken || providedToken !== SETUP_TOKEN) {
+    if (typeof providedToken !== 'string' || !providedToken || !tokensMatch(providedToken, SETUP_TOKEN)) {
       return res.status(403).json({ error: 'Token de setup invalide' });
     }
 
@@ -78,6 +103,13 @@ router.post('/configure', async (req: Request, res: Response) => {
 
     if (!Array.isArray(settings) || settings.length === 0) {
       return res.status(400).json({ error: 'Un tableau de settings est requis' });
+    }
+
+    // Liste blanche stricte : le wizard ne peut ecrire que les reglages d'installation.
+    const invalid = settings.find((s: any) =>
+      !s || !isAllowedSettingKey(s.key, SETUP_KEYS) || typeof s.value !== 'string' || s.value.length > MAX_SETTING_LENGTH);
+    if (invalid) {
+      return res.status(400).json({ error: 'Reglage non autorise dans la configuration initiale' });
     }
 
     // Validate that all required keys are present
@@ -120,7 +152,7 @@ router.post('/configure', async (req: Request, res: Response) => {
 
     return res.json({ message: 'Configuration initiale terminee avec succes' });
   } catch (error) {
-    console.error('Setup configure error:', error);
+    console.error('Setup configure error:', describeError(error));
     return res.status(500).json({ error: 'Erreur configuration initiale' });
   }
 });

@@ -8,6 +8,7 @@ import {
   numberEmptyLines,
   restoreStructure,
 } from './correctionPrompt';
+import { describeError } from '../utils/safeError';
 
 // Local-only provider: spawns the Claude Code CLI on the host machine.
 // Useful as a fallback when API credits are exhausted. Will fail on Railway/serverless
@@ -116,7 +117,7 @@ export async function correctText(text: string): Promise<CorrectionResult> {
   try {
     envelope = JSON.parse(raw);
   } catch (e) {
-    console.error('[ClaudeCode] Failed to parse CLI envelope:', e);
+    console.error('[ClaudeCode] Failed to parse CLI envelope:', describeError(e));
     const err = new Error('Reponse Claude Code invalide (enveloppe JSON cassee).');
     (err as any).status = 502;
     throw err;

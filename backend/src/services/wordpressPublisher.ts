@@ -37,6 +37,7 @@ import { toFeaturedJpeg, toWebJpeg, FEATURED_WIDTH, FEATURED_HEIGHT, BODY_MAX_SI
 import { detectFaceFocus } from './faceFocus';
 import { boldToHtml } from './inlineBold';
 import { loadAgentRulesForPaperType } from './editorialAgents';
+import { describeError } from '../utils/safeError';
 
 export interface WpPublishInput {
   deliveryId: string;
@@ -548,7 +549,7 @@ async function saveWpState(
   try {
     await supabaseAdmin.from('deliveries').update(patch).eq('id', deliveryId);
   } catch (err) {
-    console.error('[WordPress] Failed to save wp state:', err);
+    console.error('[WordPress] Failed to save wp state:', describeError(err));
   }
 }
 

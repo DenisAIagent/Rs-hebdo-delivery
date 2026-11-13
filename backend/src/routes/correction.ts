@@ -3,6 +3,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { AuthRequest } from '../middleware/auth';
 import { correctText } from '../services/correction';
 import { guardCorrection, filterCorrections } from '../services/correctionGuard';
+import { describeError } from '../utils/safeError';
 
 const router = Router();
 
@@ -45,7 +46,7 @@ router.post('/', correctionLimiter, (req, _res, next) => { req.setTimeout(300_00
       signCount: guarded.text.length,
     });
   } catch (error: any) {
-    console.error('Correction error:', error);
+    console.error('Correction error:', describeError(error));
     const status = typeof error?.status === 'number' ? error.status : 500;
     return res.status(status >= 500 || status === 429 ? 503 : 500).json({
       error: 'Erreur lors de la correction',

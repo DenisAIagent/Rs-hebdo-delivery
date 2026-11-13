@@ -4,6 +4,7 @@
  */
 
 import { supabaseAdmin } from '../utils/supabase';
+import { describeError } from '../utils/safeError';
 
 export type LogLevel = 'info' | 'warn' | 'error';
 
@@ -60,7 +61,7 @@ export async function logDelivery(
     });
   } catch (err) {
     // Never let logging break the delivery flow
-    console.error('[DeliveryLogger] Failed to write log:', err);
+    console.error('[DeliveryLogger] Failed to write log:', describeError(err));
   }
 }
 

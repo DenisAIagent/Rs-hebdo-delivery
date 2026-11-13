@@ -2,6 +2,7 @@ import { supabaseAdmin } from '../utils/supabase';
 import { getEmailConfig } from './email';
 import { buildInviteEmail } from './inviteEmail';
 import { redirectsToApp } from './inviteLink';
+import { describeError } from '../utils/safeError';
 
 export interface InvitationResult {
   sent: boolean;
@@ -64,7 +65,7 @@ export async function sendInvitation(params: {
     console.log(`[invitation] ${params.reminder ? 'Relance' : 'Invitation'} envoyée à ${params.email}`);
     return { sent: true };
   } catch (err) {
-    console.error('[invitation] Failed to send email:', err);
+    console.error('[invitation] Failed to send email:', describeError(err));
     return { sent: false, reason: 'Envoi de l\'email impossible (réseau)' };
   }
 }

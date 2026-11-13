@@ -11,16 +11,23 @@ import { getCanaryStatus, runCanary, sendCanaryAlert } from '../services/canary'
 import { normalizeMetadata } from '../services/fieldValidation';
 import { logInfo, logWarn, type LogContext } from '../services/deliveryLogger';
 import { AuthRequest } from '../middleware/auth';
+import { isAllowedSettingKey, MAX_SETTING_LENGTH } from '../utils/settingKeys';
+import { describeError } from '../utils/safeError';
 import { supabaseAdmin } from '../utils/supabase';
 import { todayString, nextFridayString } from '../utils/dates';
 import { listClaudeModels, getLatestClaudeModel } from '../services/claude';
-import { testWpConnection, readWpPostMeta, writeWpPostMeta, listWpRevisions, listWpUsers, markWpPostPending } from '../services/wordpress';
+import { assertSafeWpUrl, testWpConnection, readWpPostMeta, writeWpPostMeta, listWpRevisions, listWpUsers, markWpPostPending } from '../services/wordpress';
 import { republishDeliveryToWordpress } from '../services/wordpressPublisher';
 import { collectMonthlyRecap, buildRecapPdf, sendMonthlyRecap, parseMonthKey, recapFilename, sampleRecap } from '../services/monthlyRecap';
 import { ensureDefaultAgents, listAgents, updateAgent, listVersions, restoreVersion } from '../services/editorialAgents';
 import { agentUpdateSchema, END_BLOCK_LABELS, HEADING_LABELS } from '../services/editorialAgentsSchema';
 
 const router = Router();
+
+const MAX_PROMPT_LENGTH = 50_000;
+const MAX_RECAP_RECIPIENTS = 3;
+// ~100 ans : Supabase n'a pas de bannissement « definitif ».
+const DEACTIVATED_BAN_DURATION = '876000h';
 
 /** Strip HTML tags safely */
 function stripHtml(str: string): string {
@@ -74,7 +81,7 @@ router.post('/paper-types', async (req: AuthRequest, res: Response) => {
     if (error) throw error;
     return res.status(201).json(data);
   } catch (error) {
-    console.error('Create paper type error:', error);
+    console.error('Create paper type error:', describeError(error));
     return res.status(500).json({ error: 'Erreur creation' });
   }
 });
@@ -103,7 +110,7 @@ router.put('/paper-types/:id', async (req: AuthRequest, res: Response) => {
     if (error) throw error;
     return res.json(data);
   } catch (error) {
-    console.error('Update paper type error:', error);
+    console.error('Update paper type error:', describeError(error));
     return res.status(500).json({ error: 'Erreur mise a jour' });
   }
 });
@@ -176,7 +183,7 @@ router.post('/hebdo', async (req: AuthRequest, res: Response) => {
     if (error) throw error;
     return res.status(201).json(data);
   } catch (error) {
-    console.error('Create hebdo error:', error);
+    console.error('Create hebdo error:', describeError(error));
     return res.status(500).json({ error: 'Erreur creation hebdo' });
   }
 });
@@ -217,7 +224,7 @@ router.put('/hebdo/:id/set-current', async (req: AuthRequest, res: Response) => 
     if (error) throw error;
     return res.json(data);
   } catch (error) {
-    console.error('Set current hebdo error:', error);
+    console.error('Set current hebdo error:', describeError(error));
     return res.status(500).json({ error: 'Erreur changement hebdo' });
   }
 });
@@ -255,7 +262,7 @@ router.get('/hebdo/:id/status', async (req: AuthRequest, res: Response) => {
 
     return res.json(status);
   } catch (error) {
-    console.error('Hebdo status error:', error);
+    console.error('Hebdo status error:', describeError(error));
     return res.status(500).json({ error: 'Erreur chargement statut' });
   }
 });
@@ -327,7 +334,7 @@ router.post('/journalists', async (req: AuthRequest, res: Response) => {
     const invitation = await sendInvitation({ email, fullName: profile.full_name });
     return res.status(201).json({ ...profile, invitation });
   } catch (error: any) {
-    console.error('Create journalist error:', error);
+    console.error('Create journalist error:', describeError(error));
     return res.status(500).json({ error: 'Erreur creation compte' });
   }
 });
@@ -452,6 +459,15 @@ router.put('/journalists/:id', async (req: AuthRequest, res: Response) => {
       .single();
 
     if (error) throw error;
+
+    // Un compte desactive ne doit garder aucune session Supabase utilisable :
+    // on bannit (ou retablit) aussi l'utilisateur cote authentification.
+    if (is_active !== undefined) {
+      const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        ban_duration: is_active === false ? DEACTIVATED_BAN_DURATION : 'none',
+      });
+      if (banError) console.error(`Auth ban sync failed for ${id}:`, banError.message);
+    }
     return res.json(data);
   } catch (error: any) {
     console.error('Update journalist error:', error?.message || error);
@@ -487,7 +503,7 @@ router.delete('/journalists/:id/mfa', async (req: AuthRequest, res: Response) =>
         : "Aucun facteur 2FA a supprimer pour cet utilisateur.",
     });
   } catch (error: any) {
-    console.error('Reset MFA error:', error);
+    console.error('Reset MFA error:', describeError(error));
     return res.status(500).json({ error: 'Erreur reinitialisation 2FA', detail: error?.message });
   }
 });
@@ -532,7 +548,7 @@ router.get('/deliveries/:id', async (req: AuthRequest, res: Response) => {
     }
     return res.json(data);
   } catch (error) {
-    console.error('Admin get delivery error:', error);
+    console.error('Admin get delivery error:', describeError(error));
     return res.status(500).json({ error: 'Erreur chargement livraison' });
   }
 });
@@ -691,7 +707,7 @@ router.put('/deliveries/:id', async (req: AuthRequest, res: Response) => {
         : 'Livraison modifiee par admin',
     });
   } catch (error) {
-    console.error('Admin update delivery error:', error);
+    console.error('Admin update delivery error:', describeError(error));
     return res.status(500).json({ error: 'Erreur modification' });
   }
 });
@@ -734,7 +750,7 @@ router.get('/logs', async (req: AuthRequest, res: Response) => {
     if (error) throw error;
     return res.json(data || []);
   } catch (error) {
-    console.error('Get logs error:', error);
+    console.error('Get logs error:', describeError(error));
     return res.status(500).json({ error: 'Erreur chargement logs' });
   }
 });
@@ -824,7 +840,7 @@ router.get('/prompt', async (_req: AuthRequest, res: Response) => {
     if (error) throw error;
     return res.json(data);
   } catch (error) {
-    console.error('Get prompt error:', error);
+    console.error('Get prompt error:', describeError(error));
     return res.status(500).json({ error: 'Erreur chargement prompt' });
   }
 });
@@ -835,6 +851,9 @@ router.put('/prompt', async (req: AuthRequest, res: Response) => {
 
   if (!prompt_text || typeof prompt_text !== 'string' || prompt_text.trim().length < 50) {
     return res.status(400).json({ error: 'Le prompt doit contenir au moins 50 caracteres' });
+  }
+  if (prompt_text.length > MAX_PROMPT_LENGTH) {
+    return res.status(400).json({ error: `Le prompt ne doit pas depasser ${MAX_PROMPT_LENGTH} caracteres` });
   }
 
   try {
@@ -861,7 +880,7 @@ router.put('/prompt', async (req: AuthRequest, res: Response) => {
     if (error) throw error;
     return res.json(data);
   } catch (error) {
-    console.error('Update prompt error:', error);
+    console.error('Update prompt error:', describeError(error));
     return res.status(500).json({ error: 'Erreur mise a jour prompt' });
   }
 });
@@ -1096,7 +1115,7 @@ router.get('/models', async (_req: AuthRequest, res: Response) => {
     const models = await listClaudeModels();
     return res.json(models);
   } catch (error: any) {
-    console.error('List models error:', error);
+    console.error('List models error:', describeError(error));
     return res.status(500).json({ error: 'Impossible de récupérer la liste des modèles', detail: error?.message || String(error) });
   }
 });
@@ -1108,7 +1127,7 @@ router.get('/models/latest', async (_req: AuthRequest, res: Response) => {
     if (!latest) return res.status(404).json({ error: 'Aucun modèle Claude trouvé' });
     return res.json(latest);
   } catch (error: any) {
-    console.error('Latest model error:', error);
+    console.error('Latest model error:', describeError(error));
     return res.status(500).json({ error: 'Impossible de détecter le dernier modèle', detail: error?.message || String(error) });
   }
 });
@@ -1125,7 +1144,7 @@ router.get('/recap/:ym/pdf', async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${recapFilename(year, month)}"`);
     return res.send(pdf);
   } catch (error: any) {
-    console.error('Recap pdf error:', error);
+    console.error('Recap pdf error:', describeError(error));
     return res.status(400).json({ error: error?.message || 'Erreur génération du récapitulatif' });
   }
 });
@@ -1136,12 +1155,15 @@ router.post('/recap/:ym/send', async (req: AuthRequest, res: Response) => {
     const { year, month } = parseMonthKey(String(req.params.ym));
     // Corps optionnel : { to?: string[], cc?: string[], sample?: boolean } (envoi de test)
     const body = req.body || {};
-    const emails = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)) : undefined);
+    // Le PDF contient les noms et e-mails des journalistes : destinataires plafonnes.
+    const emails = (v: unknown) => (Array.isArray(v)
+      ? v.filter((x) => typeof x === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)).slice(0, MAX_RECAP_RECIPIENTS)
+      : undefined);
     const result = await sendMonthlyRecap(year, month, { to: emails(body.to), cc: emails(body.cc), sample: body.sample === true });
     if (!result.sent) return res.status(400).json({ error: result.reason || 'Envoi impossible' });
     return res.json(result);
   } catch (error: any) {
-    console.error('Recap send error:', error);
+    console.error('Recap send error:', describeError(error));
     return res.status(500).json({ error: error?.message || 'Erreur envoi du récapitulatif' });
   }
 });
@@ -1209,9 +1231,8 @@ const NON_SECRET_KEYS = new Set([
 function maskValue(key: string, value: string): string {
   if (NON_SECRET_KEYS.has(key)) return value || '';
   if (!value) return '';
-  return value.length > 4
-    ? '\u2022'.repeat(8) + value.slice(-4)
-    : '\u2022'.repeat(8);
+  // Aucun caractere du secret ne repart vers le navigateur.
+  return '\u2022'.repeat(8);
 }
 
 // GET /api/admin/settings - List all settings (secret values masked)
@@ -1231,7 +1252,7 @@ router.get('/settings', async (_req: AuthRequest, res: Response) => {
 
     return res.json(masked);
   } catch (error) {
-    console.error('Get settings error:', error);
+    console.error('Get settings error:', describeError(error));
     return res.status(500).json({ error: 'Erreur chargement settings' });
   }
 });
@@ -1248,9 +1269,27 @@ router.put('/settings', async (req: AuthRequest, res: Response) => {
     const results = [];
     const failures: Array<{ key: string; reason: string }> = [];
     for (const s of settings) {
-      if (!s.key || typeof s.value !== 'string') {
-        failures.push({ key: s?.key ?? '?', reason: 'payload invalide (key ou value manquant)' });
+      if (!s || typeof s.key !== 'string' || typeof s.value !== 'string') {
+        failures.push({ key: typeof s?.key === 'string' ? s.key : '?', reason: 'payload invalide (key ou value manquant)' });
         continue;
+      }
+      if (!isAllowedSettingKey(s.key)) {
+        failures.push({ key: s.key.slice(0, 60), reason: 'reglage inconnu' });
+        continue;
+      }
+      if (s.value.length > MAX_SETTING_LENGTH) {
+        failures.push({ key: s.key, reason: 'valeur trop longue' });
+        continue;
+      }
+      // L'adresse WordPress recoit le mot de passe application a chaque appel :
+      // elle doit etre en HTTPS, publique, et dans la liste d'hotes autorises.
+      if (s.key === 'WORDPRESS_URL' && s.value.trim()) {
+        try {
+          await assertSafeWpUrl(s.value.trim());
+        } catch (e) {
+          failures.push({ key: s.key, reason: describeError(e) });
+          continue;
+        }
       }
 
       // Upsert so we tolerate keys that may not yet exist as rows
@@ -1269,7 +1308,7 @@ router.put('/settings', async (req: AuthRequest, res: Response) => {
         .single();
 
       if (error) {
-        console.error(`Update setting ${s.key} error:`, error);
+        console.error(`Update setting ${s.key} error:`, describeError(error));
         failures.push({ key: s.key, reason: error.message });
         continue;
       }
@@ -1292,7 +1331,7 @@ router.put('/settings', async (req: AuthRequest, res: Response) => {
 
     return res.json({ updated: masked, failures });
   } catch (error: any) {
-    console.error('Update settings error:', error);
+    console.error('Update settings error:', describeError(error));
     return res.status(500).json({
       error: 'Erreur mise a jour settings',
       detail: error?.message || String(error),

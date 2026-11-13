@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../utils/supabase';
 import { nextFridayString } from '../utils/dates';
+import { describeError } from '../utils/safeError';
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // every hour
 
@@ -91,7 +92,7 @@ async function rotateHebdoIfNeeded(): Promise<void> {
         `(window: ${nextStartStr} -> ${nextEndStr})`,
     );
   } catch (err) {
-    console.error('[hebdo-rotation] Unexpected error:', err);
+    console.error('[hebdo-rotation] Unexpected error:', describeError(err));
   }
 }
 

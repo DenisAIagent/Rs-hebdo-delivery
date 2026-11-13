@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import multer from 'multer';
@@ -13,31 +13,26 @@ import { validateMetadata, normalizeMetadata } from '../services/fieldValidation
 import { applyFieldPolicy, isStrictEditorialFields } from '../services/fieldPolicy';
 import { fixMojibake } from '../utils/filenames';
 import { isAdminRole } from '../utils/roles';
-
-/** Strip HTML tags safely (removes all tags, decodes entities) */
-function stripHtml(str: string): string {
-  return str
-    .replace(/<[^>]*>?/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
+import { stripHtml, cleanTitle, httpUrlOrEmpty, maxBodyLength, MAX_TITLE_LENGTH } from '../utils/textSafety';
+import { describeError } from '../utils/safeError';
 
 const MAX_FILE_BYTES = 60 * 1024 * 1024; // 60 Mo/fichier — large pour une photo de presse HD
 const MAX_FILES = 30;
+// Les fichiers sont gardes en memoire : on borne la requete entiere et on
+// n'accepte qu'un envoi a la fois par utilisateur (anti-saturation memoire).
+const MAX_REQUEST_BYTES = 600 * 1024 * 1024;
+// Champs texte du formulaire (le JSON `metadata` contient le corps du papier).
+const MAX_FIELD_BYTES = 400 * 1024;
 
 const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_BYTES, files: MAX_FILES, fields: 50 },
+  limits: { fileSize: MAX_FILE_BYTES, files: MAX_FILES, fields: 50, fieldSize: MAX_FIELD_BYTES },
   fileFilter: (_req, file, cb) => {
     // On refuse d'emblee SVG (vecteur XSS) et tout ce qui n'est pas une image.
     // Le MIME client n'est pas fiable : la vraie verif se fait sur les magic
     // bytes apres reception (assertRealImages).
-    if (file.mimetype === 'image/svg+xml') {
+    if (file.mimetype.toLowerCase().includes('svg')) {
       cb(new Error('Les images SVG ne sont pas acceptees'));
     } else if (file.mimetype.startsWith('image/')) {
       cb(null, true);
@@ -46,6 +41,8 @@ const upload = multer({
     }
   },
 });
+
+const HEIF_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1', 'avif', 'avis']);
 
 /** Vrai type d'image d'apres les premiers octets (indépendant du MIME client). */
 function detectImageType(buf: Buffer): string | null {
@@ -56,7 +53,9 @@ function detectImageType(buf: Buffer): string | null {
   if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
   if ((buf[0] === 0x49 && buf[1] === 0x49 && buf[2] === 0x2a && buf[3] === 0x00) ||
       (buf[0] === 0x4d && buf[1] === 0x4d && buf[2] === 0x00 && buf[3] === 0x2a)) return 'tiff';
-  if (buf.toString('ascii', 4, 8) === 'ftyp') return 'heic'; // HEIC/HEIF
+  // HEIC/HEIF/AVIF : le conteneur « ftyp » sert aussi aux videos (MP4, MOV),
+  // on exige donc une marque d'image.
+  if (buf.toString('ascii', 4, 8) === 'ftyp' && HEIF_BRANDS.has(buf.toString('ascii', 8, 12))) return 'heic';
   return null;
 }
 
@@ -70,6 +69,56 @@ function assertRealImages(files: Express.Multer.File[]): void {
       throw new Error(`Fichier « ${f.originalname} » : contenu non reconnu comme une image valide`);
     }
   }
+}
+
+/** Limiteur par utilisateur. Les admins livrent parfois un numero entier d'un coup. */
+function perUserLimiter(max: number, adminMax: number, message: string) {
+  return rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: (req: AuthRequest) => (isAdminRole(req.userRole) ? adminMax : max),
+    keyGenerator: (req: AuthRequest) => req.userId || ipKeyGenerator(req.ip || ''),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: message },
+  });
+}
+
+// Chaque livraison declenche des appels IA, des ecritures WordPress et Dropbox
+// et un e-mail : elle est donc plafonnee par compte, pas seulement par IP.
+const submitLimiter = perUserLimiter(20, 200, 'Trop de livraisons en une heure. Reessayez plus tard.');
+const editLimiter = perUserLimiter(40, 200, 'Trop de modifications en une heure. Reessayez plus tard.');
+const prepareLimiter = perUserLimiter(20, 100, 'Trop de preparations de dossiers. Reessayez plus tard.');
+
+const uploadsInFlight = new Set<string>();
+
+/** Borne la taille totale de la requete et interdit deux envois simultanes par compte. */
+function uploadGuard(req: AuthRequest, res: Response, next: NextFunction): void {
+  const declared = Number(req.headers['content-length']);
+  if (!Number.isFinite(declared) || declared <= 0) {
+    res.status(411).json({ error: 'Taille de la requete requise' });
+    return;
+  }
+  if (declared > MAX_REQUEST_BYTES) {
+    res.status(413).json({ error: 'Envoi trop volumineux (600 Mo au total maximum)' });
+    return;
+  }
+  const key = req.userId || '';
+  if (uploadsInFlight.has(key)) {
+    res.status(429).json({ error: 'Un envoi est deja en cours pour ce compte. Attendez qu\'il se termine.' });
+    return;
+  }
+  uploadsInFlight.add(key);
+  res.on('close', () => uploadsInFlight.delete(key));
+  req.setTimeout(900_000);
+  next();
+}
+
+/** Refuse un titre ou un corps hors gabarit avant tout appel IA / Dropbox / WordPress. */
+function contentProblem(title: string, bodyText: string, signLimit: unknown): string | null {
+  if (title.length > MAX_TITLE_LENGTH) return `Titre trop long (${MAX_TITLE_LENGTH} caracteres maximum)`;
+  const max = maxBodyLength(signLimit);
+  if (bodyText.length > max) return `Texte trop long (${bodyText.length} signes, ${max} maximum pour ce type de papier)`;
+  return null;
 }
 
 // GET /api/deliveries - List user's deliveries
@@ -88,7 +137,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     if (error) throw error;
     return res.json(data);
   } catch (error) {
-    console.error('List deliveries error:', error);
+    console.error('List deliveries error:', describeError(error));
     return res.status(500).json({ error: 'Erreur chargement livraisons' });
   }
 });
@@ -192,13 +241,13 @@ router.post('/ensure-hebdo', ensureHebdoLimiter, async (req: AuthRequest, res: R
     console.log(`[Hebdo] New hebdo created by journalist: ${label}`);
     return res.status(201).json(created);
   } catch (error) {
-    console.error('Ensure hebdo error:', error);
+    console.error('Ensure hebdo error:', describeError(error));
     return res.status(500).json({ error: 'Erreur creation hebdo' });
   }
 });
 
 // POST /api/deliveries/prepare-hebdo - Pre-create Dropbox folder structure for a hebdo
-router.post('/prepare-hebdo', async (req: AuthRequest, res: Response) => {
+router.post('/prepare-hebdo', prepareLimiter, async (req: AuthRequest, res: Response) => {
   const { hebdo_id } = req.body;
   if (!hebdo_id) {
     return res.status(400).json({ error: 'hebdo_id requis' });
@@ -234,7 +283,8 @@ router.post('/prepare-hebdo', async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: 'Aucun type de papier actif' });
   } catch (error) {
-    console.error('Prepare hebdo error:', error);
+    // Jamais l'objet d'erreur brut : une erreur axios porte les identifiants Dropbox.
+    console.error('Prepare hebdo error:', describeError(error));
     await logError('dropbox-prepare', 'Echec preparation dossiers Dropbox', {
       journalistId: req.userId,
     }, error);
@@ -261,14 +311,15 @@ router.get('/paper-types', async (_req: AuthRequest, res: Response) => {
 
 // POST /api/deliveries - Submit a delivery (now supports multiple images)
 // Extend timeout for this upload-heavy route (15 min — accommodates large photos)
-router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, upload.array('images', 30), async (req: AuthRequest, res: Response) => {
+router.post('/', submitLimiter, uploadGuard, upload.array('images', 30), async (req: AuthRequest, res: Response) => {
   // Log context — built progressively as we gather info (filled below)
   const ctx: LogContext = { journalistId: req.userId };
   let currentStep = 'start';
   // Reassigned below to the resolved author
 
   try {
-    const { paper_type_id, title, metadata, hebdo_id, author_id: rawAuthorId } = req.body;
+    const { paper_type_id, metadata, hebdo_id, author_id: rawAuthorId } = req.body;
+    const title = cleanTitle(req.body.title);
     const imageFiles = req.files as Express.Multer.File[];
 
     // Vérifie que chaque fichier est réellement une image (magic bytes)
@@ -382,9 +433,15 @@ router.post('/', (req, _res, next) => { req.setTimeout(900_000); next(); }, uplo
     const bodyText = bodyField ? parsedMetadata[bodyField.key] || '' : '';
     const signCount = bodyText.length;
 
+    const tooBig = contentProblem(title, bodyText, paperType.sign_limit);
+    if (tooBig) {
+      await logWarn('validation', tooBig, ctx);
+      return res.status(400).json({ error: `Livraison refusée : ${tooBig}` });
+    }
+
     // For backward compatibility, extract some fields
     const subject = parsedMetadata.artiste || parsedMetadata.album || '';
-    const digitalLink = parsedMetadata.lien || '';
+    const digitalLink = httpUrlOrEmpty(parsedMetadata.lien);
 
     // Enrich log context now that we have all info
     ctx.journalistName = journalistName;
@@ -529,19 +586,20 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
     }
     return res.json(data);
   } catch (error) {
-    console.error('Get delivery error:', error);
+    console.error('Get delivery error:', describeError(error));
     return res.status(500).json({ error: 'Erreur chargement livraison' });
   }
 });
 
 // PUT /api/deliveries/:id - Update a delivery (owner only, re-generates DOCX + re-uploads to Dropbox)
-router.put('/:id', (req, _res, next) => { req.setTimeout(900_000); next(); }, upload.array('images', 30), async (req: AuthRequest, res: Response) => {
+router.put('/:id', editLimiter, uploadGuard, upload.array('images', 30), async (req: AuthRequest, res: Response) => {
   const ctx: LogContext = { journalistId: req.userId };
   let currentStep = 'start';
 
   try {
     const { id } = req.params;
-    const { title, metadata } = req.body;
+    const { metadata } = req.body;
+    const title = cleanTitle(req.body.title);
     const imageFiles = req.files as Express.Multer.File[];
 
     // Vérifie que chaque fichier est réellement une image (magic bytes)
@@ -599,7 +657,12 @@ router.put('/:id', (req, _res, next) => { req.setTimeout(900_000); next(); }, up
     const bodyText = bodyField ? parsedMetadata[bodyField.key] || '' : '';
     const signCount = bodyText.length;
     const subject = parsedMetadata.artiste || parsedMetadata.album || '';
-    const digitalLink = parsedMetadata.lien || '';
+    const digitalLink = httpUrlOrEmpty(parsedMetadata.lien);
+
+    const tooBig = contentProblem(updatedTitle, bodyText, paperType.sign_limit);
+    if (tooBig) {
+      return res.status(400).json({ error: `Modification refusée : ${tooBig}` });
+    }
 
     // Get journalist profile
     const { data: profile } = await supabaseAdmin
@@ -672,6 +735,7 @@ router.put('/:id', (req, _res, next) => { req.setTimeout(900_000); next(); }, up
       .from('deliveries')
       .update(updateData)
       .eq('id', id)
+      .eq('author_id', req.userId!)
       .select()
       .single();
 

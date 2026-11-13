@@ -10,7 +10,7 @@ router.get('/config', async (_req, res: Response) => {
   try {
     return res.json({ mfaRequired: await isMfaRequired() });
   } catch {
-    return res.json({ mfaRequired: false });
+    return res.json({ mfaRequired: true });
   }
 });
 

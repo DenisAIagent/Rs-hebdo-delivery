@@ -11,6 +11,7 @@
  */
 
 import axios from 'axios';
+import { toSafeError } from '../utils/safeError';
 import { loadDropboxConfig, getCachedRootFolder, credentialsFingerprint, type DropboxConfig } from './dropboxConfig';
 
 // ── Token management ────────────────────────────────────────────
@@ -63,7 +64,9 @@ async function doRefreshToken(cfg: DropboxConfig, fingerprint: string): Promise<
     return cachedToken!;
   } catch (err: any) {
     console.error('[Dropbox] Token refresh FAILED:', err?.response?.data || err.message);
-    throw err;
+    // Jamais l'erreur axios brute : sa configuration porte l'App Secret et le
+    // refresh token, qu'un console.error en aval imprimerait dans les logs.
+    throw toSafeError(err);
   }
 }
 
@@ -111,6 +114,8 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
         await sleep(waitMs);
         continue;
       }
+      // Le jeton d'acces ne doit pas voyager avec l'erreur (logs en aval).
+      if (err?.config?.headers) delete err.config.headers.Authorization;
       throw err;
     }
   }

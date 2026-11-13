@@ -12,6 +12,7 @@ import { FolderOpen, ExternalLink, AlertCircle, Search, Trash2, Pencil, Globe, L
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { isSafeUrl } from '../../lib/safeUrl';
 
 const STATUS_LABELS: Record<string, { label: string; classes: string }> = {
   delivered: { label: 'Livre', classes: 'bg-green-50 text-green-700' },
@@ -244,7 +245,7 @@ export function DeliveriesTab() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {d.wp_status === 'sent' && d.wp_post_url ? (
+                          {d.wp_status === 'sent' && d.wp_post_url && isSafeUrl(d.wp_post_url) ? (
                             <>
                               <a
                                 href={d.wp_post_url}
@@ -284,7 +285,7 @@ export function DeliveriesTab() {
                               {sendingWp === d.id ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
                             </button>
                           )}
-                          {d.drive_folder_url && (
+                          {d.drive_folder_url && isSafeUrl(d.drive_folder_url) && (
                             <a
                               href={d.drive_folder_url}
                               target="_blank"
@@ -295,7 +296,7 @@ export function DeliveriesTab() {
                               <FolderOpen size={16} />
                             </a>
                           )}
-                          {d.digital_link && (
+                          {d.digital_link && isSafeUrl(d.digital_link) && (
                             <a
                               href={d.digital_link}
                               target="_blank"

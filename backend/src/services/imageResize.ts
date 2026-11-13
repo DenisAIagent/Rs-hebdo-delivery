@@ -8,6 +8,13 @@
 
 import sharp from 'sharp';
 
+/**
+ * Options de lecture sharp. limitInputPixels borne la memoire de decodage :
+ * 120 megapixels couvrent les boitiers de presse les plus definis, contre 268
+ * par defaut (environ 1 Go decode par image).
+ */
+export const SHARP_INPUT = { failOn: 'none', limitInputPixels: 120_000_000 } as const;
+
 export const FEATURED_WIDTH = 1280;
 export const FEATURED_HEIGHT = 853;
 export const FEATURED_JPEG_QUALITY = 90;
@@ -55,7 +62,7 @@ export function webFilename(originalname: string): string {
  * would otherwise time out on the WordPress upload and bloat the site.
  */
 export async function toWebJpeg(input: Buffer, originalname: string): Promise<ResizedImage> {
-  const { data, info } = await sharp(input, { failOn: 'none' })
+  const { data, info } = await sharp(input, SHARP_INPUT)
     .rotate()
     .resize(BODY_MAX_SIDE, BODY_MAX_SIDE, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: BODY_JPEG_QUALITY, mozjpeg: true })
@@ -96,7 +103,7 @@ export interface ImageSize {
 /** Dimensions apres orientation EXIF (5 a 8 = image tournee d'un quart). Null si illisible. */
 export async function uprightSize(input: Buffer): Promise<ImageSize | null> {
   try {
-    const { width, height, orientation } = await sharp(input, { failOn: 'none' }).metadata();
+    const { width, height, orientation } = await sharp(input, SHARP_INPUT).metadata();
     if (!width || !height) return null;
     return orientation && orientation >= 5 ? { width: height, height: width } : { width, height };
   } catch {
@@ -169,7 +176,7 @@ export interface FeaturedOptions {
  * Throws on undecodable input — callers fall back to the original file.
  */
 export async function toFeaturedJpeg(input: Buffer, originalname: string, opts: FeaturedOptions = {}): Promise<ResizedImage> {
-  const upright = await sharp(input, { failOn: 'none' }).rotate().toBuffer({ resolveWithObject: true });
+  const upright = await sharp(input, SHARP_INPUT).rotate().toBuffer({ resolveWithObject: true });
   const { width, height } = upright.info;
   const shape = featuredMode(width, height);
   const mode: 'cover' | 'contain' | 'focus' = shape === 'cover' ? 'cover' : opts.focus ? 'focus' : 'contain';

@@ -18,6 +18,13 @@ macos/
 
 # Secrets et journaux
 .env
+.env.*
+scripts/.env
+.mcp.json
+.claude/
+.agents/
+supabase/.temp/
+docs/security/
 *.env.backup*
 .env.backup*
 *.log

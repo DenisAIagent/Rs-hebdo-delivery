@@ -6,33 +6,49 @@
 
 import axios, { AxiosInstance } from 'axios';
 import { lookup } from 'node:dns/promises';
-import net from 'node:net';
+import { lookup as dnsLookup } from 'node:dns';
+import https from 'node:https';
+import { isPrivateIp } from '../utils/privateIp';
 import { supabaseAdmin } from '../utils/supabase';
 
-/** Adresse IP privée / loopback / lien-local (cibles SSRF internes). */
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const p = ip.split('.').map(Number);
-    return (
-      p[0] === 10 ||
-      p[0] === 127 ||
-      p[0] === 0 ||
-      (p[0] === 169 && p[1] === 254) ||
-      (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
-      (p[0] === 192 && p[1] === 168)
-    );
-  }
-  const v = ip.toLowerCase();
-  return v === '::1' || v === '::' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe80') ||
-    v.startsWith('::ffff:127.') || v.startsWith('::ffff:10.') || v.startsWith('::ffff:192.168.');
-}
+/** Statuts WordPress qu'un renvoi ne doit jamais modifier (article en ligne ou programme). */
+const LIVE_STATUSES = new Set(['publish', 'future']);
 
 /**
- * Valide une URL WordPress avant tout appel serveur : HTTPS obligatoire et
- * hôte résolvant vers une IP publique (anti-SSRF vers les services internes /
- * métadonnées cloud). En dev on tolère http://localhost pour les tests.
+ * Hôtes WordPress autorisés (variable d'environnement WORDPRESS_ALLOWED_HOSTS,
+ * séparés par des virgules). Vide = pas de restriction d'hôte. À définir en
+ * production (ex. « www.rollingstone.fr ») : un compte admin ne peut alors plus
+ * faire pointer le module vers un serveur tiers.
  */
-async function assertSafeWpUrl(rawUrl: string): Promise<string> {
+function allowedWpHosts(): string[] {
+  return (process.env.WORDPRESS_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Vérifie chaque adresse au moment de la connexion (anti DNS rebinding). */
+const safeLookup = (hostname: string, options: any, callback: any): void => {
+  dnsLookup(hostname, options, (err: any, address: any, family: any) => {
+    if (!err) {
+      const addresses: string[] = Array.isArray(address) ? address.map((a) => a.address) : [address];
+      if (addresses.some(isPrivateIp)) {
+        callback(new Error('Hôte WordPress non autorisé (adresse réseau interne)'));
+        return;
+      }
+    }
+    callback(err, address, family);
+  });
+};
+const pinnedHttpsAgent = new https.Agent({ lookup: safeLookup as any });
+
+/**
+ * Valide une URL WordPress avant tout appel serveur : HTTPS obligatoire, hôte
+ * éventuellement restreint à une liste, et toutes ses adresses publiques
+ * (anti-SSRF vers les services internes / métadonnées cloud). En dev on tolère
+ * http://localhost pour les tests.
+ */
+export async function assertSafeWpUrl(rawUrl: string): Promise<string> {
   let u: URL;
   try {
     u = new URL(rawUrl);
@@ -46,20 +62,36 @@ async function assertSafeWpUrl(rawUrl: string): Promise<string> {
   if (u.protocol !== 'https:' && !isLocalDev) {
     throw new Error('WORDPRESS_URL doit utiliser HTTPS');
   }
+  if (u.username || u.password) {
+    throw new Error('WORDPRESS_URL ne doit pas contenir d\'identifiants');
+  }
 
   if (!isLocalDev) {
-    let address: string;
+    const allowed = allowedWpHosts();
+    if (allowed.length > 0 && !allowed.includes(u.hostname.toLowerCase())) {
+      throw new Error('Hôte WordPress non autorisé (voir WORDPRESS_ALLOWED_HOSTS)');
+    }
+    let addresses: string[];
     try {
-      ({ address } = await lookup(u.hostname));
+      addresses = (await lookup(u.hostname, { all: true })).map((a) => a.address);
     } catch {
       throw new Error('Hôte WordPress introuvable (DNS)');
     }
-    if (isPrivateIp(address)) {
+    if (addresses.length === 0 || addresses.some(isPrivateIp)) {
       throw new Error('Hôte WordPress non autorisé (adresse réseau interne)');
     }
   }
 
   return `${u.origin}${u.pathname}`.replace(/\/+$/, '');
+}
+
+/** Même hôte (schéma + nom + port) ? Sert à ne jamais envoyer le mot de passe stocké ailleurs. */
+function sameOrigin(a: string, b: string): boolean {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
 }
 
 export interface WpConfig {
@@ -110,7 +142,13 @@ export async function getWpConfig(override: WpConfigOverride = {}): Promise<WpCo
   ]);
   const rawUrl = override.url?.trim() || storedUrl;
   const username = override.username?.trim() || storedUser;
-  const appPassword = override.appPassword?.trim() || storedPass;
+  const overridePass = override.appPassword?.trim();
+  // Le mot de passe enregistré ne part JAMAIS vers une autre adresse que celle
+  // enregistrée : tester une nouvelle URL impose de ressaisir le mot de passe.
+  if (!overridePass && storedUrl && !sameOrigin(rawUrl, storedUrl)) {
+    throw new Error('Pour tester une autre adresse WordPress, saisissez aussi le mot de passe application');
+  }
+  const appPassword = overridePass || storedPass;
 
   if (!rawUrl || !username || !appPassword) {
     throw new Error('Configuration WordPress incomplete (URL, utilisateur ou mot de passe application manquant)');
@@ -125,6 +163,10 @@ function wpClient(config: WpConfig): AxiosInstance {
   const client = axios.create({
     baseURL: `${config.baseUrl}/wp-json/wp/v2`,
     timeout: 30_000,
+    // Aucune redirection suivie : elle emporterait l'en-tête Authorization vers
+    // un autre hôte, ou vers une adresse interne après le contrôle anti-SSRF.
+    maxRedirects: 0,
+    httpsAgent: pinnedHttpsAgent,
     headers: { Authorization: `Basic ${token}` },
   });
 
@@ -386,6 +428,16 @@ export async function createWpDraftPost(input: WpCreatePostInput): Promise<WpCre
         categories: input.categories,
         tags: input.tagIds,
       };
+  // Un renvoi ne modifie jamais un article en ligne ou programmé : il passerait
+  // en ligne sans relecture (ou repasserait « en attente », donc hors ligne).
+  if (input.existingPostId) {
+    const { data: current } = await client.get(`/posts/${input.existingPostId}`, {
+      params: { context: 'edit', _fields: 'status' },
+    });
+    if (LIVE_STATUSES.has(String(current?.status || ''))) {
+      throw new Error(`Article WordPress #${input.existingPostId} deja publie ou programme : il n'est pas modifie. Corrigez-le directement dans WordPress.`);
+    }
+  }
   if (input.featuredMediaId && (!input.contentOnly || input.replaceFeatured)) body.featured_media = input.featuredMediaId;
   if (input.authorId) body.author = input.authorId;
   // POST /posts/{id} met a jour un article existant (meme contrat que la creation).

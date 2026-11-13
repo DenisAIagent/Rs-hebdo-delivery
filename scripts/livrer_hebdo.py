@@ -16,15 +16,14 @@ d'origine (signale dans le rapport).
 
 Usage :
   RS_BASE=<dossier HEBDOxxx> python3 scripts/livrer_hebdo.py papiers.json --numero 241 [--dry-run]
-Mot de passe admin : variable RS_ADMIN_PASSWORD, sinon fichier scripts/.env
-(ligne RS_ADMIN_PASSWORD=..., ignore par git).
+Compte admin : variables RS_ADMIN_EMAIL et RS_ADMIN_PASSWORD, sinon fichier
+scripts/.env (lignes RS_ADMIN_EMAIL=... et RS_ADMIN_PASSWORD=..., ignore par git).
 """
 import argparse, difflib, json, mimetypes, os, re, subprocess, sys
 
 API = os.environ.get("RS_API", "https://rs-hebdo-delivery-production.up.railway.app")
 SUPA = os.environ.get("RS_SUPABASE", "https://tjchtqvavjkwpsldszxf.supabase.co")
 PUB = os.environ.get("RS_SUPABASE_PUBLISHABLE", "sb_publishable_pYol1ke9D6VC4_cAAh4yBA_LwtGGSUa")
-ADMIN_EMAIL = os.environ.get("RS_ADMIN_EMAIL", "denis@mdmcmusicads.com")
 BASE = os.environ.get("RS_BASE", "")
 ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 
@@ -34,18 +33,19 @@ def curl(args, timeout=600):
     return r.stdout
 
 
-def admin_password():
-    pwd = os.environ.get("RS_ADMIN_PASSWORD")
-    if not pwd and os.path.exists(ENV_FILE):
+def secret(name):
+    """Valeur lue dans l'environnement, sinon dans scripts/.env. Jamais en dur dans le depot."""
+    value = os.environ.get(name)
+    if not value and os.path.exists(ENV_FILE):
         for line in open(ENV_FILE, encoding="utf-8"):
-            if line.startswith("RS_ADMIN_PASSWORD="):
-                pwd = line.split("=", 1)[1].strip()
-    return pwd or sys.exit("RS_ADMIN_PASSWORD manquant (variable d'environnement ou scripts/.env)")
+            if line.startswith(name + "="):
+                value = line.split("=", 1)[1].strip()
+    return value or sys.exit(f"{name} manquant (variable d'environnement ou scripts/.env)")
 
 
 def login():
     out = curl(["-X", "POST", "-H", f"apikey: {PUB}", "-H", "Content-Type: application/json",
-                "-d", json.dumps({"email": ADMIN_EMAIL, "password": admin_password()}),
+                "-d", json.dumps({"email": secret("RS_ADMIN_EMAIL"), "password": secret("RS_ADMIN_PASSWORD")}),
                 f"{SUPA}/auth/v1/token?grant_type=password"])
     tok = json.loads(out or "{}").get("access_token")
     return tok or sys.exit("Authentification impossible")

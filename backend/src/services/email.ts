@@ -6,6 +6,7 @@
 import { supabaseAdmin } from '../utils/supabase';
 import { ADMIN_ROLES } from '../utils/roles';
 import { isDeliveryNotificationEnabled } from './notificationPolicy';
+import { describeError } from '../utils/safeError';
 
 /** Escape HTML special characters to prevent injection in email templates */
 function escapeHtml(str: string): string {
@@ -156,13 +157,13 @@ export async function notifyDelivery(params: NotifyParams) {
 
     if (!response.ok) {
       const error = await response.json();
-      console.error('Resend API error:', error);
+      console.error('Resend API error:', describeError(error));
       return;
     }
 
     console.log(`Notification sent for: ${params.title}`);
   } catch (error) {
-    console.error('Failed to send notification email:', error);
+    console.error('Failed to send notification email:', describeError(error));
     // Don't throw - delivery shouldn't fail because of email
   }
 }
@@ -296,6 +297,6 @@ export async function notifyWordpressError(params: WpErrorNotifyParams) {
     }
     console.log(`WordPress error alert sent to ${recipients.length} admin(s) for: ${params.title}`);
   } catch (error) {
-    console.error('Failed to send WordPress error email:', error);
+    console.error('Failed to send WordPress error email:', describeError(error));
   }
 }

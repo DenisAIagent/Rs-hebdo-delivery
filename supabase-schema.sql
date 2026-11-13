@@ -265,3 +265,25 @@ INSERT INTO app_settings (key, value) VALUES
 -- First hebdo (adjust number as needed)
 INSERT INTO hebdo_config (numero, label, start_date, end_date, is_current) VALUES
   (226, 'RSH226', '2026-03-25', '2026-03-29', true);
+
+-- ============================================================
+-- VERROUILLAGE (voir supabase/migrations/20261113000000_lockdown_public_tables.sql)
+-- ============================================================
+-- L'application n'accede jamais aux tables avec la cle publique : le frontend
+-- n'utilise que supabase.auth, le backend passe par la cle service_role. Les
+-- policies ci-dessus sont donc supprimees et tous les droits retires aux roles
+-- anon / authenticated. A executer en dernier sur toute nouvelle base.
+DO $$
+DECLARE
+  t text;
+  p record;
+BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('REVOKE ALL ON public.%I FROM anon, authenticated, PUBLIC', t);
+    FOR p IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = t LOOP
+      EXECUTE format('DROP POLICY %I ON public.%I', p.policyname, t);
+    END LOOP;
+  END LOOP;
+END $$;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;

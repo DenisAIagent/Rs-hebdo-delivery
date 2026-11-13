@@ -8,7 +8,7 @@
 import sharp from 'sharp';
 import type Anthropic from '@anthropic-ai/sdk';
 import { getAnthropicClient, getClaudeModel } from './claude';
-import type { FocusPoint } from './imageResize';
+import { SHARP_INPUT, type FocusPoint } from './imageResize';
 
 export interface FaceBox {
   x: number;
@@ -70,7 +70,7 @@ export function focusFromFaces(faces: FaceBox[]): FocusPoint | null {
 }
 
 export async function detectFaceFocus(input: Buffer): Promise<FocusPoint | null> {
-  const preview = await sharp(input, { failOn: 'none' })
+  const preview = await sharp(input, SHARP_INPUT)
     .rotate()
     .resize(ANALYSIS_MAX_SIDE, ANALYSIS_MAX_SIDE, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 80 })

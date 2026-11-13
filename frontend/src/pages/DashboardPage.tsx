@@ -21,16 +21,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-
-/** Only allow http/https URLs to prevent javascript: injection */
-function isSafeUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+import { isSafeUrl } from '../lib/safeUrl';
 
 function statusChip(s: Delivery['status']) {
   if (s === 'delivered') {

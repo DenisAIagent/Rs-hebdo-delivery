@@ -33,7 +33,9 @@ app.use(helmet({
   contentSecurityPolicy: isProd ? {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://client.crisp.chat"],
+      // Pas de 'unsafe-inline' : le jeton de session est en localStorage, un script
+      // injecte pourrait le lire. Le chargeur Crisp est un fichier (/crisp-loader.js).
+      scriptSrc: ["'self'", "https://client.crisp.chat"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://client.crisp.chat"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://client.crisp.chat"],
       imgSrc: ["'self'", "data:", "https:"],
@@ -59,7 +61,8 @@ app.use(cors({
     if (!origin || isAllowedOrigin(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('CORS not allowed'));
+      // Origine inconnue : aucun en-tete CORS (le navigateur bloque), sans erreur 500.
+      callback(null, false);
     }
   },
   credentials: true,

@@ -41,3 +41,16 @@ videos/**/assets/vo/*.aiff
 
 # Acces temporaires pour la migration Supabase
 .env.migration
+
+# Tout fichier d'environnement (seuls les modeles .env.example sont suivis)
+.env.*
+!.env.example
+scripts/.env
+
+# Configuration locale des outils d'IA (reference du projet Supabase de prod)
+.mcp.json
+.agents/
+skills-lock.json
+
+# Rapports d'audit de securite : ils decrivent des faiblesses, jamais sur GitHub
+docs/security/
